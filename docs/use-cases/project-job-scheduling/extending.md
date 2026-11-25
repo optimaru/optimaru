@@ -215,8 +215,8 @@ from optimaru.project_job_scheduling.constraints import NonRenewableResourceUsag
 others = [spec for spec in get_constraints() if spec.name != "non_renewable_resource_usage_cost"]
 picks = [*others, NonRenewableResourceUsageCost(weight=1)]
 config = pj.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 result = pj.solve(schedule, config=config, constraints=picks)
 print(pj.constraint_costs(result.to_core(), picks)["non_renewable_resource_usage_cost"]["costs"])
 ```
@@ -486,9 +486,9 @@ schedule = generate_demo_data()
 steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     config = pj.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     result = pj.solve(schedule, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -496,7 +496,7 @@ for label, picked in (("default path", None), ("assembly", get_constraints())):
 ```
 
 Both lines end on the same score: same seed, same steps, same scoring. If they differ
-after a change, the two paths no longer score alike. A step is what `step_count_limit`
+after a change, the two paths no longer score alike. A step is what `stop.step_limit`
 counts; the moves that polish a ruin-and-recreate kick are not counted, on either path.
 
 The second line solves with `get_constraints()`, so it follows the tree it runs on: the

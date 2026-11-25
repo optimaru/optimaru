@@ -11,6 +11,7 @@ from optimaru.max_cut.constraints import get_constraints, partition_size_bounds_
 from optimaru.max_cut.models import MaxCutProblemModel
 
 from .._picks import only, replace_default
+from .._settings import set_setting
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -22,38 +23,42 @@ def demo() -> MaxCutProblemModel:
 
 def steps(count: int, seed: int = 1) -> max_cut.SolverConfig:
     config = max_cut.SolverConfig()
-    config.step_count_limit = count
-    config.random_seed = seed
+    config.stop.step_limit = count
+    config.run.random_seed = seed
     return config
 
 
 def test_solver_config_defaults():
     config = max_cut.SolverConfig()
-    assert config.spent_limit_seconds == 30.0
-    assert (config.step_count_limit, config.unimproved_step_count_limit) == (0, 0)
-    assert (config.random_seed, config.parallel_solver_count, config.late_acceptance_size) == (0, 1, 0)
-    assert (config.change_move_weight, config.swap_move_weight) == (0.8, 0.2)
-    assert config.ruin_recreate is True
-    assert config.ruin_recreate_as_move_weight == 0.0
-    assert config.descent_weight == 0.0
-    assert config.full_assert is False
-    assert config.on_new_best is None
+    assert config.stop.time_limit_seconds == 30.0
+    assert (config.stop.step_limit, config.stop.unimproved_step_limit) == (0, 0)
+    assert (config.run.random_seed, config.run.parallel_solver_count, config.acceptance.late_acceptance_size) == (
+        0,
+        1,
+        0,
+    )
+    assert (config.moves.change_weight, config.moves.swap_weight) == (0.8, 0.2)
+    assert config.alns_trigger.enabled is True
+    assert config.strategies.ruin_recreate_weight == 0.0
+    assert config.strategies.descent_weight == 0.0
+    assert config.run.full_assert is False
+    assert config.run.on_new_best is None
 
 
 @pytest.mark.parametrize(
     "attribute, value",
     [
-        ("spent_limit_seconds", -1.0),
-        ("unimproved_spent_limit_seconds", -1.0),
-        ("parallel_solver_count", 0),
-        ("late_acceptance_size", -1),
-        ("ruin_recreate_rewards", [1.0, 2.0]),
+        ("stop.time_limit_seconds", -1.0),
+        ("stop.unimproved_time_limit_seconds", -1.0),
+        ("run.parallel_solver_count", 0),
+        ("acceptance.late_acceptance_size", -1),
+        ("alns.rewards", [1.0, 2.0]),
     ],
 )
 def test_solver_config_refuses_invalid_values(attribute, value):
     config = max_cut.SolverConfig()
     with pytest.raises(ValueError):
-        setattr(config, attribute, value)
+        set_setting(config, attribute, value)
 
 
 def test_unknown_config_knobs_are_refused():
@@ -116,15 +121,15 @@ def test_keyword_arguments_override_the_config():
     )
     # The overrides applied (on_new_best fired) to a copy: the caller's config is unchanged.
     assert calls and all(isinstance(step, int) for step, _, _ in calls)
-    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (30.0, 5, 1)
-    assert config.step_count_limit == 100 and config.on_new_best is None
+    assert (config.stop.time_limit_seconds, config.run.random_seed, config.run.parallel_solver_count) == (30.0, 5, 1)
+    assert config.stop.step_limit == 100 and config.run.on_new_best is None
 
 
 def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     config = max_cut.SolverConfig()
-    before = config.best_score_limit
+    before = config.stop.target_score
     max_cut.solve(demo(), time_limit_seconds=5.0, stop_at_first_feasible=True, config=config)
-    assert config.best_score_limit == before  # the score limit went to a copy
+    assert config.stop.target_score == before  # the score limit went to a copy
 
 
 def test_multi_start_returns_a_consistent_best():
@@ -170,9 +175,9 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
 def test_full_assert_solves_without_corruption():
     for exact in (True, False):
         config = steps(3000, seed=3)
-        config.full_assert = True
-        config.ruin_recreate_unimproved_step_trigger = 100
-        config.ruin_recreate_as_move_weight = 0.05
+        config.run.full_assert = True
+        config.alns_trigger.unimproved_steps = 100
+        config.strategies.ruin_recreate_weight = 0.05
         model = demo()
         if not exact:
             model.min_partition_size = model.max_partition_size = None
@@ -255,7 +260,7 @@ def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
 
     class Capture:
         def __init__(self, cfg):
-            seen.append(cfg.best_score_limit)
+            seen.append(cfg.stop.target_score)
             raise Captured
 
     monkeypatch.setattr(package, "Solver", Capture)

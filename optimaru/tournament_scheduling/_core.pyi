@@ -105,45 +105,128 @@ def unfairness(loads: Sequence[int]) -> float:
     """Load-balance unfairness (6 significant digits, HALF_EVEN)."""
 
 class SolverConfig:
-    """Engine settings. Default: 30 s budget, LA + ALNS, single start."""
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    late_acceptance_size: int
-    """0 = automatic: clamp(8 * assignments, 400, 3200)."""
-    full_assert: bool
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    change_move_weight: float
-    swap_move_weight: float
-    descent_weight: float
-    """Probability that a step runs a best-improvement descent over a nearby entity pair
-    instead of the move mix (one sweep ≈ 2 * teams evaluations). Default 0 = off."""
-    ruin_recreate_as_move_weight: float
-    """Weight of destroy-repair as an ordinary move judged by the acceptor
-    (separate from the stagnation kick). Default 0 = off."""
-    ruin_recreate_as_move_max_ruin: int
-    custom_move_probability: float
-    """Upper bound on the probability of drawing the custom operator (TeamCountMove) in a step. 1 = unlimited."""
-    value_recommender: bool
-    """Steers the value choice of change moves to hard-feasible teams (no match that day +
-    not unavailable), with or without `constraints=`. Default False."""
-    team_count_moves: bool
-    """Macro moves on the number of loaded teams (empty / revive a team), with or without
-    `constraints=`. The only path across the medium-level team-count barrier, so default True."""
-    best_score_limit: tuple[int, float]
-    """Stop early at or above this score. E.g. (0, -inf) == stop at the first feasible."""
-    on_new_best: Callable[[int, Score], None] | None
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``strategies``, ``custom_moves``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        custom_moves: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        unimproved_step_limit: int
+        target_score: tuple[int, float]
+        """Stop early at or above this score. E.g. (0, -inf) == stop at the first feasible."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        descent_weight: float
+        """Probability that a step runs a best-improvement descent over a nearby entity pair
+        instead of the move mix (one sweep ≈ 2 * teams evaluations). Default 0 = off."""
+        ruin_recreate_weight: float
+        """Weight of destroy-repair as an ordinary move judged by the acceptor
+        (separate from the stagnation kick). Default 0 = off."""
+        ruin_recreate_max_ruin: int
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class CustomMoves:
+        """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        share: float
+        """Upper bound on the probability of drawing the custom operator (TeamCountMove) in a step. 1 = unlimited."""
+        team_count: bool
+        """Macro moves on the number of loaded teams (empty / revive a team), with or without
+        `constraints=`. The only path across the medium-level team-count barrier, so default True."""
+
+    custom_moves: CustomMoves
+    """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        value_recommender: bool
+        """Steers the value choice of change moves to hard-feasible teams (no match that day +
+        not unavailable), with or without `constraints=`. Default False."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """0 = automatic: clamp(8 * assignments, 400, 3200)."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        full_assert: bool
+        on_new_best: Callable[[int, Score], None] | None
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...

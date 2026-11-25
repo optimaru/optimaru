@@ -47,7 +47,7 @@ clip=False with a non-zero offset cannot be hard, because hard 0 must mean no vi
 clip=True (a threshold) or another level`. On soft it is allowed.
 
 An unassigned task contributes nothing. `SolverConfig` holds the engine's knobs
-(`spent_limit_seconds`, `step_count_limit`, ...); see the
+(`stop.time_limit_seconds`, `stop.step_limit`, ...); see the
 [use-case README](README.md#python-api).
 
 ## Install and test
@@ -72,11 +72,11 @@ alb.solve(core, time_limit_seconds=5.0, random_seed=42)            # solved in p
 print(core.score, core.assignment(), core.station_loads())
 ```
 
-For finer control build `alb.SolverConfig()` (time budget, `step_count_limit`,
-multi-start, ALNS knobs, `close_station_moves`, `value_recommender_probability`, the
-`on_new_best(step, score)` callback, `best_score_limit` early stop, ...) and call
+For finer control build `alb.SolverConfig()` (time budget, `stop.step_limit`,
+multi-start, ALNS knobs, `custom_moves.close_station`, `selection.value_recommender_probability`, the
+`on_new_best(step, score)` callback, `stop.target_score` early stop, ...) and call
 `alb.Solver(cfg).solve(core)` or `alb.solve(problem, config=cfg)`. A zero budget
-(`spent_limit_seconds = 0`) returns the construction, or a complete warm-start seed,
+(`stop.time_limit_seconds = 0`) returns the construction, or a complete warm-start seed,
 unchanged.
 
 Note: `core.tasks[i]` returns a copy — write stations in bulk with
@@ -87,7 +87,8 @@ Note: `core.tasks[i]` returns a copy — write stations in bulk with
 `solve_request` takes a pydantic request, `models.AssemblyLineBalancingRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `AssemblyLineBalancingProblemModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 

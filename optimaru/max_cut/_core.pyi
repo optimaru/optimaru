@@ -100,48 +100,116 @@ def calculate_score(problem: MaxCutProblem) -> Score:
     partition instead.)"""
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget (30 s by default). 0 returns the start partition unchanged."""
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    """0 = no step limit."""
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    """Independent starts (seed + i each); the best wins. Ignored by
-    solve_with_constraints."""
-    late_acceptance_size: int
-    """0 = auto: clamp(8 * vertex count, 400, 3200). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
-    from a given solution keeps this one length."""
-    full_assert: bool
-    ruin_recreate: bool
-    """Adaptive ruin-and-recreate kicks on stagnation (off in exact-size mode)."""
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    ruin_recreate_as_move_weight: float
-    """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-    ruin_recreate.as_move_weight); 0 (default) = off; off in exact-size mode."""
-    ruin_recreate_as_move_max_ruin: int
-    change_move_weight: float
-    """A change move flips one vertex (0.8 by default; 0 in exact-size mode)."""
-    swap_move_weight: float
-    """A swap move exchanges a side-0 and a side-1 vertex (0.2 by default; 1 in
-    exact-size mode)."""
-    descent_weight: float
-    """Assignment-shape best-improvement descent strategy weight. 0 = off (off in exact-size mode)."""
-    best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
-    the first feasible solution."""
-    on_new_best: Callable[[int, Score], None] | None
-    """Called as on_new_best(step, score) on every new best (by the first parallel start
-    only). An exception it raises stops the solve and is raised by solve()."""
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``strategies``, ``moves``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget (30 s by default). 0 returns the start partition unchanged."""
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        """0 = no step limit."""
+        unimproved_step_limit: int
+        target_score: tuple[int, float]
+        """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
+        the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        """Adaptive ruin-and-recreate kicks on stagnation (off in exact-size mode)."""
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        ruin_recreate_weight: float
+        """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
+        ruin_recreate.as_move_weight); 0 (default) = off; off in exact-size mode."""
+        ruin_recreate_max_ruin: int
+        descent_weight: float
+        """Assignment-shape best-improvement descent strategy weight. 0 = off (off in exact-size mode)."""
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        """A change move flips one vertex (0.8 by default; 0 in exact-size mode)."""
+        swap_weight: float
+        """A swap move exchanges a side-0 and a side-1 vertex (0.2 by default; 1 in
+        exact-size mode)."""
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """0 = auto: clamp(8 * vertex count, 400, 3200). The first stage's length: the search restarts with
+        a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+        from a given solution keeps this one length."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        """Independent starts (seed + i each); the best wins. Ignored by
+        solve_with_constraints."""
+        full_assert: bool
+        on_new_best: Callable[[int, Score], None] | None
+        """Called as on_new_best(step, score) on every new best (by the first parallel start
+        only). An exception it raises stops the solve and is raised by solve()."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Start partition + Late Acceptance local search (+ adaptive

@@ -199,9 +199,9 @@ def test_every_sample_constructs_like_the_oracle(name):
 def test_a_solved_sample_matches_the_oracle(name):
     model = Model.model_validate(_samples()[name])
     config = knapsack.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = 500
-    config.random_seed = 42
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = 500
+    config.run.random_seed = 42
     model = knapsack.solve(model, config=config)
     data = model.model_dump()
     _assert_parity(data)
@@ -315,7 +315,7 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     # ... and the engine scores the same picks the same way.
     core = Model.model_validate(data).to_core()
     zero = knapsack.SolverConfig()
-    zero.spent_limit_seconds = 0
+    zero.stop.time_limit_seconds = 0
     core.warm_start = True
     knapsack.Solver(zero).solve_with_constraints(core, picked)
     assert (core.score.hard, core.score.soft) == pytest.approx(expected)

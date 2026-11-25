@@ -166,7 +166,7 @@ def test_groups_of_one_do_not_change_how_a_plan_is_scored():
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
     plan = to_plan(two_ends([visit("a", "g1"), visit("b", "g2"), visit("c", "g3")], vehicles))
     config = vrp.SolverConfig()
-    config.step_count_limit = 2000
+    config.stop.step_limit = 2000
 
     vrp.solve(plan, config=config)
 
@@ -344,7 +344,7 @@ def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
     plan = to_plan(two_ends([visit("a", "g"), visit("b", "g")], vehicles))
     config = vrp.SolverConfig()
-    config.step_count_limit = 3000
+    config.stop.step_limit = 3000
 
     if entry == "solve":
         vrp.solve(plan, config=config)
@@ -365,7 +365,7 @@ def test_calculate_score_reads_a_grouped_plan_as_the_solve_scored_it():
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
     plan = to_plan(two_ends([visit("a", "g"), visit("b", "g"), visit("c")], vehicles))
     config = vrp.SolverConfig()
-    config.step_count_limit = 3000
+    config.stop.step_limit = 3000
     vrp.solve(plan, config=config)
     solved = as_tuple(plan.score)
 
@@ -424,7 +424,7 @@ def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():
     vehicles = [vehicle("v", ["a"], max_stops=1), vehicle("w", ["b"], max_stops=1)]
     plan = to_plan(two_ends([visit("a", "g"), visit("b", "g")], vehicles))
     config = vrp.SolverConfig()
-    config.step_count_limit = 500
+    config.stop.step_limit = 500
     others = [spec for spec in get_constraints() if spec.name != "visit_group_cost"]
 
     vrp.solve(plan, config=config, constraints=others)
@@ -435,18 +435,18 @@ def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():
 
 def test_the_group_operator_can_be_turned_off_and_its_knob_is_checked():
     config = vrp.SolverConfig()
-    assert config.group_ruin_recreate is True
-    assert config.group_ruin_max_visits == 30
-    config.group_ruin_recreate = False
-    config.group_ruin_max_visits = 0
+    assert config.alns.group_ruin is True
+    assert config.alns.group_ruin_max_visits == 30
+    config.alns.group_ruin = False
+    config.alns.group_ruin_max_visits = 0
     with pytest.raises(ValueError, match="group_ruin_max_visits must not be negative"):
-        config.group_ruin_max_visits = -1
+        config.alns.group_ruin_max_visits = -1
 
     solution = solve_request(
         RoutePlanRequest(
             model_input=two_ends([visit("a", "g"), visit("b", "g"), visit("c")]),
             timelimit=0.3,
-            solver_parameters={"group_ruin_recreate": False},
+            solver_parameters={"alns": {"group_ruin": False}},
         )
     )
     riding = vehicle_of(solution)
@@ -510,14 +510,14 @@ def test_parallel_starts_return_the_best_single_start_on_the_constraint_path(pat
                 timelimit=60,
                 random_seed=seed,
                 num_workers=starts,
-                solver_parameters={"step_count_limit": 2000},
+                solver_parameters={"stop": {"step_limit": 2000}},
             )
             return solve_request(request).score
         config = vrp.SolverConfig()
-        config.spent_limit_seconds = 60.0  # the step limit ends the solve
-        config.step_count_limit = 2000
-        config.random_seed = seed
-        config.parallel_solver_count = starts
+        config.stop.time_limit_seconds = 60.0  # the step limit ends the solve
+        config.stop.step_limit = 2000
+        config.run.random_seed = seed
+        config.run.parallel_solver_count = starts
         plan = to_plan(model_input)
         vrp.solve(plan, config=config, constraints=get_constraints() if path == "a constraint list" else None)
         return str(plan.score)
@@ -537,9 +537,9 @@ def test_on_new_best_reports_from_parallel_starts_on_a_constraint_list():
     # held, and the first start's callback takes it back while the others search.
     plan = to_plan(grouped_input(24, 3, size=3, seed=4))
     config = vrp.SolverConfig()
-    config.spent_limit_seconds = 60.0
-    config.step_count_limit = 2000
-    config.parallel_solver_count = 3
+    config.stop.time_limit_seconds = 60.0
+    config.stop.step_limit = 2000
+    config.run.parallel_solver_count = 3
     reported = []
     basics = only(
         get_constraints(), "vehicle_capacity_cost", "max_end_time_cost", "travel_time_cost", "max_travel_time_cost"
@@ -566,7 +566,11 @@ def test_groups_stay_whole_and_in_order_in_a_larger_solve(group_operator):
         model_input=model_input,
         timelimit=60,  # the step limit ends the solve
         random_seed=3,
-        solver_parameters={"step_count_limit": 6000, "full_assert": True, "group_ruin_recreate": group_operator},
+        solver_parameters={
+            "stop": {"step_limit": 6000},
+            "alns": {"group_ruin": group_operator},
+            "run": {"full_assert": True},
+        },
     )
 
     solution = solve_request(request)

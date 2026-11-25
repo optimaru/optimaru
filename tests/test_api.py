@@ -221,7 +221,7 @@ def test_solves_from_several_threads_each_get_their_own_answer(api):
     knapsack = use_case_module("knapsack")
     problem = model_of("knapsack")
     config = knapsack.SolverConfig()
-    config.step_count_limit = 50
+    config.stop.step_limit = 50
     with ThreadPoolExecutor(4) as pool:
         solved = list(pool.map(lambda seed: knapsack.solve(problem, random_seed=seed, config=config), range(8)))
     assert len(api.created()) == 8
@@ -303,7 +303,7 @@ def test_solve_of_a_model_returns_what_it_returns_here(api, slug):
     before = problem.model_dump(mode="json")
     # A step limit and a seed make the search the same one on both sides.
     config = module.SolverConfig()
-    config.step_count_limit = 200
+    config.stop.step_limit = 200
 
     solved = module.solve(problem, time_limit_seconds=30, random_seed=3, config=config)
 
@@ -316,7 +316,7 @@ def test_solve_of_a_model_returns_what_it_returns_here(api, slug):
         "problem": before,
         "time_limit_seconds": 30,
         "random_seed": 3,
-        "config": {"step_count_limit": 200},
+        "config": {"stop": {"step_limit": 200}},
     }
     here = module.solve.__wrapped__(problem, time_limit_seconds=30, random_seed=3, config=config)
     assert solved.model_dump(mode="json") == here.model_dump(mode="json")
@@ -341,7 +341,7 @@ def test_solve_request_of_a_model_use_case_goes_the_same_way(api, slug):
         for value in vars(models).values()
         if isinstance(value, type) and issubclass(value, _models().SolveRequest) and value is not _models().SolveRequest
     )
-    request = request_type(model_input=problem, time_limit_seconds=30, solver_parameters={"step_count_limit": 50})
+    request = request_type(model_input=problem, time_limit_seconds=30, solver_parameters={"stop": {"step_limit": 50}})
 
     solved = module.solve_request(request)
 
@@ -352,7 +352,7 @@ def test_solve_request_of_a_model_use_case_goes_the_same_way(api, slug):
         "time_limit_seconds": 30.0,
         "random_seed": 0,
         "parallel_solver_count": 1,
-        "config": {"step_count_limit": 50},
+        "config": {"stop": {"step_limit": 50}},
     }
 
 
@@ -397,7 +397,7 @@ def test_school_timetablings_solve_sends_its_call_as_the_request(api):
     before = dict(problem)
     keywords = {"time_limit_seconds": 30, "random_seed": 3, "weights": {"teacher_gap_cost": 40}}
     config = school.canon.SolverConfig()
-    config.step_count_limit = 300
+    config.stop.step_limit = 300
 
     solved = school.solve(problem, config=config, **keywords)
 
@@ -412,7 +412,7 @@ def test_school_timetablings_solve_sends_its_call_as_the_request(api):
         "weights": {"teacher_gap_cost": 40.0},
         "mode": "canonical",
     }
-    assert request["solver_parameters"] == {"step_count_limit": 300}
+    assert request["solver_parameters"] == {"stop": {"step_limit": 300}}
     assert "constraints" not in created.body
     here = school.solve.__wrapped__(problem, config=config, **keywords)
     assert set(solved) == set(here)
@@ -422,12 +422,12 @@ def test_school_timetablings_solve_sends_its_call_as_the_request(api):
 def test_school_timetablings_config_travels_as_the_request_fields(api):
     school = use_case_module("school_timetabling")
     config = school.canon.SolverConfig()
-    config.spent_limit_seconds = 7
-    config.random_seed = 5
-    config.step_count_limit = 100
-    config.best_score_limit = (0, float("-inf"))
-    config.weights = school.canon.ObjectiveWeights()
-    config.weights.teacher_gap_cost = 33
+    config.stop.time_limit_seconds = 7
+    config.run.random_seed = 5
+    config.stop.step_limit = 100
+    config.stop.target_score = (0, float("-inf"))
+    config.cost.weights = school.canon.ObjectiveWeights()
+    config.cost.weights.teacher_gap_cost = 33
 
     school.solve(small_problem("school_timetabling"), config=config, random_seed=9)
 
@@ -435,7 +435,7 @@ def test_school_timetablings_config_travels_as_the_request_fields(api):
     assert request["time_limit_seconds"] == 7.0
     assert request["random_seed"] == 9  # the keyword wins over the config, as it does here
     assert request["stop_at_first_feasible"] is True
-    assert request["solver_parameters"] == {"step_count_limit": 100}
+    assert request["solver_parameters"] == {"stop": {"step_limit": 100}}
     assert request["weights"]["teacher_gap_cost"] == 33.0
 
 
@@ -522,24 +522,24 @@ def test_school_timetablings_config_fields_are_plain_but_weights(domain):
     """The config scan of `_api_request` sends every field that changed: each must be one JSON carries."""
     school = use_case_module("school_timetabling")
     config = school.canon.SolverConfig() if domain == "canon" else school.SolverConfig()
-    for name in dir(config):
-        value = getattr(config, name)
-        if name.startswith("_") or name in ("on_new_best", "weights", "best_score_limit") or callable(value):
-            continue  # best_score_limit is infinite by default; only a changed one travels, as a list
-        _api._plain(value, name)
+    for group, settings in config.to_dict().items():
+        for name, value in settings.items():
+            if (group, name) in (("cost", "weights"), ("stop", "target_score")):
+                continue  # target_score is infinite by default; only a changed one travels, as a list
+            _api._plain(value, f"{group}.{name}")
 
 
 def test_school_timetablings_quickstart_mode_travels_with_its_config(api):
     school = use_case_module("school_timetabling")
     problem = small_problem("school_timetabling")
     config = school.SolverConfig()
-    config.step_count_limit = 200
+    config.stop.step_limit = 200
 
     solved = school.solve(problem, mode="quickstart", config=config, random_seed=2)
 
     request = api.created()[0].body["request"]
     assert request["mode"] == "quickstart"
-    assert request["solver_parameters"] == {"step_count_limit": 200}
+    assert request["solver_parameters"] == {"stop": {"step_limit": 200}}
     assert request["weights"] is None
     here = school.solve.__wrapped__(problem, mode="quickstart", config=config, random_seed=2)
     assert solved["lessons"] == here["lessons"]
@@ -548,12 +548,12 @@ def test_school_timetablings_quickstart_mode_travels_with_its_config(api):
 def test_school_timetablings_own_score_limit_travels_as_a_solver_parameter(api):
     school = use_case_module("school_timetabling")
     config = school.canon.SolverConfig()
-    config.best_score_limit = (0, -50.0)
+    config.stop.target_score = (0, -50.0)
 
     school.solve(small_problem("school_timetabling"), config=config, time_limit_seconds=0.2)
 
     request = api.created()[0].body["request"]
-    assert request["solver_parameters"] == {"best_score_limit": [0, -50.0]}
+    assert request["solver_parameters"] == {"stop": {"target_score": [0, -50.0]}}
     assert request["stop_at_first_feasible"] is False
 
 
@@ -650,15 +650,20 @@ def test_free_form_solver_parameters_are_made_plain_or_refused(api):
     acceptor = next(
         getattr(module.AcceptorType, name)
         for name in dir(module.AcceptorType)
-        if name.isupper() and getattr(module.AcceptorType, name) != module.SolverConfig().acceptor_type
+        if name.isupper() and getattr(module.AcceptorType, name) != module.SolverConfig().acceptance.rule
     )
-    named = request.model_copy(update={"solver_parameters": {"acceptor_type": acceptor, "step_count_limit": 50}})
+    named = request.model_copy(
+        update={"solver_parameters": {"stop": {"step_limit": 50}, "acceptance": {"rule": acceptor}}}
+    )
     module.solve_request(named)
     (created,) = api.created()
-    assert created.body["request"]["solver_parameters"] == {"acceptor_type": acceptor.name, "step_count_limit": 50}
+    assert created.body["request"]["solver_parameters"] == {
+        "stop": {"step_limit": 50},
+        "acceptance": {"rule": acceptor.name},
+    }
 
     # pydantic would write this limit as [0, null], which the API reads as "leave it as it is".
-    endless = request.model_copy(update={"solver_parameters": {"best_score_limit": (0, float("-inf"))}})
+    endless = request.model_copy(update={"solver_parameters": {"stop": {"target_score": (0, float("-inf"))}}})
     with pytest.raises(ValueError, match="solver_parameters.*non-finite"):
         module.solve_request(endless)
     assert len(api.created()) == 1
@@ -691,30 +696,32 @@ def test_a_config_arrives_as_the_fields_that_were_changed(api):
     acceptor = next(
         getattr(module.AcceptorType, name)
         for name in dir(module.AcceptorType)
-        if name.isupper() and getattr(module.AcceptorType, name) != config.acceptor_type
+        if name.isupper() and getattr(module.AcceptorType, name) != config.acceptance.rule
     )
-    config.acceptor_type = acceptor
-    config.simulated_annealing_starting_temperature = (0, 12.5)
-    config.late_acceptance_size = 77
-    config.step_count_limit = 100
-    config.random_seed = 5  # the keyword below overrides it, as it does here
+    config.acceptance.rule = acceptor
+    config.acceptance.simulated_annealing_starting_temperature = (0, 12.5)
+    config.acceptance.late_acceptance_size = 77
+    config.stop.step_limit = 100
+    config.run.random_seed = 5  # the keyword below overrides it, as it does here
 
     module.solve(model_of("quadratic-assignment"), time_limit_seconds=30, random_seed=9, config=config)
 
     (created,) = api.created()
     assert created.body["config"] == {
-        "acceptor_type": acceptor.name,
-        "simulated_annealing_starting_temperature": [0, 12.5],
-        "late_acceptance_size": 77,
-        "step_count_limit": 100,
-        "random_seed": 5,
+        "stop": {"step_limit": 100},
+        "acceptance": {
+            "rule": acceptor.name,
+            "simulated_annealing_starting_temperature": [0, 12.5],
+            "late_acceptance_size": 77,
+        },
+        "run": {"random_seed": 5},
     }
     assert created.body["random_seed"] == 9
     ((_, keywords),) = api.calls
     rebuilt = keywords["config"]
-    assert rebuilt.acceptor_type == acceptor
-    assert rebuilt.simulated_annealing_starting_temperature == (0, 12.5)
-    assert (rebuilt.late_acceptance_size, rebuilt.step_count_limit) == (77, 100)
+    assert rebuilt.acceptance.rule == acceptor
+    assert rebuilt.acceptance.simulated_annealing_starting_temperature == (0, 12.5)
+    assert (rebuilt.acceptance.late_acceptance_size, rebuilt.stop.step_limit) == (77, 100)
 
 
 @pytest.mark.parametrize("use_case", ["conference_scheduling", "flight_crew_scheduling", "sports_league_scheduling"])
@@ -722,13 +729,13 @@ def test_a_pydantic_solve_config_is_read_as_solve_reads_it(api, use_case):
     module = use_case_module(use_case)
     models = importlib.import_module(f"optimaru.{use_case}.models")
     slug = use_case.replace("_", "-")
-    config = models.SolveConfig(time_limit_seconds=20, random_seed=4, step_count_limit=60)
+    config = models.SolveConfig(time_limit_seconds=20, random_seed=4, stop={"step_limit": 60})
 
     solved = module.solve(model_of(slug), config=config)
 
     (created,) = api.created()
     sent = created.body["config"]
-    assert (sent["spent_limit_seconds"], sent["random_seed"], sent["step_count_limit"]) == (20, 4, 60)
+    assert (sent["stop"]["time_limit_seconds"], sent["run"]["random_seed"], sent["stop"]["step_limit"]) == (20, 4, 60)
     here = module.solve.__wrapped__(model_of(slug), config=config)
     assert solved.model_dump(mode="json") == here.model_dump(mode="json")
 
@@ -772,8 +779,14 @@ REAL_REFUSALS = (
     ({"time_limit_seconds": 0}, "time_limit_seconds: Input should be greater than 0"),
     ({"time_limit_seconds": 2e9}, "time_limit_seconds: Input should be less than or equal to 1000000000"),
     ({"parallel_solver_count": 17}, "Value error, parallel_solver_count must be between 1 and 16"),
-    ({"config": {"parallel_solver_count": 0}}, "Value error, config.parallel_solver_count must be between 1 and 16"),
-    ({"config": {"spent_limit_seconds": -1}}, "Value error, config.spent_limit_seconds must be between 0 and 1e9"),
+    (
+        {"config": {"parallel_solver_count": 0}},
+        "Value error, config.run.parallel_solver_count must be between 1 and 16",
+    ),
+    (
+        {"config": {"stop": {"time_limit_seconds": -1}}},
+        "Value error, config.stop.time_limit_seconds must be between 0 and 1e9",
+    ),
     ({"constraints": []}, "constraints: Value error, constraints must select at least one enabled constraint"),
     (
         {"constraints": [{"name": "knapsack_capacity_cost", "weight": True}]},
@@ -819,7 +832,7 @@ def test_a_time_limit_of_zero_travels_as_the_config_field(api):
     solved = knapsack.solve(model_of("knapsack"), time_limit_seconds=0)
     (created,) = api.created()
     assert "time_limit_seconds" not in created.body
-    assert created.body["config"] == {"spent_limit_seconds": 0}
+    assert created.body["config"] == {"stop": {"time_limit_seconds": 0}}
     here = knapsack.solve.__wrapped__(model_of("knapsack"), time_limit_seconds=0)
     assert solved.model_dump(mode="json") == here.model_dump(mode="json")
 
@@ -848,12 +861,12 @@ def test_what_cannot_be_sent_is_refused_before_anything_is_sent(api):
     with pytest.raises(ValueError, match="on_new_best is a callback"):
         knapsack.solve(problem, on_new_best=lambda step, score: None)
     config = knapsack.SolverConfig()
-    config.on_new_best = lambda step, score: None
+    config.run.on_new_best = lambda step, score: None
     with pytest.raises(ValueError, match="on_new_best is a callback"):
         knapsack.solve(problem, config=config)
     config = knapsack.SolverConfig()
-    config.best_score_limit = (-3, float("-inf"))  # not the first feasible solution, which travels as the keyword
-    with pytest.raises(ValueError, match="config.best_score_limit.*non-finite.*stop_at_first_feasible=True"):
+    config.stop.target_score = (-3, float("-inf"))  # not the first feasible solution, which travels as the keyword
+    with pytest.raises(ValueError, match="config.stop.target_score.*non-finite.*stop_at_first_feasible=True"):
         knapsack.solve(problem, config=config)
     with pytest.raises(TypeError):
         knapsack.solve(problem, no_such_keyword=1)
@@ -946,8 +959,8 @@ def test_the_wait_follows_the_time_limit_of_the_call(monkeypatch):
     monkeypatch.setattr(_api, "_WAIT_MARGIN", 100.0)
     assert _api._wait_limit({"problem": {}}) == 2 * 30 + 100
     assert _api._wait_limit({"problem": {}, "time_limit_seconds": 5}) == 2 * 5 + 100
-    assert _api._wait_limit({"problem": {}, "config": {"spent_limit_seconds": 7}}) == 2 * 7 + 100
-    assert _api._wait_limit({"problem": {}, "config": {"spent_limit_seconds": 0}}) == 2 * 30 + 100
+    assert _api._wait_limit({"problem": {}, "config": {"stop": {"time_limit_seconds": 7}}}) == 2 * 7 + 100
+    assert _api._wait_limit({"problem": {}, "config": {"stop": {"time_limit_seconds": 0}}}) == 2 * 30 + 100
     assert _api._wait_limit({"request": {"time_limit_seconds": 4}}) == 2 * 4 + 100
     assert _api._wait_limit({"request": {"timelimit": 4, "num_workers": 3}}) == 2 * 12 + 100
     assert _api._wait_limit({"request": {"time_limit_seconds": 2, "settings": {"multi_start": 5}}}) == 2 * 10 + 100
@@ -1149,7 +1162,7 @@ def test_the_seed_checked_is_the_one_employee_scheduling_solves_with(api):
     assert created.body["request"]["random_seed"] == 5
 
 
-@pytest.mark.parametrize("config", [{"spent_limit_seconds": 1}, "fast"])
+@pytest.mark.parametrize("config", [{"stop": {"time_limit_seconds": 1}}, "fast"])
 def test_a_config_of_another_type_is_refused_as_here(api, config):
     knapsack = use_case_module("knapsack")
     with pytest.raises(TypeError, match="config must be a optimaru.knapsack.SolverConfig"):

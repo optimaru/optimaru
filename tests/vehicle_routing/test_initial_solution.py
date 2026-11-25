@@ -169,7 +169,7 @@ def test_stop_at_first_feasible_request_sets_the_hard_only_limit(monkeypatch):
         pass
 
     def capture(cfg):
-        seen.append(cfg.best_score_limit)
+        seen.append(cfg.stop.target_score)
         raise Captured
 
     monkeypatch.setattr(models._core, "Solver", capture)

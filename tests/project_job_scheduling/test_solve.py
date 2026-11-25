@@ -110,7 +110,7 @@ def test_stop_at_first_feasible_has_no_soft_floor():
         on_new_best=None,
         config=None,
     )
-    assert cfg.best_score_limit == (0, -(2**63), -(2**63))
+    assert cfg.stop.target_score == (0, -(2**63), -(2**63))
 
 
 def _competing_activities(count: int = 30) -> ProjectJobScheduleModel:
@@ -191,15 +191,15 @@ def _competing_activities(count: int = 30) -> ProjectJobScheduleModel:
 
 def _solved(model: ProjectJobScheduleModel, *, serial_schedule_moves: bool) -> ProjectJobScheduleModel:
     config = pj.SolverConfig()
-    config.step_count_limit = 20_000
-    config.serial_schedule_moves = serial_schedule_moves
+    config.stop.step_limit = 20_000
+    config.custom_moves.serial_schedule = serial_schedule_moves
     return pj.solve(model, config=config, random_seed=3, parallel_solver_count=1)
 
 
 def test_serial_schedule_moves_end_the_project_earlier():
     config = pj.SolverConfig()
-    assert config.serial_schedule_moves is True
-    assert config.custom_move_probability == 0.2
+    assert config.custom_moves.serial_schedule is True
+    assert config.custom_moves.share == 0.2
 
     model = _competing_activities()
     with_moves = _solved(model, serial_schedule_moves=True)
@@ -213,7 +213,7 @@ def test_serial_schedule_moves_end_the_project_earlier():
 
 def test_serial_schedule_moves_can_be_switched_off():
     config = pj.SolverConfig()
-    config.serial_schedule_moves = False
-    config.step_count_limit = 20_000
+    config.custom_moves.serial_schedule = False
+    config.stop.step_limit = 20_000
     result = pj.solve(generate_demo_data(), config=config, random_seed=1)
     assert result.score_hard == 0

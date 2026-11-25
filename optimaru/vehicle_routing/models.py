@@ -436,14 +436,14 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
     )
 
     cfg = _core.SolverConfig()
-    cfg.spent_limit_seconds = request.time_limit_seconds
-    cfg.random_seed = request.random_seed
-    cfg.parallel_solver_count = request.parallel_solver_count
-    cfg.full_assert = request.full_assert
+    cfg.stop.time_limit_seconds = request.time_limit_seconds
+    cfg.run.random_seed = request.random_seed
+    cfg.run.parallel_solver_count = request.parallel_solver_count
+    cfg.run.full_assert = request.full_assert
     apply_solver_parameters(cfg, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
-        cfg.best_score_limit = (0, -(2**63), -(2**63))
+        cfg.stop.target_score = (0, -(2**63), -(2**63))
     solver = _core.Solver(cfg)
     has_route_policy = any(
         v.max_travel_time

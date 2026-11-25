@@ -219,8 +219,8 @@ from optimaru.knapsack.constraints import UnusedCapacityCost
 others = [spec for spec in get_constraints() if spec.name != "unused_capacity_cost"]
 picks = [*others, UnusedCapacityCost(weight=10)]
 config = knapsack.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 result = knapsack.solve(problem, config=config, constraints=picks)
 print(knapsack.constraint_costs(result, picks)["unused_capacity_cost"]["costs"], result.total_value)
 ```
@@ -454,9 +454,9 @@ steps = 5_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     core = problem.to_core()
     config = knapsack.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     knapsack.solve(core, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -487,8 +487,8 @@ at the same budget over several seeds, with and without it:
 ```python
 for seed in range(1, 6):
     config = knapsack.SolverConfig()
-    config.step_count_limit = 2_000_000
-    config.random_seed = seed
+    config.stop.step_limit = 2_000_000
+    config.run.random_seed = seed
     for picked in (others, picks):
         result = knapsack.solve(problem, config=config, constraints=picked)
         print(seed, result.total_value, problem.capacity - result.total_weight)

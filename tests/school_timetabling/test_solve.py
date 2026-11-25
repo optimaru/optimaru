@@ -96,7 +96,7 @@ def test_solve_quickstart_mode(problem):
 
 def test_solve_accepts_config_objects(problem):
     # models.SolveConfig works as config in both modes.
-    model_cfg = SolveConfig(late_acceptance_size=100)
+    model_cfg = SolveConfig(acceptance={"late_acceptance_size": 100})
     result = st.solve(
         problem,
         time_limit_seconds=10.0,
@@ -109,7 +109,7 @@ def test_solve_accepts_config_objects(problem):
 
     # A mode's _core config can be passed directly too.
     cfg = st.canon.SolverConfig()
-    cfg.late_acceptance_size = 100
+    cfg.acceptance.late_acceptance_size = 100
     result = st.solve(
         problem,
         time_limit_seconds=5.0,
@@ -174,13 +174,13 @@ def test_weights_and_constraints_do_not_mix(problem):
     with pytest.raises(ValueError, match="fast path"):
         st.solve(problem, time_limit_seconds=0.1, weights={"teacher_gap_cost": 1}, constraints=st.Assembly())
     cfg = st.canon.SolverConfig()
-    cfg.weights = st.canon.ObjectiveWeights(teacher_gap_cost=1)
+    cfg.cost.weights = st.canon.ObjectiveWeights(teacher_gap_cost=1)
     with pytest.raises(ValueError, match="fast path"):
         st.solve(problem, time_limit_seconds=0.1, config=cfg, constraints=st.Assembly())
 
 
 def test_default_weights_go_with_constraints(problem):
-    """weights= equal to the defaults changes nothing, so it is accepted next to a selection like config.weights."""
+    """weights= equal to the defaults changes nothing, so it is accepted next to a selection like config.cost.weights."""
     defaults = st.constraints.default_weights()  # the six soft names, as the server sends them
     for weights in (defaults, {"teacher_gap_cost": defaults["teacher_gap_cost"]}):
         result = st.solve(problem, time_limit_seconds=0.5, random_seed=3, weights=weights, constraints=st.Assembly())

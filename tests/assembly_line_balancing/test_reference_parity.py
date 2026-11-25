@@ -117,7 +117,7 @@ def _random_complete(problem: dict, rng: random.Random) -> list[int]:
 def _constructed(data: dict) -> list[int]:
     core = Model.model_validate(data).to_core()
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     alb.Solver(config).solve(core)
     return core.assignment()
 
@@ -154,9 +154,9 @@ def test_a_solved_sample_matches_the_oracle(name):
     problem = _samples()[name]
     model = Model.model_validate(problem)
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = 300
-    config.random_seed = 42
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = 300
+    config.run.random_seed = 42
     model = alb.solve(model, config=config)
     _assert_parity(model.model_dump())
     assert (model.score_hard, model.score_soft) == ref.default_score(model.model_dump())

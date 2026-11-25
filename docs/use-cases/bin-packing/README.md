@@ -70,14 +70,14 @@ is a reward and all four are scored by default (`default_enabled`);
 - **No weights on the problem.** `BinPackingProblem` and `BinPackingProblemModel` carry
   no constraint weights (`extra="forbid"`). Weights come only from constraint
   selections; the defaults (1 each) are the components'.
-- **`SolverConfig`** has the engine knobs (`spent_limit_seconds`, `step_count_limit`,
-  `unimproved_*`, `parallel_solver_count`, `late_acceptance_size`, `ruin_recreate_*`,
-  move weights, `value_recommender_probability`, `empty_bin_moves`,
-  `empty_bin_candidates`, `repack_moves`, `repack_partner_bins`, `trade_moves`,
-  `fill_tie_break`, `best_score_limit`,
+- **`SolverConfig`** has the engine knobs (`stop.time_limit_seconds`, `stop.step_limit`,
+  `unimproved_*`, `parallel_solver_count`, `acceptance.late_acceptance_size`, `ruin_recreate_*`,
+  move weights, `selection.value_recommender_probability`, `custom_moves.empty_bin`,
+  `custom_moves.empty_bin_candidates`, `custom_moves.repack`, `custom_moves.repack_partner_bins`, `custom_moves.trade`,
+  `acceptance.fill_tie_break`, `stop.target_score`,
   `on_new_best`, `full_assert`) set as attributes (`SolverConfig()` takes no arguments).
-  Zero budget is `spent_limit_seconds = 0`; a fixed number of steps is
-  `step_count_limit = N`. `on_new_best` is called as `on_new_best(step, score)`.
+  Zero budget is `stop.time_limit_seconds = 0`; a fixed number of steps is
+  `stop.step_limit = N`. `on_new_best` is called as `on_new_best(step, score)`.
 - **Exponent granularity.** The engine shapes a unit constraint per unit and a global
   on its total. The units are bins: `bin_capacity_cost`, `color_conflict_cost` and
   `item_conflict_cost` are shaped per bin (red x3 + blue x2 in one bin at exponent 2:
@@ -146,7 +146,7 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 - `optimaru/bin_packing/cpp/bp/search/moves/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
   and `TradeMove` (header-only, so the tests drive them directly)
 - `optimaru/bin_packing/cpp/bp/search/accept/fill_late_acceptance.hpp` — late acceptance with the rule for a
-  step that keeps the score (`fill_tie_break`)
+  step that keeps the score (`acceptance.fill_tie_break`)
 - `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
 - `optimaru/bin_packing/cpp/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
@@ -185,30 +185,30 @@ moves of the domain (`optimaru/bin_packing/cpp/bp/search/moves/moves.hpp`). They
 `used_bins_cost` is a step function: a bin only stops costing when its last item
 leaves, which no single change can show the acceptor.
 
-- **`EmptyBinMove`** (`empty_bin_moves`) moves every item of one of the
-  `empty_bin_candidates` lightest bins into the best-fitting other bin with room, in
+- **`EmptyBinMove`** (`custom_moves.empty_bin`) moves every item of one of the
+  `custom_moves.empty_bin_candidates` lightest bins into the best-fitting other bin with room, in
   one move. It checks the capacity only.
-- **`RepackMove`** (`repack_moves`, `repack_partner_bins`) takes the items out of one
-  of those light bins *and* out of 1 to `repack_partner_bins` (2) other light bins, and
+- **`RepackMove`** (`custom_moves.repack`, `custom_moves.repack_partner_bins`) takes the items out of one
+  of those light bins *and* out of 1 to `custom_moves.repack_partner_bins` (2) other light bins, and
   puts them back heaviest first into the fullest bin where each adds no capacity, colour
   or conflict violation; one that fits no other bin goes to the emptied light bin
   (or, if it clashes there too, a new bin). So the move either saves a bin or
   reshuffles the light bins at an equal score. It adds no hard violation as long as
   every item fits the capacity on its own and some bin is free.
-- **`TradeMove`** (`trade_moves`) trades none, one or two items of one bin for none,
+- **`TradeMove`** (`custom_moves.trade`) trades none, one or two items of one bin for none,
   one or two of another. Of the trades with up to 16 other bins that keep both bins
   within the capacity and leave the fuller of the two no less full, it makes the one
   that raises the two bins' sum of squared loads most; when no trade raises it, one
   after which both hold what they held, in other items. That second kind is how an item gets out of a full bin and to the bin
   that needs it. It checks the capacity only.
 
-**A step that keeps the score** (`fill_tie_break`). Every packing with the same number
+**A step that keeps the score** (`acceptance.fill_tie_break`). Every packing with the same number
 of bins has the same score, and plain late acceptance takes every step from one to the
-next, so the change and swap moves undo what `TradeMove` gains. With `fill_tie_break`
+next, so the change and swap moves undo what `TradeMove` gains. With `acceptance.fill_tie_break`
 (the default) such a step is taken when it does not lower the *fill*, the sum of the
 squared bin loads, and otherwise one time in eight
 (`optimaru/bin_packing/cpp/bp/search/accept/fill_late_acceptance.hpp`). The fill is not part
-of the score: the score, `best_score_limit`, the unimproved limits and `on_new_best` see
+of the score: the score, `stop.target_score`, the unimproved limits and `on_new_best` see
 the number of bins alone. A step that changes the score is judged as before.
 
 What the two add, on Falkenauer's instances
@@ -217,7 +217,7 @@ of each of the eight classes, two seeds, 10 s, one thread), as runs that end abo
 capacity bound ceil(total weight / capacity). The bound is the best known bin count the
 OR-Library file states for 23 of the 24, and one below the file's count for `u120_19`:
 
-| `trade_moves` | `fill_tie_break` | runs above the bound, of 48 | where |
+| `custom_moves.trade` | `acceptance.fill_tie_break` | runs above the bound, of 48 | where |
 | --- | --- | ---: | --- |
 | on | on | 0 | |
 | on | off | 7 | the triplets of 249 items (1 of 6 runs) and of 501 (6 of 6) |
@@ -233,7 +233,7 @@ off, 44 bins), 120 items of weight 10..60 on capacity 100, about 40% in one of 4
 ([`benchmarks/bin-packing/cpsat/bin_packing_cpsat/quality_bench.py`](../../../benchmarks/bin-packing/cpsat/bin_packing_cpsat/quality_bench.py)),
 bins used:
 
-| instance (weight lower bound) | `repack_moves` off | `trade_moves` and `fill_tie_break` off | all three off | default |
+| instance (weight lower bound) | `custom_moves.repack` off | `custom_moves.trade` and `acceptance.fill_tie_break` off | all three off | default |
 | --- | --- | --- | --- | --- |
 | sq1 (43) | 43, 43, 43 | 43, 43, 43 | 45, 45, 45 | 43, 43, 43 |
 | g11 (42) | 42, 42, 42 | 42, 42, 42 | 45, 45, 45 | 42, 42, 42 |
@@ -249,7 +249,7 @@ The full table is in [`benchmarks/bin-packing`](../../../benchmarks/bin-packing/
 `BinPackingProblemModel` whose search starts from `solution`, a solved model or
 the same thing as a JSON dict. Items are matched by id; items left out or at
 bin -1 are placed around the seeded bins by the best-fit construction before the
-search starts, and a complete seed skips construction (with `spent_limit_seconds = 0`
+search starts, and a complete seed skips construction (with `stop.time_limit_seconds = 0`
 it comes back exactly, gaps included). Unknown ids, duplicates and bins outside
 the item count raise `ValueError`. A seed is used once: the solve clears
 `warm_start`, and a plain solve ignores input bins.
@@ -270,7 +270,7 @@ The solution has the **assignment** shape; the domain solver that configures the
 engine is `optimaru/bin_packing/cpp/bp/solver.hpp` + `optimaru/bin_packing/cpp/bp/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves (weights in
-`Solver::Config`; `value_recommender_probability` biases change moves toward bins in
+`Solver::Config`; `selection.value_recommender_probability` biases change moves toward bins in
 use). `EmptyBinMove` (moves every item of a light bin into the other bins in one step),
 `RepackMove` (re-places the items of a few light bins without a clash) and `TradeMove`
 (trades items between two bins so that one gets fuller) are defined

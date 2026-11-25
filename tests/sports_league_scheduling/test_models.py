@@ -49,12 +49,12 @@ def test_from_core_records_score():
 def test_solve_config_to_core():
     cfg = SolveConfig(time_limit_seconds=3.0, random_seed=7, stop_at_first_feasible=True)
     core = cfg.to_core()
-    assert core.spent_limit_seconds == pytest.approx(3.0)
-    assert core.random_seed == 7
-    assert core.best_score_limit == (0, float("-inf"))
+    assert core.stop.time_limit_seconds == pytest.approx(3.0)
+    assert core.run.random_seed == 7
+    assert core.stop.target_score == (0, float("-inf"))
 
     with pytest.raises(ValueError):
-        SolveConfig(ruin_recreate_min_ruin_fraction=0.5, ruin_recreate_max_ruin_fraction=0.1)
+        SolveConfig(alns={"min_ruin_fraction": 0.5, "max_ruin_fraction": 0.1})
 
 
 def _dump_with_round(value):
@@ -85,7 +85,7 @@ def test_solve_takes_the_model_and_leaves_it_as_it_was():
     model = LeagueScheduleModel.from_core(small_schedule())
     before = model.model_dump()
     config = sl.SolverConfig()
-    config.step_count_limit = 500
+    config.stop.step_limit = 500
     solved = sl.solve(model, config=config, random_seed=3)
     assert isinstance(solved, LeagueScheduleModel) and solved is not model
     assert model.model_dump() == before

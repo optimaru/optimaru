@@ -30,24 +30,24 @@ def test_metaheuristic_finds_two_bin_optimum() -> None:
 def test_metaheuristic_accepts_all_solver_parameters() -> None:
     candidate = problem()
     config = SolverConfig()
-    config.spent_limit_seconds = 0.1
-    config.random_seed = 11
-    config.parallel_solver_count = 3
-    config.step_count_limit = 500
-    config.unimproved_step_count_limit = 200
-    config.late_acceptance_size = 50
-    config.ruin_recreate = True
-    config.ruin_recreate_unimproved_step_trigger = 20
-    config.change_move_weight = 0.6
-    config.swap_move_weight = 0.4
-    config.value_recommender_probability = 0.3
-    config.empty_bin_moves = True
-    config.empty_bin_candidates = 1
-    config.repack_moves = True
-    config.repack_partner_bins = 1
-    config.trade_moves = True
-    config.fill_tie_break = True
-    config.best_score_limit = (0, -2)
+    config.stop.time_limit_seconds = 0.1
+    config.run.random_seed = 11
+    config.run.parallel_solver_count = 3
+    config.stop.step_limit = 500
+    config.stop.unimproved_step_limit = 200
+    config.acceptance.late_acceptance_size = 50
+    config.alns_trigger.enabled = True
+    config.alns_trigger.unimproved_steps = 20
+    config.moves.change_weight = 0.6
+    config.moves.swap_weight = 0.4
+    config.selection.value_recommender_probability = 0.3
+    config.custom_moves.empty_bin = True
+    config.custom_moves.empty_bin_candidates = 1
+    config.custom_moves.repack = True
+    config.custom_moves.repack_partner_bins = 1
+    config.custom_moves.trade = True
+    config.acceptance.fill_tie_break = True
+    config.stop.target_score = (0, -2)
     solve(candidate, config=config)
     assert (candidate.score.hard, candidate.score.soft) == (0, -2.0)
 

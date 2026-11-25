@@ -15,14 +15,14 @@ moves, interleaved with adaptive ruin & recreate (ALNS) — random, related,
 worst, SISR substring and whole-route ruins under an adaptive operator
 selection scheme, repaired by regret-k insertion. Every ALNS knob is on
 `SolverConfig`. Destroy-and-repair runs as an acceptor-judged move by default;
-the unconditional stagnation kick is off (`ruin_recreate = True` turns it on —
+the unconditional stagnation kick is off (`alns_trigger.enabled = True` turns it on —
 on a tightly loaded fleet it stalls the search, see `Solver::Config`). Two more
 strategies run by default on top of the move mix: an ejection chain
-(`ejection_chain_weight`) for the slack shifts a tightly loaded fleet needs,
-and an iterated local search (`iterated_local_search_weight`: ruin a few
+(`strategies.ejection_chain_weight`) for the slack shifts a tightly loaded fleet needs,
+and an iterated local search (`strategies.iterated_local_search_weight`: ruin a few
 visits, repair, descend to a local optimum) that does most of the work on
 large instances; with it the nearby neighbourhood is 25 visits
-(`driving_time_nearby_size`). See `Solver::Config` for the measurements behind
+(`selection.driving_time_nearby_size`). See `Solver::Config` for the measurements behind
 each default.
 
 Score convention (hard / medium / soft), at the default weights:
@@ -43,7 +43,7 @@ Visits that share a `group` (`Visit.group_index`, `VisitModel.group`) are one jo
 they ride one vehicle together or all stay unassigned (`visit_group_cost`, hard),
 and `after` (`Visit.after_visit_indices`) puts a partial order on them
 (`visit_order_cost`, hard). A group operator moves a group between vehicles as one
-unit (`group_ruin_recreate`).
+unit (`alns.group_ruin`).
 
 A vehicle's profile may list visits it may not serve (`ProfileVisits`,
 `TravelProfile.forbidden_visits`; `profile_forbidden_visit_cost`, hard and always on)
@@ -56,6 +56,7 @@ Compared lexicographically: hard dominates medium dominates soft.
 """
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -75,6 +76,9 @@ from ._core import (
     list_constraints,
 )
 from .models import solve_request, with_initial_solution
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "AcceptorType",

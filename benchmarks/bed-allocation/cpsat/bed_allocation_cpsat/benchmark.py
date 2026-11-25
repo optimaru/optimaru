@@ -148,8 +148,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
     import optimaru.bed_allocation as ba
 
     config = ba.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = seed
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = seed
     ba.Solver(config).solve(problem)
 
 

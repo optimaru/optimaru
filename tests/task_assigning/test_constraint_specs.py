@@ -420,7 +420,7 @@ def _zero_budget(solution, picks):
     """The engine's score of `solution` under `picks`: a solve with no time keeps it as it is."""
     before = solution.task_lists()
     config = ta.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     ta.Solver(config).solve_with_constraints(solution, picks)
     assert solution.task_lists() == before
     return engine(solution.score)
@@ -604,11 +604,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     solution = build_solution()
     config = ta.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 2000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 2000
+    config.stop.time_limit_seconds = 30
     ta.Solver(config).solve_with_constraints(solution, picks)
     raw = ta.constraint_costs(solution, picks)
     assert len(raw) == len(picks)

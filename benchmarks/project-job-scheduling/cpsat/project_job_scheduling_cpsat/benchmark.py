@@ -134,8 +134,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
     import optimaru.project_job_scheduling as pjs
 
     config = pjs.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = seed
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = seed
     pjs.Solver(config).solve(problem)
 
 

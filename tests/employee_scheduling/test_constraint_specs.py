@@ -310,7 +310,10 @@ def test_the_spec_parameter_drift_is_fixed():
 
 
 def test_the_run_repair_default_is_the_same_on_both_sides():
-    assert es.SolverConfig().employee_run_repair_max_days == models.SolverSettings().employee_run_repair_max_days
+    assert (
+        es.SolverConfig().custom_moves.employee_run_repair_max_days
+        == models.SolverSettings().custom_moves.employee_run_repair_max_days
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -727,9 +730,9 @@ def test_a_solve_with_repeated_and_shifted_picks_reports_the_mirror_score(picks)
     score is the Python mirror's of the final roster (and a fresh recompute's)."""
     schedule = es.make_random_roster(days=14, shifts_per_day=4, employees=5, seed=11)
     config = es.SolverConfig()
-    config.random_seed = 3
-    config.step_count_limit = 4000
-    config.spent_limit_seconds = 30
+    config.run.random_seed = 3
+    config.stop.step_limit = 4000
+    config.stop.time_limit_seconds = 30
     calculator = es.DecomposedCalculator(picks)
     es.Solver(config).solve(schedule, calculator)
     reported = schedule.score

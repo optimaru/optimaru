@@ -44,15 +44,15 @@ def test_solve_config_to_core():
         time_limit_seconds=3.5,
         random_seed=9,
         parallel_solver_count=2,
-        compatible_value_probability=0.5,
-        best_score_limit=(0, -123.0),
+        stop={"target_score": (0, -123.0)},
+        selection={"compatible_value_probability": 0.5},
     )
     core = cfg.to_core()
-    assert abs(core.spent_limit_seconds - 3.5) < 1e-9
-    assert core.random_seed == 9
-    assert core.parallel_solver_count == 2
-    assert abs(core.compatible_value_probability - 0.5) < 1e-9
-    assert core.best_score_limit == (0, -123.0)
+    assert abs(core.stop.time_limit_seconds - 3.5) < 1e-9
+    assert core.run.random_seed == 9
+    assert core.run.parallel_solver_count == 2
+    assert abs(core.selection.compatible_value_probability - 0.5) < 1e-9
+    assert core.stop.target_score == (0, -123.0)
 
 
 def _dump_with(field, value):
@@ -102,7 +102,7 @@ def test_solve_takes_the_model_and_leaves_it_as_it_was():
     model = ConferenceScheduleModel.from_core(cs.generate_demo_data())
     before = model.model_dump()
     config = cs.SolverConfig()
-    config.step_count_limit = 500
+    config.stop.step_limit = 500
     solved = cs.solve(model, config=config, random_seed=3)
     assert isinstance(solved, ConferenceScheduleModel) and solved is not model
     assert model.model_dump() == before

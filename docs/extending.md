@@ -199,8 +199,8 @@ knobs: the limits, the seed, the parallel starts, the callback, the ruin &
 recreate knobs and, where the caller chooses it, the acceptance rule with its
 parameters (`AcceptanceConfig`) come from the bases in
 `optimaru/solver_config.hpp`, and `bind_solver_config` binds those. This lets you turn the move off for an
-A/B comparison and keeps Python users in control. Bin packing's `empty_bin_moves` /
-`empty_bin_candidates` are a complete example, including value checks in the
+A/B comparison and keeps Python users in control. Bin packing's `custom_moves.empty_bin` /
+`custom_moves.empty_bin_candidates` are a complete example, including value checks in the
 binding.
 
 ### 4. Test it

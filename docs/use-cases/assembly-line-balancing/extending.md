@@ -217,8 +217,8 @@ def generated_line(task_count=100, cycle_time=120, seed=2):
 others = [spec for spec in get_constraints() if spec.name != "late_work_cost"]
 picks = [*others, LateWorkCost(weight=0.01)]  # a small weight: the station count stays the first concern
 config = alb.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 line = generated_line()
 alb.solve(line, config=config, constraints=picks)  # a compiled problem is solved in place
 late = sum(alb.constraint_costs(line, picks)["late_work_cost"]["costs"])
@@ -505,9 +505,9 @@ steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", enabled), ("get_constraints()", get_constraints())):
     line = generated_line()
     config = alb.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     alb.solve(line, config=config, constraints=picked)
     seconds = time.perf_counter() - start

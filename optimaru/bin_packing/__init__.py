@@ -29,6 +29,7 @@ The JSON contract is `optimaru.bin_packing.models` (pydantic).
 from typing import TypeVar
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     BinPackingProblem,
@@ -45,6 +46,9 @@ from ._core import (
 from .constraints import get_constraints as _get_constraints
 from .models import BinPackingProblemModel, solve_request, with_initial_solution
 from .models import parameter_uses as _parameter_uses
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "BinPackingProblem",
@@ -89,7 +93,7 @@ def solve(
     The score is on the result: ``solve(problem).score`` (``.hard``, ``.soft``).
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
-    on). Explicit keyword arguments override config. ``spent_limit_seconds = 0`` on
+    on). Explicit keyword arguments override config. ``stop.time_limit_seconds = 0`` on
     the config skips the search: the construction (or the seed of a warm start,
     completed where an item is still -1) comes back as it is.
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached;

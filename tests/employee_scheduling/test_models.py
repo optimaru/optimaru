@@ -1,6 +1,7 @@
 """Tests for the pydantic request/response layer (optimaru.employee_scheduling.models)."""
 
 import os
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -102,52 +103,50 @@ def test_solver_settings_expose_engine_knobs():
         model_input=_small_input(constraints=default_constraints() + [UnassignedShiftsCost()]),
         settings=SolverSettings(
             random_seed=9,
-            guided_moves=False,
-            employee_greedy_construction=False,
-            late_acceptance_size=25,
-            no_improvement_limit_seconds=0.05,
-            step_count_limit=200,
-            no_improvement_step_count_limit=100,
-            ruin_recreate=False,
-            ruin_recreate_rewards=[10.0, 5.0, 1.0, 0.0],
-            ruin_recreate_as_move_weight=0.05,
-            ruin_recreate_as_move_max_ruin=8,
-            descent_weight=0.03,
-            descent_max_sweeps=2,
-            change_move_weight=1.0,
-            swap_move_weight=0.0,
-            smart_change_moves=False,
-            smart_change_candidate_count=3,
-            employee_day_repair_moves=False,
-            employee_run_repair_moves=False,
-            employee_run_repair_max_days=5,
-            employee_window_moves=False,
-            employee_window_max_days=2,
-            custom_move_probability=0.15,
-            employee_ruin_moves=False,
+            construction={"employee_greedy": False},
+            stop={"step_limit": 200},
+            alns_trigger={"enabled": False},
+            strategies={
+                "ruin_recreate_weight": 0.05,
+                "ruin_recreate_max_ruin": 8,
+                "descent_weight": 0.03,
+                "descent_max_sweeps": 2,
+            },
+            custom_moves={
+                "guided": False,
+                "smart_change": False,
+                "smart_change_candidate_count": 3,
+                "employee_day_repair": False,
+                "employee_run_repair": False,
+                "employee_run_repair_max_days": 5,
+                "employee_window": False,
+                "employee_window_max_days": 2,
+                "share": 0.15,
+            },
+            moves={"change_weight": 1.0, "swap_weight": 0.0},
+            acceptance={"late_acceptance_size": 25},
+            alns={"rewards": [10.0, 5.0, 1.0, 0.0], "employee_ruin": False},
         ),
     )
     clone = ScheduleRequest.model_validate_json(request.model_dump_json())
-    assert clone.settings.late_acceptance_size == 25
-    assert clone.settings.employee_greedy_construction is False
-    assert clone.settings.no_improvement_limit_seconds == pytest.approx(0.05)
-    assert clone.settings.step_count_limit == 200
-    assert clone.settings.no_improvement_step_count_limit == 100
-    assert clone.settings.ruin_recreate is False
-    assert clone.settings.ruin_recreate_rewards == [10.0, 5.0, 1.0, 0.0]
-    assert clone.settings.ruin_recreate_as_move_weight == pytest.approx(0.05)
-    assert clone.settings.ruin_recreate_as_move_max_ruin == 8
-    assert clone.settings.descent_weight == pytest.approx(0.03)
-    assert clone.settings.descent_max_sweeps == 2
-    assert clone.settings.smart_change_moves is False
-    assert clone.settings.smart_change_candidate_count == 3
-    assert clone.settings.employee_day_repair_moves is False
-    assert clone.settings.employee_run_repair_moves is False
-    assert clone.settings.employee_run_repair_max_days == 5
-    assert clone.settings.employee_window_moves is False
-    assert clone.settings.employee_window_max_days == 2
-    assert clone.settings.custom_move_probability == pytest.approx(0.15)
-    assert clone.settings.employee_ruin_moves is False
+    assert clone.settings.acceptance.late_acceptance_size == 25
+    assert clone.settings.construction.employee_greedy is False
+    assert clone.settings.stop.step_limit == 200
+    assert clone.settings.alns_trigger.enabled is False
+    assert clone.settings.alns.rewards == [10.0, 5.0, 1.0, 0.0]
+    assert clone.settings.strategies.ruin_recreate_weight == pytest.approx(0.05)
+    assert clone.settings.strategies.ruin_recreate_max_ruin == 8
+    assert clone.settings.strategies.descent_weight == pytest.approx(0.03)
+    assert clone.settings.strategies.descent_max_sweeps == 2
+    assert clone.settings.custom_moves.smart_change is False
+    assert clone.settings.custom_moves.smart_change_candidate_count == 3
+    assert clone.settings.custom_moves.employee_day_repair is False
+    assert clone.settings.custom_moves.employee_run_repair is False
+    assert clone.settings.custom_moves.employee_run_repair_max_days == 5
+    assert clone.settings.custom_moves.employee_window is False
+    assert clone.settings.custom_moves.employee_window_max_days == 2
+    assert clone.settings.custom_moves.share == pytest.approx(0.15)
+    assert clone.settings.alns.employee_ruin is False
 
     solution = solve_request(clone)
     assert isinstance(solution, ScheduleSolution)
@@ -155,13 +154,9 @@ def test_solver_settings_expose_engine_knobs():
 
 def test_solver_settings_reject_invalid_ruin_options():
     with pytest.raises(ValueError):
-        SolverSettings(ruin_recreate_rewards=[1.0, 2.0, 3.0])
+        SolverSettings(alns={"rewards": [1.0, 2.0, 3.0]})
     with pytest.raises(ValueError, match="must be <="):
-        SolverSettings(ruin_recreate_min_ruin_fraction=0.5, ruin_recreate_max_ruin_fraction=0.1)
-    with pytest.raises(ValueError, match="must match"):
-        SolverSettings(no_improvement_limit_seconds=0.1, unimproved_spent_limit_seconds=0.2)
-    with pytest.raises(ValueError, match="must match"):
-        SolverSettings(no_improvement_step_count_limit=10, unimproved_step_count_limit=20)
+        SolverSettings(alns={"min_ruin_fraction": 0.5, "max_ruin_fraction": 0.1})
 
 
 def test_rules_flow_into_calculator_unchanged():
@@ -261,24 +256,40 @@ def test_a_single_start_ignores_select():
     assert isinstance(solution, ScheduleSolution)
 
 
-@pytest.mark.parametrize("key", ["no_such_knob", "spent_limit_seconds", "random_seed", "on_new_best", "__class__"])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "moves.no_such_knob",
+        "stop.time_limit_seconds",
+        "stop.step_limit",
+        "run.random_seed",
+        "run.on_new_best",
+        "alns.__class__",
+    ],
+)
 def test_a_bad_portfolio_key_fails_before_any_solve(key):
+    group, name = key.split(".")
     body = {
         "timelimit": 30,
         "model_input": _small_input().model_dump(),
-        "settings": {"multi_start": 4, "portfolio": [{"late_acceptance_size": 50}, {key: 1}]},
+        "settings": {"multi_start": 4, "portfolio": [{"acceptance": {"late_acceptance_size": 50}}, {group: {name: 1}}]},
     }
-    with pytest.raises(ValueError, match=rf"portfolio\[1\]: .*{key}"):
+    with pytest.raises(ValueError, match=rf"portfolio\[1\]: .*{re.escape(key)}"):
         ScheduleRequest.model_validate(body)
 
 
-def test_every_portfolio_key_is_a_solver_config_attribute():
+def test_every_portfolio_key_is_a_solver_config_setting():
     config = es.SolverConfig()
-    assert [key for key in models._PORTFOLIO_KEYS if not hasattr(config, key)] == []
+    missing = [
+        key for key in models._PORTFOLIO_KEYS if key.split(".")[1] not in dir(getattr(config, key.split(".")[0]))
+    ]
+    assert missing == []
 
 
 def test_portfolio_overrides_reach_each_start():
-    request = _multi_start_request(multi_start=2, portfolio=[{"late_acceptance_size": 50}, {"descent_weight": 0.0}])
+    request = _multi_start_request(
+        multi_start=2, portfolio=[{"acceptance": {"late_acceptance_size": 50}}, {"strategies": {"descent_weight": 0.0}}]
+    )
     assert _start_count(request) == 2
 
 

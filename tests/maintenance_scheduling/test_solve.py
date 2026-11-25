@@ -88,12 +88,12 @@ def test_pinned_job_is_kept():
 
 def test_solver_config_roundtrip():
     config = mnt.SolverConfig()
-    config.spent_limit_seconds = 1.5
-    config.random_seed = 11
-    config.parallel_solver_count = 2
-    config.best_score_limit = (0, float("-inf"))
-    assert config.spent_limit_seconds == 1.5
-    assert config.best_score_limit == (0, float("-inf"))
+    config.stop.time_limit_seconds = 1.5
+    config.run.random_seed = 11
+    config.run.parallel_solver_count = 2
+    config.stop.target_score = (0, float("-inf"))
+    assert config.stop.time_limit_seconds == 1.5
+    assert config.stop.target_score == (0, float("-inf"))
 
     schedule = mnt.generate_demo_data("SMALL", MONDAY)
     mnt.solve(schedule, config=config)

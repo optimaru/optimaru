@@ -38,7 +38,7 @@ vehicles = [vrp.Vehicle("V1", 6, 0, departure_time=7 * 3600)]
 plan = vrp.VehicleRoutePlan("demo", locations, vehicles, visits)
 
 config = vrp.SolverConfig()
-config.spent_limit_seconds = 2
+config.stop.time_limit_seconds = 2
 solver = vrp.Solver(config)
 
 solver.solve(plan)                      # default constraints

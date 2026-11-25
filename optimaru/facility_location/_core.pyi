@@ -84,69 +84,153 @@ def calculate_score(problem: FacilityLocationProblem) -> Score:
     """Full recompute of the score (also stores problem.score)."""
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    late_acceptance_size: int
-    """0 = auto: clamp(8 * consumer count, 400, 3200). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
-    from a given solution keeps this one length."""
-    full_assert: bool
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    ruin_recreate_as_move_weight: float
-    """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-    ruin_recreate.as_move_weight); one such move costs ~ruinCount * facility
-    count score evaluations. 0 = off."""
-    ruin_recreate_as_move_max_ruin: int
-    change_move_weight: float
-    swap_move_weight: float
-    nearby_probability: float
-    """Bias swap partners (and the LNS related ruin) toward geographically
-    close consumers with this probability. 0 = off (uniform-random)."""
-    nearby_size: int
-    value_recommender_probability: float
-    """Probability that a change move draws the consumer's new facility from
-    its value_recommender_keep nearest facilities instead of uniformly."""
-    value_recommender_keep: int
-    descent_weight: float
-    """Assignment-shape best-improvement descent strategy: probability a step runs a
-    full nearby-pair descent (~2 * facility count evaluations per sweep)
-    instead of one sampled move. 0 = off."""
-    custom_move_probability: float
-    """Gate on how often a step may draw one of the macro moves (CloseFacilityMove,
-    SwapFacilityMove) instead of a change or a swap; 1 = unrestricted. A solve that starts from
-    nothing draws them on a tenth of this once late acceptance has started over for the first
-    time."""
-    close_facility_moves: bool
-    """Enable the facility-closing macro move: it empties one used facility in
-    a single step, the only way past the setup-cost step function."""
-    close_facility_keep: int
-    """How far down a consumer's distance-ordered facility list the two macro
-    moves look for a new home (SwapFacilityMove for the consumers of the
-    facility it closes). 0 switches both moves off."""
-    close_facility_migrate_probability: float
-    """Probability that an emptied facility's consumers migrate together to one
-    alternative site instead of being redistributed over the open ones."""
-    swap_facility_moves: bool
-    """Enable SwapFacilityMove: open a closed facility and close the one that serves its
-    surroundings in a single step; the closed one's consumers go to their nearest facility with
-    room, and the facilities with room take the consumers nearer to them. Without it the search
-    keeps the facilities it first settles on."""
-    best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
-    the first feasible solution."""
-    on_new_best: Callable[[int, Score], None] | None
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``strategies``, ``custom_moves``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        custom_moves: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        unimproved_step_limit: int
+        target_score: tuple[int, float]
+        """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
+        the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        ruin_recreate_weight: float
+        """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
+        ruin_recreate.as_move_weight); one such move costs ~ruinCount * facility
+        count score evaluations. 0 = off."""
+        ruin_recreate_max_ruin: int
+        descent_weight: float
+        """Assignment-shape best-improvement descent strategy: probability a step runs a
+        full nearby-pair descent (~2 * facility count evaluations per sweep)
+        instead of one sampled move. 0 = off."""
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class CustomMoves:
+        """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        share: float
+        """Gate on how often a step may draw one of the macro moves (CloseFacilityMove,
+        SwapFacilityMove) instead of a change or a swap; 1 = unrestricted. A solve that starts from
+        nothing draws them on a tenth of this once late acceptance has started over for the first
+        time."""
+        close_facility: bool
+        """Enable the facility-closing macro move: it empties one used facility in
+        a single step, the only way past the setup-cost step function."""
+        close_facility_keep: int
+        """How far down a consumer's distance-ordered facility list the two macro
+        moves look for a new home (SwapFacilityMove for the consumers of the
+        facility it closes). 0 switches both moves off."""
+        close_facility_migrate_probability: float
+        """Probability that an emptied facility's consumers migrate together to one
+        alternative site instead of being redistributed over the open ones."""
+        swap_facility: bool
+        """Enable SwapFacilityMove: open a closed facility and close the one that serves its
+        surroundings in a single step; the closed one's consumers go to their nearest facility with
+        room, and the facilities with room take the consumers nearer to them. Without it the search
+        keeps the facilities it first settles on."""
+
+    custom_moves: CustomMoves
+    """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        nearby_probability: float
+        """Bias swap partners (and the LNS related ruin) toward geographically
+        close consumers with this probability. 0 = off (uniform-random)."""
+        nearby_size: int
+        value_recommender_probability: float
+        """Probability that a change move draws the consumer's new facility from
+        its value_recommender_keep nearest facilities instead of uniformly."""
+        value_recommender_keep: int
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """0 = auto: clamp(8 * consumer count, 400, 3200). The first stage's length: the search restarts with
+        a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+        from a given solution keeps this one length."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        full_assert: bool
+        on_new_best: Callable[[int, Score], None] | None
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Construction heuristic + Late Acceptance local search (+ adaptive

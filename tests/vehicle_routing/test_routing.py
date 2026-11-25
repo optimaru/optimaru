@@ -9,27 +9,30 @@ import optimaru.vehicle_routing as vrp
 from optimaru.vehicle_routing import models
 from optimaru.vehicle_routing.constraints import TravelDistanceCost, UnassignedVisitsCost, get_constraints
 
+from .._settings import set_setting
 from .test_constraint_specs import _random_plan
 
 
 def test_request_solver_parameters_are_applied():
     config = vrp.SolverConfig()
-    models.apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
-    assert config.late_acceptance_size == 7
-    assert config.ruin_recreate is False
+    models.apply_solver_parameters(
+        config, {"alns_trigger": {"enabled": False}, "acceptance": {"late_acceptance_size": 7}}
+    )
+    assert config.acceptance.late_acceptance_size == 7
+    assert config.alns_trigger.enabled is False
     with pytest.raises(ValueError, match="unknown solver parameter"):
         models.apply_solver_parameters(config, {"not_a_parameter": 1})
 
 
 def test_granular_descent_parameters_are_public():
     config = vrp.SolverConfig()
-    assert config.granular_descent is True
-    config.granular_descent = False
-    config.granular_descent_max_segment = 3
-    config.granular_descent_candidate_routes = 6
-    assert not config.granular_descent
-    assert config.granular_descent_max_segment == 3
-    assert config.granular_descent_candidate_routes == 6
+    assert config.strategies.granular_descent is True
+    config.strategies.granular_descent = False
+    config.strategies.granular_descent_max_segment = 3
+    config.strategies.granular_descent_candidate_routes = 6
+    assert not config.strategies.granular_descent
+    assert config.strategies.granular_descent_max_segment == 3
+    assert config.strategies.granular_descent_candidate_routes == 6
 
 
 # Also the small problem of tests/_problems.py.
@@ -60,8 +63,8 @@ def small_plan():
 
 def solve(plan, seconds=0.3, seed=7):
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = seconds
-    cfg.random_seed = seed
+    cfg.stop.time_limit_seconds = seconds
+    cfg.run.random_seed = seed
     vrp.Solver(cfg).solve(plan)
     return plan
 
@@ -375,7 +378,7 @@ def test_travel_distance_cost_prices_the_distance_matrix():
 
 def _steps(steps):
     config = vrp.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 
@@ -385,7 +388,7 @@ def test_package_solve_solves_in_place_and_returns_the_plan():
     assert vrp.solve(plan, config=config, random_seed=7, full_assert=True) is plan
     assert plan.score.hard == 0
     # The keyword overrides go to a copy of the caller's config.
-    assert config.full_assert is False
+    assert config.run.full_assert is False
 
 
 def test_package_solve_with_constraints_equals_solve_with_constraints():
@@ -394,7 +397,7 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
     by_package, by_solver = small_plan(), small_plan()
     vrp.solve(by_package, config=_steps(2000), random_seed=7, constraints=get_constraints())
     config = _steps(2000)
-    config.random_seed = 7
+    config.run.random_seed = 7
     vrp.Solver(config).solve_with_constraints(by_solver, get_constraints())
     assert str(by_package.score) == str(by_solver.score)
 
@@ -402,14 +405,14 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("parallel_solver_count", 0, "must be positive"),
-        ("late_acceptance_size", -1, "must be >= 0"),
-        ("ruin_recreate_rewards", [1.0, 2.0], "exactly 4 values"),
+        ("run.parallel_solver_count", 0, "must be positive"),
+        ("acceptance.late_acceptance_size", -1, "must be >= 0"),
+        ("alns.rewards", [1.0, 2.0], "exactly 4 values"),
     ],
 )
 def test_config_rejects_out_of_range_values(field, value, message):
     with pytest.raises(ValueError, match=message):
-        setattr(vrp.SolverConfig(), field, value)
+        set_setting(vrp.SolverConfig(), field, value)
 
 
 def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
@@ -417,8 +420,8 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
     class Recorder:
         def __init__(self, config):
-            seen["limit"] = config.best_score_limit
-            seen["callback"] = config.on_new_best
+            seen["limit"] = config.stop.target_score
+            seen["callback"] = config.run.on_new_best
 
         def solve(self, problem):
             seen["solved"] = problem
@@ -439,9 +442,9 @@ def test_package_solve_reports_new_bests():
 
 def _new_bests(acceptor) -> list:
     config = vrp.SolverConfig()
-    config.step_count_limit = 4000
-    config.random_seed = 5
-    config.acceptor_type = acceptor
+    config.stop.step_limit = 4000
+    config.run.random_seed = 5
+    config.acceptance.rule = acceptor
     calls = []
     vrp.solve(_random_plan(), config=config, on_new_best=lambda step, score: calls.append(step))
     return calls

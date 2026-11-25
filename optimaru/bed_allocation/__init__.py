@@ -37,6 +37,7 @@ The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models`.
 from typing import TypeVar
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     Bed,
@@ -58,6 +59,9 @@ from ._core import (
 from .constraints import get_constraints as _get_constraints
 from .models import BedPlanModel, solve_request, with_initial_solution
 from .models import parameter_uses as _parameter_uses
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "Bed",

@@ -79,25 +79,26 @@ For finer control build `fab.SolverConfig()` and pass `config=`:
 
 | knob | default | meaning |
 |---|---|---|
-| `spent_limit_seconds` | 30 | wall clock; 0 returns the start as is |
-| `step_count_limit`, `unimproved_step_count_limit`, `unimproved_spent_limit_seconds` | 0 (off) | early exits |
+| `stop.time_limit_seconds` | 30 | wall clock; 0 returns the start as is |
+| `stop.step_limit`, `stop.unimproved_step_limit`, `stop.unimproved_time_limit_seconds` | 0 (off) | early exits |
 | `random_seed`, `parallel_solver_count` | 0, 1 | independent threads with seed + i; the strictly best wins |
-| `acceptor_type` | `SIMULATED_ANNEALING` | the engine's acceptor (`LATE_ACCEPTANCE`, `HILL_CLIMBING`, ...) |
-| `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction` | (0, 0) = auto, 0.01 | auto: hard 0, soft = 1% of the start's \|soft\|, cooling over the time limit (or over `step_count_limit` when that is further along). A seeded `step_count_limit` run repeats only while its step fraction leads the time fraction: give it a time limit generous enough for the step budget |
-| `late_acceptance_size` | 0 (= clamp(16 x rows, 400, 3200)) | for `LATE_ACCEPTANCE` |
-| `entity_tabu_size`, `great_deluge_water_level_step`, `step_counting_hill_climbing_size`, `record_to_record_start_gap`, `record_to_record_end_gap` | 7, (0, 0), 400, 0.02, 0.0 | the parameters of the other rules: see [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule) |
-| `machine_move_probability` | 0.55 | share of change moves that switch a machine (else a priority shift of 1..8) |
-| `priority_swap_moves`, `custom_move_probability` | True, 0.45 | the priority swap of two operations, and its gate |
-| `change_move_weight`, `swap_move_weight` | 1, 0 | the engine's assignment-shape move mix |
-| `ruin_recreate`, `ruin_recreate_*` | off | the engine's ALNS (a recreate decodes once per candidate value) |
-| `best_score_limit`, `full_assert`, `on_new_best` | | stop early, verify every move, `on_new_best(step, score)` |
+| `acceptance.rule` | `SIMULATED_ANNEALING` | the engine's acceptor (`LATE_ACCEPTANCE`, `HILL_CLIMBING`, ...) |
+| `acceptance.simulated_annealing_starting_temperature`, `acceptance.simulated_annealing_temperature_fraction` | (0, 0) = auto, 0.01 | auto: hard 0, soft = 1% of the start's \|soft\|, cooling over the time limit (or over `stop.step_limit` when that is further along). A seeded `stop.step_limit` run repeats only while its step fraction leads the time fraction: give it a time limit generous enough for the step budget |
+| `acceptance.late_acceptance_size` | 0 (= clamp(16 x rows, 400, 3200)) | for `LATE_ACCEPTANCE` |
+| `acceptance.entity_tabu_size`, `acceptance.great_deluge_water_level_step`, `acceptance.step_counting_hill_climbing_size`, `acceptance.record_to_record_start_gap`, `acceptance.record_to_record_end_gap` | 7, (0, 0), 400, 0.02, 0.0 | the parameters of the other rules: see [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule) |
+| `selection.machine_move_probability` | 0.55 | share of change moves that switch a machine (else a priority shift of 1..8) |
+| `custom_moves.priority_swap`, `custom_moves.share` | True, 0.45 | the priority swap of two operations, and its gate |
+| `moves.change_weight`, `moves.swap_weight` | 1, 0 | the engine's assignment-shape move mix |
+| `alns_trigger.enabled`, `ruin_recreate_*` | off | the engine's ALNS (a recreate decodes once per candidate value) |
+| `stop.target_score`, `full_assert`, `on_new_best` | | stop early, verify every move, `on_new_best(step, score)` |
 
 ## JSON in, JSON out
 
 `solve_request` takes a pydantic request, `models.SemiconductorScheduleRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `SemiconductorScheduleModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 

@@ -215,8 +215,8 @@ others = [spec for spec in get_constraints() if spec.name != "order_revisit_cost
 picks = [*others, OrderRevisitCost(weight=10)]
 solution = op.generate_demo_data(trolleys_count=10, orders_count=24)
 config = op.SolverConfig()
-config.step_count_limit = 3_000_000
-config.random_seed = 1
+config.stop.step_limit = 3_000_000
+config.run.random_seed = 1
 op.solve(solution, config=config, constraints=picks)
 raw = op.constraint_costs(solution, picks)
 walk = sum(raw["distance_from_previous_pick_task_cost"]["costs"]) + sum(
@@ -483,9 +483,9 @@ steps = 3_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     solution = op.generate_demo_data(trolleys_count=10, orders_count=24)  # solve() works in place
     config = op.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     op.solve(solution, config=config, constraints=picked)
     seconds = time.perf_counter() - start

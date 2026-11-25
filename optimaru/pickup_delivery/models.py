@@ -526,14 +526,14 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         lambda picks: _core.constraint_costs(plan, picks),
     )
     config = _core.SolverConfig()
-    config.spent_limit_seconds = request.time_limit_seconds
-    config.random_seed = request.random_seed
-    config.parallel_solver_count = request.parallel_solver_count
-    config.full_assert = request.full_assert
+    config.stop.time_limit_seconds = request.time_limit_seconds
+    config.run.random_seed = request.random_seed
+    config.run.parallel_solver_count = request.parallel_solver_count
+    config.run.full_assert = request.full_assert
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
-        config.best_score_limit = (0, -(2**63), -(2**63))
+        config.stop.target_score = (0, -(2**63), -(2**63))
     solver = _core.Solver(config)
     has_route_policy = any(
         v.max_travel_time

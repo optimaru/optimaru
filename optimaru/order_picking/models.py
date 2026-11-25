@@ -198,13 +198,13 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
     constraints = check_parameters(parameter_uses(request), constraints, get_constraints)
     solution = to_solution(request)
     config = _core.SolverConfig()
-    config.spent_limit_seconds = request.time_limit_seconds
-    config.random_seed = request.random_seed
-    config.parallel_solver_count = request.parallel_solver_count
-    config.full_assert = request.full_assert
+    config.stop.time_limit_seconds = request.time_limit_seconds
+    config.run.random_seed = request.random_seed
+    config.run.parallel_solver_count = request.parallel_solver_count
+    config.run.full_assert = request.full_assert
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
-        config.best_score_limit = (0, float("-inf"))
+        config.stop.target_score = (0, float("-inf"))
     solver = _core.Solver(config)
     if constraints is None:
         solver.solve(solution)

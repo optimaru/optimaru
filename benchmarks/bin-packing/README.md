@@ -89,12 +89,12 @@ infeasible.
 
 Bins used, seeds 1, 2, 3, one thread, measured 2026-11-12; no run ended infeasible. "LB" is
 the weight lower bound, ceil(total weight / capacity). The columns are the engine with parts
-of its search switched off in `SolverConfig`: `repack_moves`, `trade_moves` and
-`fill_tie_break` all three, `repack_moves` alone, and `trade_moves` with `fill_tie_break`
+of its search switched off in `SolverConfig`: `custom_moves.repack`, `custom_moves.trade` and
+`acceptance.fill_tie_break` all three, `custom_moves.repack` alone, and `custom_moves.trade` with `acceptance.fill_tie_break`
 (the search of 0.5.0). The last three columns are the runs of 2 s; those of 10 s gave the
 same number in every cell.
 
-| instance (items, LB) | all three off 2 s | all three off 10 s | `repack_moves` off | `trade_moves` and `fill_tie_break` off | engine |
+| instance (items, LB) | all three off 2 s | all three off 10 s | `custom_moves.repack` off | `custom_moves.trade` and `acceptance.fill_tie_break` off | engine |
 | --- | --- | --- | --- | --- | --- |
 | sq1 (120, 43) | 45, 45, 45 | 45, 45, 45 | 43, 43, 43 | 43, 43, 43 | 43, 43, 43 |
 | g11 (120, 42) | 45, 45, 45 | 44, 45, 45 | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 |

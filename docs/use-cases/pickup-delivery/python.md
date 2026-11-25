@@ -75,13 +75,13 @@ print(plan.unassigned_delivery_ids())  # []
   at their default weights.
 - `pdp.Solver(config).solve(plan)` and
   `pdp.Solver(config).solve_with_constraints(plan, constraints)` are the same
-  solves one level down. `SolverConfig` fields include `spent_limit_seconds`,
-  `step_count_limit`, `random_seed`, `parallel_solver_count`, `full_assert`,
-  `best_score_limit`, `on_new_best` and the switches of the request-level
-  operators: `request_ruin_recreate` (with `request_ruin_max_requests`),
-  `bundle_moves` (with `bundle_max_requests`), `pair_moves`,
-  `pair_exchange_moves` and `pair_ruin`; the stubs in `_core.pyi` list them all.
-  `acceptor_type` chooses the rule local search accepts a move by (late
+  solves one level down. `SolverConfig` fields include `stop.time_limit_seconds`,
+  `stop.step_limit`, `random_seed`, `parallel_solver_count`, `full_assert`,
+  `stop.target_score`, `on_new_best` and the switches of the request-level
+  operators: `alns.request_ruin` (with `alns.request_ruin_max_requests`),
+  `custom_moves.bundle` (with `custom_moves.bundle_max_requests`), `custom_moves.pair`,
+  `custom_moves.pair_exchange` and `alns.pair_ruin`; the stubs in `_core.pyi` list them all.
+  `acceptance.rule` chooses the rule local search accepts a move by (late
   acceptance by default); its parameters are listed under
   [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 - `pdp.calculate_score(plan)` recomputes the derived fields and the score of the

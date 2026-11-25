@@ -240,9 +240,9 @@ problem = lots24()  # the benchmark instance, built by the script of step 6
 others = [spec for spec in get_constraints() if spec.name != "late_lots_cost"]
 picks = [*others, LateLotsCost(weight=50)]
 config = fab.SolverConfig()
-config.step_count_limit = 500_000
-config.spent_limit_seconds = 600
-config.random_seed = 1
+config.stop.step_limit = 500_000
+config.stop.time_limit_seconds = 600
+config.run.random_seed = 1
 result = fab.solve(problem, config=config, constraints=picks)
 print(fab.constraint_costs(result, picks)["late_lots_cost"]["costs"], result.total_weighted_tardiness)
 ```
@@ -504,9 +504,9 @@ problem = lots24()
 steps = 500_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     config = fab.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     result = fab.solve(problem, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -535,9 +535,9 @@ the same budget over several seeds, with and without it:
 ```python
 for seed in range(1, 6):
     config = fab.SolverConfig()
-    config.step_count_limit = 500_000
-    config.spent_limit_seconds = 600
-    config.random_seed = seed
+    config.stop.step_limit = 500_000
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = seed
     for picked in (others, picks):
         result = fab.solve(problem, config=config, constraints=picked)
         late = fab.constraint_costs(result)["late_lots_cost"]["costs"][0]

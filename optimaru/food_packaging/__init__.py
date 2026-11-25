@@ -54,6 +54,7 @@ Usage::
 from typing import TypeVar
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -76,6 +77,9 @@ from ._core import (
 from .constraints import get_constraints as _get_constraints
 from .models import PackagingScheduleModel, solve_request, with_initial_solution
 from .models import parameter_uses as _parameter_uses
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "ConstraintInfo",
@@ -126,7 +130,7 @@ def solve(
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
     on). Explicit keyword arguments override config.
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -inf)).
+    (``stop.target_score = (0, -inf)``).
 
     ``full_assert`` re-verifies every incremental score against a full recompute
     (a debugging aid; much slower).

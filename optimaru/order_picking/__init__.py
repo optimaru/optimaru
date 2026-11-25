@@ -30,6 +30,7 @@ pydantic request/response models (JSON in/out) live in
 """
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -53,6 +54,9 @@ from ._core import (
     update_shadow_variables,
 )
 from .models import solve_request, with_initial_solution
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "ConstraintInfo",
@@ -96,7 +100,7 @@ def solve(
 
     ``config`` (a `SolverConfig`) is the base configuration; the explicit
     keyword arguments override it. ``stop_at_first_feasible`` terminates as
-    soon as hard 0 is reached (best_score_limit=(0, -inf)). The default time
+    soon as hard 0 is reached (``stop.target_score = (0, -inf)``). The default time
     budget is the engine's 30s.
 
     ``full_assert`` re-verifies every incremental score against a full recompute

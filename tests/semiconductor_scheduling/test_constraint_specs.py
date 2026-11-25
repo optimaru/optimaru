@@ -234,7 +234,7 @@ def test_picks_score_the_result_and_the_totals_stay_complete():
 
 def _steps(count: int) -> fab.SolverConfig:
     config = fab.SolverConfig()
-    config.step_count_limit = count
+    config.stop.step_limit = count
     return config
 
 

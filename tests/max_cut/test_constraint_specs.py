@@ -82,14 +82,14 @@ COSTED = [SamePartitionPairsCost(), DifferentPartitionPairsCost(), PartitionSize
 def solved(constraints=None, problem=None) -> MaxCutProblemModel:
     problem = problem if problem is not None else fixture_h()
     config = max_cut.SolverConfig()
-    config.step_count_limit = 2000
-    config.random_seed = 1
+    config.stop.step_limit = 2000
+    config.run.random_seed = 1
     return max_cut.solve(problem, config=config, constraints=constraints)
 
 
 def _zero() -> max_cut.SolverConfig:
     config = max_cut.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
@@ -338,8 +338,8 @@ def test_score_matches_the_engine_for_arbitrary_specs(specs):
     """Rescoring a solution solved with arbitrary specs under those specs equals the engine score."""
     core = fixture_h().to_core()
     config = max_cut.SolverConfig()
-    config.step_count_limit = 500
-    config.random_seed = 2
+    config.stop.step_limit = 500
+    config.run.random_seed = 2
     max_cut.Solver(config).solve_with_constraints(core, specs)
     python = score(max_cut.constraint_costs(core), specs)
     assert python.hard == core.score.hard
@@ -532,10 +532,10 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     data = json.loads((Path(__file__).parent / "fixtures" / "web_demo.json").read_text())
     core = MaxCutProblemModel.model_validate(data).to_core()
     config = max_cut.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 30
     max_cut.Solver(config).solve_with_constraints(core, picks)
     raw = max_cut.constraint_costs(core, picks)
     assert len(raw) == len(picks)

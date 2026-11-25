@@ -232,8 +232,8 @@ others = [spec for spec in get_constraints() if spec.name != "waiting_time_cost"
 picks = [*others, WaitingTimeCost(weight=0.1)]
 plan = make_plan()
 config = vrp.SolverConfig()
-config.step_count_limit = 100_000
-config.random_seed = 1
+config.stop.step_limit = 100_000
+config.run.random_seed = 1
 vrp.solve(plan, config=config, constraints=picks)
 raw = vrp.constraint_costs(plan, picks)
 print(sum(raw["waiting_time_cost"]["costs"]), sum(raw["travel_time_cost"]["costs"]))
@@ -475,9 +475,9 @@ steps = 100_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     plan = make_plan()  # solve() works in place: a fresh plan for every run
     config = vrp.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     vrp.solve(plan, config=config, constraints=picked)
     seconds = time.perf_counter() - start

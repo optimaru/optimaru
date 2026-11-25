@@ -37,7 +37,7 @@ solved = pdp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in p
 print(solved.score.hard, solved.score.medium, solved.score.soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.pickup_delivery.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `stop.time_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.pickup_delivery.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
@@ -227,8 +227,8 @@ the whole move is laid out, so a candidate never holds half a request.
 
 | Operator | One application |
 | --- | --- |
-| `requestRuinRecreate` | Takes 1 to `request_ruin_max_requests` requests out (never more than two fifths of the plan's requests; a request of a group brings its whole group, which can take the count past that) and reinserts each at its cheapest slot pair: large neighbourhood search at request granularity. Which requests: random ones, related ones (the requests of nearby stops), the ones whose stops cost the most driving, the requests of one route, or the requests in adjacent stretches of nearby routes. In which order: at random, or by regret-`regret_k` (the request that loses the most by waiting goes first). `blink_rate` skips a candidate slot now and then, so the same hole is not always rebuilt the same way. Up to two requests waiting in the unassigned pool join each reinsertion, which is how a left-out request gets routed. |
-| `bundleRelocate` | Moves a bundle (1 to `bundle_max_requests` requests whose pickups follow each other on a route, a group counting as one) to one other route, each request at its cheapest slot there. A cluster of orders crosses in one step; moved one by one, the plans in between are worse or infeasible. |
+| `requestRuinRecreate` | Takes 1 to `alns.request_ruin_max_requests` requests out (never more than two fifths of the plan's requests; a request of a group brings its whole group, which can take the count past that) and reinserts each at its cheapest slot pair: large neighbourhood search at request granularity. Which requests: random ones, related ones (the requests of nearby stops), the ones whose stops cost the most driving, the requests of one route, or the requests in adjacent stretches of nearby routes. In which order: at random, or by regret-`alns.regret_k` (the request that loses the most by waiting goes first). `alns.blink_rate` skips a candidate slot now and then, so the same hole is not always rebuilt the same way. Up to two requests waiting in the unassigned pool join each reinsertion, which is how a left-out request gets routed. |
+| `bundleRelocate` | Moves a bundle (1 to `custom_moves.bundle_max_requests` requests whose pickups follow each other on a route, a group counting as one) to one other route, each request at its cheapest slot there. A cluster of orders crosses in one step; moved one by one, the plans in between are worse or infeasible. |
 | `bundleExchange` | Swaps a bundle of one route with a bundle of a nearby route, the two sized independently. |
 
 A request with a pinned stop is left where it is, and a request bound to a
@@ -261,7 +261,7 @@ deal with what it leaves behind.
 3. **Relocate** — to a position anchored on a nearby stop.
 
 **`PairExchangeMove`** swaps two requests of different routes in place (from
-`pair_exchange_min_nodes` stops on).
+`custom_moves.pair_exchange_min_nodes` stops on).
 
 **`PairRuin`** makes the engine's kick take whole requests, seeded at a random
 one and spreading to its nearest neighbours. The built-in ruins pick individual
@@ -277,8 +277,8 @@ requests out, and the ruin takes a group whole.
 
 Three configurations on the same generated instances (`build_random_instance`
 with the capacity and the windows below, closed routes; 5 seeds each, 4 s): the
-engine's stop-granular moves alone (`pair_moves`, `pair_ruin`,
-`request_ruin_recreate` and `bundle_moves` off), with the pair operators, and
+engine's stop-granular moves alone (`custom_moves.pair`, `alns.pair_ruin`,
+`alns.request_ruin` and `custom_moves.bundle` off), with the pair operators, and
 with the request moves as well (the defaults). Cells are the mean medium / soft
 level; measured 2026-11-11.
 
@@ -298,7 +298,7 @@ coverage: they beat the stop-granular moves in 17 of the 20 runs.
 
 Most of the gain is `requestRuinRecreate`. On 14 of the harder Li & Lim
 instances (3 s each, 5 seeds) the mean distance ends 0.5% above the best known
-with the defaults and 4.0% above with `request_ruin_recreate` off. Switching off
+with the defaults and 4.0% above with `alns.request_ruin` off. Switching off
 the bundle moves, the pair operators, regret or blinking instead leaves it
 between 0.1% and 0.5%, which is the spread between seeds; without the engine's
 kick it is 0.7%. The Li & Lim results at 30 s are in
@@ -404,7 +404,7 @@ equal in 1).
 `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same
 way, so it returns the score the solve stored and prices a split group on a plan
 built by hand.
-With `pair_construction_heuristic` off the engine's own construction places
+With `construction.pair_heuristic` off the engine's own construction places
 stops one at a time and may start with a group split, which the search then has
 to mend; through `solve(plan)` it starts from an empty pool, while a list passed
 as `constraints` leaves the stops the caller parked in the pool where they are. Like `required_vehicle_cost`

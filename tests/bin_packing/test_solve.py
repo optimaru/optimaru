@@ -17,6 +17,7 @@ from optimaru.bin_packing.constraints import (
 from optimaru.bin_packing.models import BinPackingProblemModel
 
 from .._picks import replace_default
+from .._settings import set_setting
 
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
@@ -31,9 +32,9 @@ def test_web_sample_reaches_the_eight_bin_lower_bound():
     problem = web_demo()
     assert sum(item.weight for item in problem.items) == 746
     config = bp.SolverConfig()
-    config.spent_limit_seconds = 10
-    config.best_score_limit = (0, -8.0)
-    config.random_seed = 7
+    config.stop.time_limit_seconds = 10
+    config.stop.target_score = (0, -8.0)
+    config.run.random_seed = 7
     assert bp.solve(problem, config=config).score == bp.Score(0, -8.0)
     assert problem.bins_used() == 8
     assert all(load > 0 for load in problem.bin_loads())  # compacted, no gaps
@@ -42,9 +43,9 @@ def test_web_sample_reaches_the_eight_bin_lower_bound():
 def test_web_sample_with_constraints_reaches_the_same_optimum():
     problem = web_demo()
     config = bp.SolverConfig()
-    config.spent_limit_seconds = 10
-    config.best_score_limit = (0, -8.0)
-    config.random_seed = 7
+    config.stop.time_limit_seconds = 10
+    config.stop.target_score = (0, -8.0)
+    config.run.random_seed = 7
     assert bp.solve(problem, config=config, constraints=get_constraints()).score == bp.Score(0, -8.0)
 
 
@@ -68,8 +69,8 @@ def test_step_count_limit_makes_the_search_deterministic():
     def run():
         problem = web_demo()
         config = bp.SolverConfig()
-        config.step_count_limit = 3000
-        config.random_seed = 9
+        config.stop.step_limit = 3000
+        config.run.random_seed = 9
         bp.solve(problem, config=config)
         return problem.assignment(), problem.score
 
@@ -80,8 +81,8 @@ def test_constraints_path_scores_with_the_picks():
     problem = web_demo()
     picks = replace_default(get_constraints(), "used_bins_cost", UsedBinsCost(weight=5))
     config = bp.SolverConfig()
-    config.step_count_limit = 2000
-    config.random_seed = 2
+    config.stop.step_limit = 2000
+    config.run.random_seed = 2
     score = bp.solve(problem, config=config, constraints=picks).score
     assert score == bp.calculate_score(problem, picks)
     assert score.soft == -5 * problem.bins_used()
@@ -96,21 +97,22 @@ def test_empty_problem_scores_zero_and_clears_the_seed():
 @pytest.mark.parametrize(
     ("attribute", "value"),
     [
-        ("parallel_solver_count", 0),
-        ("late_acceptance_size", -1),
-        ("spent_limit_seconds", -1.0),
-        ("empty_bin_candidates", 0),
-        ("repack_partner_bins", -1),
-        ("ruin_recreate_rewards", [1.0]),
+        ("run.parallel_solver_count", 0),
+        ("acceptance.late_acceptance_size", -1),
+        ("stop.time_limit_seconds", -1.0),
+        ("custom_moves.empty_bin_candidates", 0),
+        ("custom_moves.repack_partner_bins", -1),
+        ("alns.rewards", [1.0]),
     ],
 )
 def test_solver_config_refuses_bad_values(attribute, value):
     with pytest.raises(ValueError):
-        setattr(bp.SolverConfig(), attribute, value)
+        set_setting(bp.SolverConfig(), attribute, value)
 
 
-def test_solver_config_takes_no_constructor_arguments():
-    with pytest.raises(TypeError):
+def test_solver_config_takes_its_settings_by_group():
+    assert bp.SolverConfig(stop={"time_limit_seconds": 0}).stop.time_limit_seconds == 0
+    with pytest.raises(TypeError, match=r"spent_limit_seconds is now SolverConfig\.stop\.time_limit_seconds"):
         bp.SolverConfig(spent_limit_seconds=0)
 
 
@@ -177,11 +179,11 @@ def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
     for repack in (True, False):
         problem = coloured_instance()
         config = bp.SolverConfig()
-        config.step_count_limit = 50_000
-        config.random_seed = 1
-        config.repack_moves = repack
-        config.trade_moves = False
-        config.fill_tie_break = False
+        config.stop.step_limit = 50_000
+        config.run.random_seed = 1
+        config.custom_moves.repack = repack
+        config.custom_moves.trade = False
+        config.acceptance.fill_tie_break = False
         score = bp.solve(problem, config=config).score
         assert score.hard == 0
         bins[repack] = problem.bins_used()
@@ -210,8 +212,8 @@ def test_trades_and_the_fill_tie_break_fill_every_bin_of_a_triplet_instance():
     as it was, and not asserted here."""
     problem = triplets(10, seed=1)
     config = bp.SolverConfig()
-    config.step_count_limit = 20_000
-    config.random_seed = 1
+    config.stop.step_limit = 20_000
+    config.run.random_seed = 1
     assert bp.solve(problem, config=config).score == bp.Score(0, -10.0)
     assert problem.bins_used() == 10
 
@@ -221,9 +223,9 @@ def test_parallel_starts_each_follow_their_own_packing():
     own, and the solve ends feasible at the 10 bins."""
     problem = triplets(10, seed=1)
     config = bp.SolverConfig()
-    config.step_count_limit = 20_000
-    config.random_seed = 1
-    config.parallel_solver_count = 2
+    config.stop.step_limit = 20_000
+    config.run.random_seed = 1
+    config.run.parallel_solver_count = 2
     assert bp.solve(problem, config=config).score == bp.Score(0, -10.0)
     assert sorted(problem.bin_loads()) == [1000] * 10
 
@@ -234,9 +236,9 @@ def test_the_fill_tie_break_keeps_on_new_best_to_the_score():
     seen = []
     problem = triplets(10, seed=1)
     config = bp.SolverConfig()
-    config.step_count_limit = 20_000
-    config.random_seed = 1
-    config.on_new_best = lambda _step, score: seen.append(score)
+    config.stop.step_limit = 20_000
+    config.run.random_seed = 1
+    config.run.on_new_best = lambda _step, score: seen.append(score)
     bp.solve(problem, config=config)
     assert seen[-1] == bp.Score(0, -10.0)
     assert all(score.soft == int(score.soft) for score in seen)
@@ -254,9 +256,9 @@ def test_full_assert_solve_with_the_macro_moves(shaped):
         else None
     )
     config = bp.SolverConfig()
-    config.full_assert = True
-    config.step_count_limit = 3000
-    config.random_seed = 3
+    config.run.full_assert = True
+    config.stop.step_limit = 3000
+    config.run.random_seed = 3
     score = bp.solve(problem, config=config, constraints=picks).score
     assert score == bp.calculate_score(problem, picks)
     assert all(item.bin >= 0 for item in problem.items)

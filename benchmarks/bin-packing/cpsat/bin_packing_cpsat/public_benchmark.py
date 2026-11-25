@@ -38,8 +38,8 @@ def _lower_bound(problem) -> int:
 def _run_engine(problem, seconds: float, seed: int) -> dict:
     core = problem.to_core()
     config = bin_packing.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = seed
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = seed
     started = time.perf_counter()
     bin_packing.solve(core, config=config)
     elapsed = time.perf_counter() - started

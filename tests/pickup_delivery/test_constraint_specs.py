@@ -71,8 +71,8 @@ def build_plan(demand: int = 4, capacity: int = 10) -> pdp.PdpRoutePlan:
 def solve(constraints=None, seconds=0.4, seed=1):
     plan = build_plan()
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = seconds
-    cfg.random_seed = seed
+    cfg.stop.time_limit_seconds = seconds
+    cfg.run.random_seed = seed
     pdp.Solver(cfg).solve_with_constraints(plan, constraints)
     return plan
 
@@ -456,9 +456,9 @@ def _solve_reporting(run):
     reported = []
     plan = build_plan()
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = 0.4
-    cfg.random_seed = 1
-    cfg.on_new_best = lambda _step, best: reported.append((best.hard, best.medium, best.soft))
+    cfg.stop.time_limit_seconds = 0.4
+    cfg.run.random_seed = 1
+    cfg.run.on_new_best = lambda _step, best: reported.append((best.hard, best.medium, best.soft))
     run(pdp.Solver(cfg), plan)
     return plan, reported
 
@@ -519,17 +519,17 @@ def test_squared_order_age_is_opt_in():
 def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
     """Solver.solve releases the GIL, so two workers can call back (and raise) into Python."""
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = 0.3
-    cfg.parallel_solver_count = 2
+    cfg.stop.time_limit_seconds = 0.3
+    cfg.run.parallel_solver_count = 2
     calls = []
-    cfg.on_new_best = lambda _step, best: calls.append(best)
+    cfg.run.on_new_best = lambda _step, best: calls.append(best)
     pdp.Solver(cfg).solve(build_plan())
     assert calls  # returned (a held GIL deadlocked here)
 
     def boom(_step, _best):
         raise RuntimeError("boom")
 
-    cfg.on_new_best = boom
+    cfg.run.on_new_best = boom
     with pytest.raises(RuntimeError, match="boom"):
         pdp.Solver(cfg).solve(build_plan())
 
@@ -543,9 +543,9 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
         raise RuntimeError("boom")
 
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = 30.0
-    cfg.parallel_solver_count = 4
-    cfg.on_new_best = boom
+    cfg.stop.time_limit_seconds = 30.0
+    cfg.run.parallel_solver_count = 4
+    cfg.run.on_new_best = boom
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
         pdp.Solver(cfg).solve(build_plan())
@@ -561,8 +561,8 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     from optimaru.pickup_delivery import _core
 
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = 30.0
-    cfg.parallel_solver_count = 4
+    cfg.stop.time_limit_seconds = 30.0
+    cfg.run.parallel_solver_count = 4
     _core._fail_worker_thread_start(1)
     try:
         started = time.monotonic()
@@ -625,9 +625,9 @@ def _zero_budget(picks):
     construction, which would route r3) keeps it as it is."""
     plan = _hand_plan()
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = 0
-    cfg.random_seed = 1
-    cfg.pair_construction_heuristic = False
+    cfg.stop.time_limit_seconds = 0
+    cfg.run.random_seed = 1
+    cfg.construction.pair_heuristic = False
     pdp.Solver(cfg).solve_with_constraints(plan, picks)
     assert [list(vehicle.node_indices) for vehicle in plan.vehicles] == [[0, 1], [2, 3], []]
     assert sorted(plan.unassigned_node_indices) == [4, 5]
@@ -989,10 +989,10 @@ def test_a_long_solve_with_negative_thresholds_scores_exactly(picks):
             vehicle.min_load_ratio = 0.55
         plan.vehicles = vehicles
     cfg = pdp.SolverConfig()
-    cfg.spent_limit_seconds = 60
-    cfg.step_count_limit = 15_000
-    cfg.random_seed = 5
-    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    cfg.stop.time_limit_seconds = 60
+    cfg.stop.step_limit = 15_000
+    cfg.run.random_seed = 5
+    cfg.run.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
     pdp.Solver(cfg).solve_with_constraints(plan, picks)
     final = (plan.score.hard, plan.score.medium, plan.score.soft)
     assert len(reports) > 1 and reports[-1] == final

@@ -16,14 +16,14 @@ def _problem(**fields) -> QuadraticAssignmentProblemModel:
 
 def _no_search() -> SolverConfig:
     config = SolverConfig()
-    config.spent_limit_seconds = 0.0
+    config.stop.time_limit_seconds = 0.0
     return config
 
 
 def _steps(count: int, seed: int) -> SolverConfig:
     config = SolverConfig()
-    config.step_count_limit = count
-    config.random_seed = seed
+    config.stop.step_limit = count
+    config.run.random_seed = seed
     return config
 
 

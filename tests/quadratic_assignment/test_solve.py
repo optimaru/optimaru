@@ -13,6 +13,7 @@ from optimaru.quadratic_assignment.constraints import get_constraints
 from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
 
 from .._picks import only
+from .._settings import set_setting
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -24,47 +25,58 @@ def demo() -> QuadraticAssignmentProblemModel:
 
 def steps(count: int, seed: int = 1) -> qap.SolverConfig:
     config = qap.SolverConfig()
-    config.step_count_limit = count
-    config.random_seed = seed
+    config.stop.step_limit = count
+    config.run.random_seed = seed
     return config
 
 
 def test_solver_config_defaults():
     config = qap.SolverConfig()
-    assert config.spent_limit_seconds == 30.0
-    assert (config.step_count_limit, config.unimproved_step_count_limit) == (0, 0)
-    assert config.unimproved_spent_limit_seconds == 0.0
-    assert (config.random_seed, config.parallel_solver_count, config.late_acceptance_size) == (0, 1, 0)
-    assert config.acceptor_type == qap.AcceptorType.LATE_ACCEPTANCE
-    assert config.entity_tabu_size == 7
-    assert config.full_assert is False
-    assert config.on_new_best is None
+    assert config.stop.time_limit_seconds == 30.0
+    assert (config.stop.step_limit, config.stop.unimproved_step_limit) == (0, 0)
+    assert config.stop.unimproved_time_limit_seconds == 0.0
+    assert (config.run.random_seed, config.run.parallel_solver_count, config.acceptance.late_acceptance_size) == (
+        0,
+        1,
+        0,
+    )
+    assert config.acceptance.rule == qap.AcceptorType.LATE_ACCEPTANCE
+    assert config.acceptance.entity_tabu_size == 7
+    assert config.run.full_assert is False
+    assert config.run.on_new_best is None
 
 
 @pytest.mark.parametrize(
     "attribute, value",
     [
-        ("spent_limit_seconds", -1.0),
-        ("unimproved_spent_limit_seconds", -1.0),
-        ("parallel_solver_count", 0),
-        ("late_acceptance_size", -1),
-        ("entity_tabu_size", -1),
+        ("stop.time_limit_seconds", -1.0),
+        ("stop.unimproved_time_limit_seconds", -1.0),
+        ("run.parallel_solver_count", 0),
+        ("acceptance.late_acceptance_size", -1),
+        ("acceptance.entity_tabu_size", -1),
     ],
 )
 def test_solver_config_refuses_invalid_values(attribute, value):
     config = qap.SolverConfig()
     with pytest.raises(ValueError):
-        setattr(config, attribute, value)
+        set_setting(config, attribute, value)
 
 
 def test_no_permutation_breaking_knob_is_exposed():
     """Nothing that could break the permutation (change moves, ruin-and-recreate, descent) is exposed."""
     config = qap.SolverConfig()
-    breaking = ("change_move_weight", "swap_move_weight", "ruin_recreate", "descent_weight", "nearby_probability")
+    breaking = (
+        "moves.change_weight",
+        "moves.swap_weight",
+        "alns_trigger.enabled",
+        "strategies.descent_weight",
+        "selection.nearby_probability",
+    )
     for name in breaking:
-        assert not hasattr(config, name)
+        group, setting = name.split(".")
+        assert group not in config.GROUPS or setting not in dir(getattr(config, group))
         with pytest.raises(AttributeError):
-            setattr(config, name, 1)
+            set_setting(config, name, 1)
 
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
@@ -137,7 +149,7 @@ def test_late_acceptance_goes_on_in_stages_after_it_converges():
     for seed in range(1, 6):
         best_steps = []
         config = steps(2_000_000, seed)
-        config.spent_limit_seconds = 600.0  # the step limit binds
+        config.stop.time_limit_seconds = 600.0  # the step limit binds
         qap.solve(problem, config=config, on_new_best=lambda step, score, seen=best_steps: seen.append(step))
         last_new_best.append(best_steps[-1])
     assert max(last_new_best) > 100_000, last_new_best
@@ -156,15 +168,15 @@ def test_keyword_arguments_override_the_config():
     )
     # The overrides applied (on_new_best fired) to a copy: the caller's config is unchanged.
     assert calls and all(isinstance(step, int) for step, _, _ in calls)
-    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (30.0, 5, 1)
-    assert config.step_count_limit == 100 and config.on_new_best is None
+    assert (config.stop.time_limit_seconds, config.run.random_seed, config.run.parallel_solver_count) == (30.0, 5, 1)
+    assert config.stop.step_limit == 100 and config.run.on_new_best is None
 
 
 def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     config = qap.SolverConfig()
-    before = config.best_score_limit
+    before = config.stop.target_score
     qap.solve(demo(), time_limit_seconds=5.0, stop_at_first_feasible=True, config=config)
-    assert config.best_score_limit == before  # the score limit went to a copy
+    assert config.stop.target_score == before  # the score limit went to a copy
 
 
 def test_multi_start_returns_a_consistent_best():
@@ -180,8 +192,8 @@ def test_multi_start_returns_a_consistent_best():
 @pytest.mark.parametrize("acceptor", ["LATE_ACCEPTANCE", "ENTITY_TABU", "HILL_CLIMBING"])
 def test_full_assert_solves_without_corruption(acceptor):
     config = steps(1500, seed=3)
-    config.full_assert = True
-    config.acceptor_type = getattr(qap.AcceptorType, acceptor)
+    config.run.full_assert = True
+    config.acceptance.rule = getattr(qap.AcceptorType, acceptor)
     core = demo().to_core()
     qap.Solver(config).solve(core)
     plugin = demo().to_core()
@@ -290,9 +302,9 @@ def _random_instance(n: int, seed: int) -> QuadraticAssignmentProblemModel:
 
 def _new_bests(acceptor, **knobs) -> list:
     config = steps(3000, seed=7)
-    config.acceptor_type = acceptor
+    config.acceptance.rule = acceptor
     for name, value in knobs.items():
-        setattr(config, name, value)
+        setattr(config.acceptance, name, value)
     calls = []
     qap.solve(_random_instance(15, 3).to_core(), config=config, on_new_best=lambda step, score: calls.append(step))
     return calls
@@ -301,10 +313,10 @@ def _new_bests(acceptor, **knobs) -> list:
 def test_simulated_annealing_is_not_hill_climbing():
     """SA gets an automatic starting temperature (the engine default (0, 0) made it hill climbing)."""
     config = qap.SolverConfig()
-    assert config.simulated_annealing_starting_temperature == (0, 0.0)
-    assert config.simulated_annealing_temperature_fraction == pytest.approx(0.01)
+    assert config.acceptance.simulated_annealing_starting_temperature == (0, 0.0)
+    assert config.acceptance.simulated_annealing_temperature_fraction == pytest.approx(0.01)
     with pytest.raises(ValueError):
-        config.simulated_annealing_temperature_fraction = 0
+        config.acceptance.simulated_annealing_temperature_fraction = 0
     assert _new_bests(qap.AcceptorType.SIMULATED_ANNEALING) != _new_bests(qap.AcceptorType.HILL_CLIMBING)
 
 

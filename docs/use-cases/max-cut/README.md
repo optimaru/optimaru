@@ -152,12 +152,12 @@ offsets; it rejects an exponent other than 1).
 ### Python API
 
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
-  `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
-  `parallel_solver_count`, `late_acceptance_size` (the first stage's:
-  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `ruin_recreate*`,
-  `change/swap_move_weight`, `descent_weight`, `best_score_limit`, `on_new_best`),
-  set by attribute. Zero budget = `spent_limit_seconds = 0` (`step_count_limit = 0`
-  means "no limit"); a bounded search = `step_count_limit = N`. Without a time limit a
+  `stop.time_limit_seconds`, `stop.step_limit`, `unimproved_*`, `random_seed`,
+  `parallel_solver_count`, `acceptance.late_acceptance_size` (the first stage's:
+  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `alns_trigger.*`, `alns.*`,
+  `moves.change_weight`, `moves.swap_weight`, `strategies.descent_weight`, `stop.target_score`, `on_new_best`),
+  set by attribute. Zero budget = `stop.time_limit_seconds = 0` (`stop.step_limit = 0`
+  means "no limit"); a bounded search = `stop.step_limit = N`. Without a time limit a
   solve runs the 30 s budget. `on_new_best(step, score)`. Multi-start runs independent
   engine searches from the same start.
 - `solve()` returns the solved problem: the engine object it was given, solved in place (its
@@ -224,7 +224,7 @@ Vertices the partition leaves out take the default start. Any result of `solve`
 is accepted, feasible or not. Under exact size bounds the search only swaps
 sides, so a seed of the wrong size keeps that size and its hard penalty. Unknown
 vertices, sides other than 0 or 1 and sides that contradict `fixed_partition`
-raise `ValueError`. With a zero budget (`spent_limit_seconds = 0`) the seed comes
+raise `ValueError`. With a zero budget (`stop.time_limit_seconds = 0`) the seed comes
 back unchanged.
 
 ```python
@@ -243,7 +243,7 @@ The solution has the **assignment** shape; the domain solver that configures the
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate on stagnation (and, with
-`ruin_recreate_as_move_weight > 0`, as an ordinary move — it moves a cluster of vertices
+`strategies.ruin_recreate_weight > 0`, as an ordinary move — it moves a cluster of vertices
 chained by same-side pairs at once). A new move (a gain-guided Kernighan–Lin flip,
 say) is an `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`
 on every engine `optimaru/max_cut/cpp/mc/solver.cpp` builds: the one in `searchOneStart()`

@@ -80,7 +80,7 @@ runs one start, except in vehicle routing and pickup and delivery, where every
 start scores on its own copy of the picks. `on_new_best` reports the first
 start only, so the returned
 score can be better than the last one it was called with. A start that reaches
-a target (`stop_at_first_feasible`, `best_score_limit`) stops the others: they
+a target (`stop_at_first_feasible`, `stop.target_score`) stops the others: they
 hand over their best so far, and the best of all starts is returned. Which start
 gets there first depends on the threads, so with a target and more than one
 start the same seed can give a different solution from run to run.
@@ -96,7 +96,7 @@ request = uc.models.KnapsackRequest(  # each use case names its own request
     parallel_solver_count=1,
     stop_at_first_feasible=False,
     full_assert=False,
-    solver_parameters={},             # further SolverConfig fields by name
+    solver_parameters={},             # further SolverConfig settings by group: {"alns": {...}}
 )
 solved = uc.solve_request(request, constraints=None)
 ```
@@ -133,15 +133,15 @@ Pickup and delivery, quadratic assignment, semiconductor scheduling and
 vehicle routing let you choose the rule local search accepts a move by, on
 `SolverConfig`. The attributes and their defaults are the same in the four:
 
-| `acceptor_type` | Its parameters | Default |
+| `acceptance.rule` | Its parameters | Default |
 |---|---|---|
-| `LATE_ACCEPTANCE` | `late_acceptance_size` | 0 = the use case's automatic size |
+| `LATE_ACCEPTANCE` | `acceptance.late_acceptance_size` | 0 = the use case's automatic size |
 | `HILL_CLIMBING` | none | |
-| `ENTITY_TABU` | `entity_tabu_size`: steps a moved entity stays tabu | 7 |
-| `SIMULATED_ANNEALING` | `simulated_annealing_starting_temperature` (hard, soft), cooling to 0 over the solve; `simulated_annealing_temperature_fraction` | (0, 0) = automatic: hard 0, soft = the fraction (0.01) of the start's soft level, at least 1. The soft level alone: the medium level (unassigned visits in vehicle routing, unassigned requests in pickup and delivery) does not count. Give the temperature yourself when your picks can make the soft level positive (a reward, or an offset without `clip`) or larger than the medium level's unit |
-| `GREAT_DELUGE` | `great_deluge_water_level_step` (hard, soft): how much the water level, which starts at the start's score, rises per step | (0, 0): the level stays at the start's score |
-| `STEP_COUNTING_HILL_CLIMBING` | `step_counting_hill_climbing_size`: the bar is reset to the current score every this many steps | 400 |
-| `RECORD_TO_RECORD_TRAVEL` | `record_to_record_start_gap`, `record_to_record_end_gap`: the gap below the best score that is still accepted, as a fraction of the start's soft score | 0.02, shrinking to 0.0 over the solve (an end gap above the start gap is the gap throughout) |
+| `ENTITY_TABU` | `acceptance.entity_tabu_size`: steps a moved entity stays tabu | 7 |
+| `SIMULATED_ANNEALING` | `acceptance.simulated_annealing_starting_temperature` (hard, soft), cooling to 0 over the solve; `acceptance.simulated_annealing_temperature_fraction` | (0, 0) = automatic: hard 0, soft = the fraction (0.01) of the start's soft level, at least 1. The soft level alone: the medium level (unassigned visits in vehicle routing, unassigned requests in pickup and delivery) does not count. Give the temperature yourself when your picks can make the soft level positive (a reward, or an offset without `clip`) or larger than the medium level's unit |
+| `GREAT_DELUGE` | `acceptance.great_deluge_water_level_step` (hard, soft): how much the water level, which starts at the start's score, rises per step | (0, 0): the level stays at the start's score |
+| `STEP_COUNTING_HILL_CLIMBING` | `acceptance.step_counting_hill_climbing_size`: the bar is reset to the current score every this many steps | 400 |
+| `RECORD_TO_RECORD_TRAVEL` | `acceptance.record_to_record_start_gap`, `acceptance.record_to_record_end_gap`: the gap below the best score that is still accepted, as a fraction of the start's soft score | 0.02, shrinking to 0.0 over the solve (an end gap above the start gap is the gap throughout) |
 
 The default rule is late acceptance, and simulated annealing in semiconductor
 scheduling. In vehicle routing and pickup and delivery an amount you give
@@ -158,7 +158,7 @@ tightens.
 A late acceptance history is a trade: a short one converges fast, a long one
 finds more and needs longer. In bed allocation, facility location, food packaging,
 knapsack, maintenance scheduling, max-cut, quadratic assignment and sports league
-scheduling the search does not stay with one length. `late_acceptance_size`
+scheduling the search does not stay with one length. `acceptance.late_acceptance_size`
 is the history of the first stage. Once that stage has converged and no new
 best has come for a while, late acceptance starts over from the start's score
 with the history doubled, then doubled again, as long as the next stage still
@@ -175,12 +175,12 @@ A use case can also draw its own macro moves less often from the first
 restart on (`AcceptanceSettings::later_stage_custom_move_share`): a later stage
 takes worse solutions for a long while, and moves that each make a pass over
 the whole solution would take the steps of the moves that polish. Facility
-location does, at a tenth of `custom_move_probability`.
+location does, at a tenth of `custom_moves.share`.
 
 Only a solve that the construction starts runs in stages. One that starts from
 a solution you give (`with_initial_solution`, a request's `initial_solution`),
 also one that places only a part and leaves the rest to the construction,
-keeps the one history of `late_acceptance_size` and searches with the
+keeps the one history of `acceptance.late_acceptance_size` and searches with the
 ruin-and-recreate kicks, as every solve did before the stages: the start's
 score is then no lower than where the search stands, so starting over from it
 would loosen nothing and take the place of a kick. In 0.5.0 such a solve ran
@@ -571,8 +571,8 @@ The contract is the same everywhere:
 School timetabling takes dicts, so it uses a keyword instead:
 `solve(problem, initial_solution=previous)`. Each use case's README lists its
 exceptions. To stop right after the start, use a zero time limit
-(`spent_limit_seconds = 0`, or `time_limit_seconds=0` where `solve()` takes
-one); `step_count_limit = 0` means no limit, not zero steps.
+(`stop.time_limit_seconds = 0`, or `time_limit_seconds=0` where `solve()` takes
+one); `stop.step_limit = 0` means no limit, not zero steps.
 
 ## Extending a use case
 

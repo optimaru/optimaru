@@ -20,16 +20,13 @@ from optimaru.semiconductor_scheduling.models import (
 )
 
 
-def _config(**fields) -> SolverConfig:
-    config = SolverConfig()
-    for name, value in fields.items():
-        setattr(config, name, value)
-    return config
+def _config(**groups) -> SolverConfig:
+    return SolverConfig(**groups)
 
 
 def _no_search() -> SolverConfig:
     """The zero-budget idiom: the solve returns its start."""
-    return _config(spent_limit_seconds=0)
+    return _config(stop={"time_limit_seconds": 0})
 
 
 def _raw(problem, name: str) -> float:
@@ -139,7 +136,7 @@ def test_seed_the_decoder_cannot_keep_is_never_lost_to_the_search():
     for random_seed in range(5):
         seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
         seed_score = calculate_score(seeded.model_copy(deep=True))
-        config = _config(step_count_limit=200, random_seed=random_seed)
+        config = _config(run={"random_seed": random_seed}, stop={"step_limit": 200})
         seeded = solve(seeded, config=config)
         assert (seeded.score_hard, seeded.score_soft) >= tuple(seed_score)
 
@@ -160,7 +157,7 @@ def test_seed_with_idle_time_stays_as_given_until_the_search_runs():
     assert seeded.assignments == [AssignmentModel(**row) for row in idle]
 
     searched = with_initial_solution(_choice_problem(), {"assignments": idle})
-    searched = solve(searched, config=_config(step_count_limit=100, random_seed=1))
+    searched = solve(searched, config=_config(run={"random_seed": 1}, stop={"step_limit": 100}))
     assert (searched.score_hard, searched.score_soft) > tuple(seed_score)
 
 
@@ -198,7 +195,7 @@ def test_seed_against_a_pin_is_scored_as_given_and_the_search_restores_the_pin()
     seeded = solve(seeded, config=_no_search())
     assert _raw(seeded, "pinned_assignments_cost") == 1
     searched = with_initial_solution(_choice_problem(pinned_assignments=[pin]), {"assignments": seed})
-    searched = solve(searched, config=_config(step_count_limit=100, random_seed=1))
+    searched = solve(searched, config=_config(run={"random_seed": 1}, stop={"step_limit": 100}))
     assert _raw(searched, "pinned_assignments_cost") == 0
 
 
@@ -260,7 +257,7 @@ def test_hard_infeasible_result_feeds_back_unchanged():
         ],
     )
     solved = problem.model_copy(deep=True)
-    solved = solve(solved, config=_config(step_count_limit=50, random_seed=1))
+    solved = solve(solved, config=_config(run={"random_seed": 1}, stop={"step_limit": 50}))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
     seeded = solve(seeded, config=_no_search())
@@ -300,7 +297,7 @@ def test_input_problem_is_not_mutated():
     seeded = with_initial_solution(problem, {"assignments": QUEUE_SEED})
     assert seeded.score_hard is None
     assert seeded.makespan is None
-    seeded = solve(seeded, config=_config(step_count_limit=50, random_seed=1))
+    seeded = solve(seeded, config=_config(run={"random_seed": 1}, stop={"step_limit": 50}))
     assert problem.model_dump() == before
 
 
@@ -308,8 +305,8 @@ def test_plain_solve_still_ignores_input_assignments():
     fresh = _queue_problem()
     preset = _queue_problem(assignments=[AssignmentModel(**row) for row in QUEUE_SEED])
     assert preset.warm_start is False
-    fresh = solve(fresh, config=_config(step_count_limit=200, random_seed=5))
-    preset = solve(preset, config=_config(step_count_limit=200, random_seed=5))
+    fresh = solve(fresh, config=_config(run={"random_seed": 5}, stop={"step_limit": 200}))
+    preset = solve(preset, config=_config(run={"random_seed": 5}, stop={"step_limit": 200}))
     assert fresh.assignments == preset.assignments
 
 

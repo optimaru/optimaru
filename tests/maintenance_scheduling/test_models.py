@@ -103,7 +103,7 @@ def test_solve_via_models():
 
 def _steps(steps):
     config = mnt.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 

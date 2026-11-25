@@ -70,7 +70,8 @@ weight then in medium units, folded at 1e6), and each repeated pick carries its 
 `solve_request` takes a pydantic request, `models.MeetingScheduleRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `MeetingScheduleModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 
@@ -150,9 +151,9 @@ another one per standard library).
 
 Adopted defaults (full history in the comments of `optimaru/meeting_scheduling/cpp/ms/solver.hpp`):
 
-- `late_acceptance_size = 0` → automatic `clamp(128 × assignments, 3200, 6400)`
-- `day_fit_value_probability = 0.8` (steers change moves to grains that fit within a day)
-- `ruin_recreate_as_move_weight = 2e-4`, `ruin_recreate_as_move_max_ruin = 12`
+- `acceptance.late_acceptance_size = 0` → automatic `clamp(128 × assignments, 3200, 6400)`
+- `selection.day_fit_value_probability = 0.8` (steers change moves to grains that fit within a day)
+- `strategies.ruin_recreate_weight = 2e-4`, `strategies.ruin_recreate_max_ruin = 12`
   — destroy-repair is also drawn as an ordinary move judged by the acceptor. A per-step
   probability of 2e-4 was a flat, size-independent peak (1e-4/3e-4/5e-4 all worse).
 - The incremental calculator's delta path is vectorized with a two-pass sum/increment
@@ -171,7 +172,7 @@ ruin 6/24, fixed LA 3200/12800, polish 2000/15000, change/swap 0.85/0.15,
 dayFit 0.9, smaller kick ruin (0.05-0.15).
 
 On the comparison's instances, which the bench solves now, the default
-`ruin_recreate_as_move_weight = 2e-4` against `asMove=0` (2026-11-24, one Apple M4 Max Mac
+`strategies.ruin_recreate_weight = 2e-4` against `asMove=0` (2026-11-24, one Apple M4 Max Mac
 (16 cores), single-threaded runs one after another, interleaved by seed, beside the other
 benchmark lanes (at most ten solver threads on the twelve performance cores), 10 s per run;
 mean objective, hard 0 in every run):

@@ -163,7 +163,7 @@ def test_score_and_item_are_plain_values():
 
 def _steps(steps):
     config = bp.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 

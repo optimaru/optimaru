@@ -75,11 +75,16 @@ def test_a_weight_the_fast_path_cannot_apply_raises(problem, without_field):
 
 
 def test_the_pydantic_config_follows_the_same_rule(without_field):
-    """models.SolveConfig.weights: dropped at its default, refused at any other value, like weights=."""
-    assert SolveConfig().to_canon().weights == canon.ObjectiveWeights()
-    assert SolveConfig(weights=ObjectiveWeightsModel(teacher_gap_cost=2.5)).to_canon().weights.teacher_gap_cost == 2.5
+    """models.SolveConfig.cost.weights: dropped at its default, refused at any other value, like weights=."""
+    assert SolveConfig().to_canon().cost.weights == canon.ObjectiveWeights()
+    assert (
+        SolveConfig(cost={"weights": ObjectiveWeightsModel(teacher_gap_cost=2.5)})
+        .to_canon()
+        .cost.weights.teacher_gap_cost
+        == 2.5
+    )
     with pytest.raises(ValueError, match="not on the default path"):
-        SolveConfig(weights=ObjectiveWeightsModel(**{HIDDEN: 8})).to_canon()
+        SolveConfig(cost={"weights": ObjectiveWeightsModel(**{HIDDEN: 8})}).to_canon()
 
 
 @pytest.mark.parametrize(

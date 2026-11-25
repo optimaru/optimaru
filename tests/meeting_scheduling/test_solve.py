@@ -102,10 +102,10 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 def _step_limited_score(seed, starts, **solve_arguments):
     """The score of a seeded demo solve that 2,000 steps end, not the clock."""
     config = ms.SolverConfig()
-    config.spent_limit_seconds = 60.0
-    config.step_count_limit = 2000
-    config.random_seed = seed
-    config.parallel_solver_count = starts
+    config.stop.time_limit_seconds = 60.0
+    config.stop.step_limit = 2000
+    config.run.random_seed = seed
+    config.run.parallel_solver_count = starts
     solved = ms.solve(ms.generate_demo_data(), config=config, **solve_arguments)
     return (solved.score.hard, solved.score.soft)
 

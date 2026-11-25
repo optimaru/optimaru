@@ -62,7 +62,7 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 
 Two knobs do not apply on the plugin path: `parallel_solver_count`
-(a caller-owned calculator cannot be cloned into workers) and `order_consolidate_moves`
+(a caller-owned calculator cannot be cloned into workers) and `custom_moves.order_consolidate`
 (that operator reads the monolithic calculator's live volume table). Details are in
 the comments of `cpp/op/solver.hpp`.
 """

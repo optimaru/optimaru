@@ -396,7 +396,7 @@ def _two_jobs():
 def _zero_budget_solve(schedule, picks):
     """Score a complete assignment under ``picks`` on the engine: no step is taken."""
     config = mnt.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     assignment = schedule.assignment()
     mnt.Solver(config).solve_with_constraints(schedule, picks)
     assert schedule.assignment() == assignment
@@ -557,11 +557,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = mnt.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 5000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 5000
+    config.stop.time_limit_seconds = 30
     mnt.Solver(config).solve_with_constraints(schedule, picks)
     raw = mnt.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)

@@ -45,7 +45,7 @@ print(plan.routes())                   # {'V1': ['C1']}
 debugging aid, much slower), `on_new_best`, `constraints` and a full `config`: a
 `vrp.SolverConfig`, whose fields the keywords override on a copy.
 `vrp.Solver(config).solve(plan)` is the same solve one level down.
-`config.acceptor_type` chooses the rule local search accepts a move by (late
+`config.acceptance.rule` chooses the rule local search accepts a move by (late
 acceptance by default); its parameters are listed under
 [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 
@@ -86,8 +86,8 @@ acceptance by default); its parameters are listed under
 
 The default VRP configuration also enables a granular descent (Toth & Vigo 2003):
 nearby route pairs are searched with best-improvement relocate, swap, 2-opt,
-2-opt* and bounded CROSS-exchange moves. Set `granular_descent = False` (or
-lower `descent_weight`) when a cheaper sampled neighbourhood is preferred.
+2-opt* and bounded CROSS-exchange moves. Set `strategies.granular_descent = False` (or
+lower `strategies.descent_weight`) when a cheaper sampled neighbourhood is preferred.
 
 ## JSON in, JSON out (pydantic)
 

@@ -26,7 +26,7 @@ __all__ = ["FIRST_FEASIBLE_LIMIT", "check_parameters", "solve_in_place", "solver
 
 _Config = TypeVar("_Config")
 
-#: ``best_score_limit`` for "stop at the first feasible solution" on a (hard, soft) score:
+#: ``stop.target_score`` for "stop at the first feasible solution" on a (hard, soft) score:
 #: hard 0, and no floor on soft. A use case with more score levels has its own.
 FIRST_FEASIBLE_LIMIT: tuple[float, ...] = (0, float("-inf"))
 
@@ -49,9 +49,9 @@ def solver_config(
     into it; ``None`` starts from ``config_type()``, the engine defaults. A keyword left
     at its default keeps the base setting:
 
-    - ``time_limit_seconds`` sets ``spent_limit_seconds``;
+    - ``time_limit_seconds`` sets ``stop.time_limit_seconds``;
     - ``random_seed`` and ``parallel_solver_count`` set the fields of the same name;
-    - ``stop_at_first_feasible`` sets ``best_score_limit`` to ``first_feasible_limit``.
+    - ``stop_at_first_feasible`` sets ``stop.target_score`` to ``first_feasible_limit``.
       The default is hard 0 with no floor on soft, for a (hard, soft) score; a use case
       with more score levels passes its own;
     - ``full_assert`` turns ``full_assert`` on (it never turns it off);
@@ -59,17 +59,17 @@ def solver_config(
     """
     cfg = config_type() if config is None else copy.copy(config)
     if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
+        cfg.stop.time_limit_seconds = time_limit_seconds
     if random_seed is not None:
-        cfg.random_seed = random_seed
+        cfg.run.random_seed = random_seed
     if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
+        cfg.run.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
-        cfg.best_score_limit = first_feasible_limit
+        cfg.stop.target_score = first_feasible_limit
     if full_assert:
-        cfg.full_assert = True
+        cfg.run.full_assert = True
     if on_new_best is not None:
-        cfg.on_new_best = on_new_best
+        cfg.run.on_new_best = on_new_best
     return cfg
 
 

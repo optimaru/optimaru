@@ -319,10 +319,10 @@ def test_on_new_best_reports_the_levels_of_the_final_score():
     reports = []
     schedule = build_schedule()
     cfg = fp.SolverConfig()
-    cfg.spent_limit_seconds = 10.0
-    cfg.step_count_limit = 2000
-    cfg.random_seed = 7
-    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    cfg.stop.time_limit_seconds = 10.0
+    cfg.stop.step_limit = 2000
+    cfg.run.random_seed = 7
+    cfg.run.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
     fp.Solver(cfg).solve_with_constraints(schedule, picks)
     final = (schedule.score.hard, schedule.score.medium, schedule.score.soft)
     assert final[2] <= -MEDIUM_UNIT
@@ -353,7 +353,7 @@ def _zero_budget(schedule, picks):
     """The engine's score of `schedule` under `picks`: a solve with no time keeps it as it is."""
     before = _layout(schedule)
     config = fp.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     fp.Solver(config).solve_with_constraints(schedule, picks)
     assert _layout(schedule) == before
     return _engine(schedule.score)
@@ -547,11 +547,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = fp.generate_demo_data(line_count=3, job_count=12)
     config = fp.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 2000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 2000
+    config.stop.time_limit_seconds = 30
     fp.Solver(config).solve_with_constraints(schedule, picks)
     raw = fp.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)

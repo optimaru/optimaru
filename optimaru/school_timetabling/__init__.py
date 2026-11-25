@@ -42,6 +42,7 @@ serialization) live in `optimaru.school_timetabling.models` too.
 import time
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._constraint import require_costs
 from .._solve import FIRST_FEASIBLE_LIMIT, solver_config
 from . import quickstart
@@ -95,6 +96,10 @@ from .convert import (
     inject_solution,
 )
 from .models import parameter_uses, solve_request
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
+canon.SolverConfig = _grouped(canon.SolverConfig, module=__name__ + ".canon")
 
 #: The raw per-constraint costs of a `canon.Timetable` (the canonical domain):
 #: ``{name: {costs, weight, exponent, hard, global, level, reward,
@@ -249,7 +254,7 @@ def _check_selection_weights(constraints, weights) -> None:
         weights = _fast_path_weights(weights)
     if _soft_weights(weights) != _soft_weights():
         raise ValueError(
-            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
+            "weights / config.cost.weights apply to the default fast path only; with constraints=, give each pick its weight"
         )
 
 
@@ -287,37 +292,35 @@ def _api_request(problem: dict, keywords: dict):
     parameters: dict = {}
     config = _resolve_config(keywords["config"], canonical=canonical)
     if config is not None:
-        if config.on_new_best is not None:
+        if config.run.on_new_best is not None:
             raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
-        defaults = type(config)()
-        # Every public attribute of a compiled SolverConfig that is not a method is a plain field the
-        # API sets by name and compares by value; `weights` (an ObjectiveWeights) is the one object,
-        # read by its weights. tests/test_api.py checks that a default config sends nothing.
+        defaults = type(config)().to_dict()
+        # Every setting, by group, that differs from the default travels in solver_parameters by
+        # group, except those the request has fields for; `weights` (an ObjectiveWeights) is
+        # the one object, read by its weights. tests/test_api.py checks that a default config sends nothing.
         as_fields = {
-            "spent_limit_seconds": "time_limit_seconds",
-            "random_seed": "random_seed",
-            "parallel_solver_count": "parallel_solver_count",
+            ("stop", "time_limit_seconds"): "time_limit_seconds",
+            ("run", "random_seed"): "random_seed",
+            ("run", "parallel_solver_count"): "parallel_solver_count",
         }
-        for name in dir(config):
-            if name.startswith("_") or name == "on_new_best" or callable(getattr(config, name)):
-                continue
-            value = getattr(config, name)
-            if name == "weights" and canonical:
-                # An ObjectiveWeights compares by identity: by its weights, then.
-                if weights is None and _soft_weights(value) != _soft_weights():
-                    weights = _soft_weights(value)
-                continue
-            if value == getattr(defaults, name):
-                continue
-            if name in as_fields:
-                if fields[as_fields[name]] is None:
-                    fields[as_fields[name]] = value
-            elif name == "full_assert":
-                fields["full_assert"] = fields["full_assert"] or value
-            elif name == "best_score_limit" and tuple(value) == tuple(FIRST_FEASIBLE_LIMIT):
-                fields["stop_at_first_feasible"] = True  # -inf has no JSON: it travels as the flag
-            else:
-                parameters[name] = _api._plain(value, f"config.{name}")
+        if canonical:
+            value = config.cost.weights
+            # An ObjectiveWeights compares by identity: by its weights, then.
+            if weights is None and _soft_weights(value) != _soft_weights():
+                weights = _soft_weights(value)
+        for group, settings in config.to_dict().items():
+            for name, value in settings.items():
+                if group == "cost" or value == defaults[group][name]:
+                    continue
+                if (group, name) in as_fields:
+                    if fields[as_fields[(group, name)]] is None:
+                        fields[as_fields[(group, name)]] = value
+                elif (group, name) == ("run", "full_assert"):
+                    fields["full_assert"] = fields["full_assert"] or value
+                elif (group, name) == ("stop", "target_score") and tuple(value) == tuple(FIRST_FEASIBLE_LIMIT):
+                    fields["stop_at_first_feasible"] = True  # -inf has no JSON: it travels as the flag
+                else:
+                    parameters.setdefault(group, {})[name] = _api._plain(value, f"config.{group}.{name}")
     # What a local solve refuses before it starts, refused before anything is sent.
     _check_selection_weights(constraints, weights)
     if canonical and constraints is not None:
@@ -385,10 +388,10 @@ def solve(
     avoided_period_cost / non_preferred_period_cost; omitted keys keep the
     component defaults 20/3/30/10/5/1; a soft constraint without a
     `canon.ObjectiveWeights` field is not scored on this path, so a weight for
-    it other than its default raises ValueError). It becomes ``config.weights``
+    it other than its default raises ValueError). It becomes ``config.cost.weights``
     (`canon.ObjectiveWeights`, which rejects a bool, a non-finite or a negative
     weight). Canonical mode only. Next to ``constraints`` it must equal the
-    defaults, like ``config.weights`` — a selection carries its own weights.
+    defaults, like ``config.cost.weights`` — a selection carries its own weights.
 
     ``constraints`` is a plugin constraint selection (canonical mode only; see
     the `constraints` module): an `Assembly`, or an iterable of specs and/or
@@ -397,7 +400,7 @@ def solve(
     ``None`` (default) keeps the monolithic incremental calculator's fast path.
     When given, the search runs on the assembled `canon.DecomposedCalculator`:
     a pick's ``weight=None`` is the component default (never ``weights`` /
-    ``config.weights``, which must then stay at the defaults), and the search
+    ``config.cost.weights``, which must then stay at the defaults), and the search
     is single-start (parallel_solver_count ignored). The response's penalties
     are always the canonical rescore (raw soft counts, independent of the
     selection), and objective_value uses the selection's effective soft
@@ -418,7 +421,7 @@ def solve(
     terms, so every period that can be filled is filled.
 
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
-    (best_score_limit=(0, -inf)). Do not combine it with a selection relaxing
+    (``stop.target_score = (0, -inf)``). Do not combine it with a selection relaxing
     `unassigned_lessons_cost` — a solution that drops every lesson is hard 0
     too and would stop there.
 
@@ -449,11 +452,11 @@ def solve(
         on_new_best=on_new_best,
     )
     if weights is not None:
-        cfg.weights = _fast_path_weights(weights)
-    # weights= / config.weights at the defaults (e.g. a full default dict) are harmless next to a
+        cfg.cost.weights = _fast_path_weights(weights)
+    # weights= / config.cost.weights at the defaults (e.g. a full default dict) are harmless next to a
     # selection; anything else would be silently ignored, so it raises.
     if canonical:
-        _check_selection_weights(constraints, cfg.weights)
+        _check_selection_weights(constraints, cfg.cost.weights)
     _check_initial(initial_solution)
 
     if canonical:
@@ -463,7 +466,7 @@ def solve(
         unassigned_weight = None
         if constraints is None:
             # Default: the monolithic incremental calculator's fast path.
-            report_weights = cfg.weights
+            report_weights = cfg.cost.weights
             start = time.perf_counter()
             canon.Solver(cfg).solve(converted.table)
             wall = time.perf_counter() - start

@@ -99,8 +99,8 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
     import optimaru.maintenance_scheduling as mnt
 
     config = mnt.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = seed
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = seed
     mnt.Solver(config).solve(problem)
 
 

@@ -21,7 +21,7 @@ result = pj.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`optimaru.project_job_scheduling.SolverConfig`) and `constraints` (see below). The config has the switch and the gate of the domain's own move, `serial_schedule_moves` and `custom_move_probability` ([Search](#search)). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`optimaru.project_job_scheduling.SolverConfig`) and `constraints` (see below). The config has the switch and the gate of the domain's own move, `custom_moves.serial_schedule` and `custom_moves.share` ([Search](#search)). The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=project_job_scheduling && cmake --build build -j
@@ -97,7 +97,7 @@ offsets on every constraint (one term per global total).
 The construction places the allocations one after another; late acceptance then works with
 the engine's change / swap moves on single values (a mode and a delay), its
 ruin-and-recreate kicks, and one move of the domain, `SerialScheduleMove`
-(`serial_schedule_moves`, in `optimaru/project_job_scheduling/cpp/pjs/search/moves/moves.hpp`).
+(`custom_moves.serial_schedule`, in `optimaru/project_job_scheduling/cpp/pjs/search/moves/moves.hpp`).
 
 A delay counts from the end of an allocation's predecessors, so one changed delay shifts
 every successor. In a schedule whose allocations already start as early as they can, almost
@@ -129,8 +129,8 @@ reaches the end of `delay_range_size` (an allocation that fits nowhere before it
 range shorter than the schedule needs takes much of the move's effect away), and a pinned allocation, which keeps its delay and
 takes its resources where that puts it. Non-renewable capacities depend on the modes alone
 and are left to the score. The move makes a few passes over the schedule where a built-in
-move changes one value, so `custom_move_probability` (0.2) caps how often a step draws it;
-`serial_schedule_moves = False` gives the search of 0.5.1 and earlier, step for step.
+move changes one value, so `custom_moves.share` (0.2) caps how often a step draws it;
+`custom_moves.serial_schedule = False` gives the search of 0.5.1 and earlier, step for step.
 
 Measured on one thread (2026-11-12), the move off and on:
 

@@ -224,7 +224,7 @@ class FlightCrewScheduleModel(StrictModel):
 class SolveConfig(SolveConfigBase):
     """Serializable mirror of `_core.SolverConfig`.
 
-    ``late_acceptance_size`` 0 is automatic: ``clamp(4 * seats, 400, 3200)``. A positive value
+    ``acceptance.late_acceptance_size`` 0 is automatic: ``clamp(4 * seats, 400, 3200)``. A positive value
     is used as it is.
     """
 

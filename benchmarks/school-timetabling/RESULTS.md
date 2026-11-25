@@ -297,7 +297,7 @@ both ends of the band:
 
 Hence **the descent default stays 0, and the as-move switches on
 automatically only in the measured band**: a negative
-`ruin_recreate_as_move_weight` (the new default) means 0.2 / slotRoomCount when
+`strategies.ruin_recreate_weight` (the new default) means 0.2 / slotRoomCount when
 slotRoomCount is within [900, 1300], else 0. An explicit 0 disables it, a
 positive value is used as is. Outside the band (S/M, 1480 cells) it is off
 rather than extrapolated — there is no reason to make a default out of where

@@ -86,9 +86,9 @@ def test_from_core_reports_the_solved_results():
 def test_the_model_and_the_core_solve_alike():
     """solve(model) converts, solves and returns a new solved model: the same result as the core path."""
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = 500
-    config.random_seed = 7
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = 500
+    config.run.random_seed = 7
     data = json.loads(WEB_DEMO.read_text())
     model = AssemblyLineBalancingProblemModel.model_validate(data)
     before = model.model_dump()
@@ -112,12 +112,12 @@ def test_the_model_and_the_core_solve_alike():
 def test_full_assert_solves_on_both_paths(constraints):
     """ScoreChecks::Full cross-checks the incremental score after every move (monolith and plugin assembly)."""
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = 2000
-    config.random_seed = 1
-    config.full_assert = True
-    config.ruin_recreate_unimproved_step_trigger = 100
-    config.ruin_recreate_polish_steps = 50
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = 2000
+    config.run.random_seed = 1
+    config.run.full_assert = True
+    config.alns_trigger.unimproved_steps = 100
+    config.alns.polish_steps = 50
     model = AssemblyLineBalancingProblemModel.model_validate(json.loads(WEB_DEMO.read_text()))
     model = alb.solve(model, config=config, constraints=constraints)
     check = alb.calculate_score(model.model_copy(deep=True), constraints)

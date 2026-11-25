@@ -353,135 +353,220 @@ def constraint_info() -> list[ConstraintInfo]:
     rewards (``reward=True``, ``level_flippable=False``)."""
 
 class SolverConfig:
-    """Termination, seeding and search options for `Solver`."""
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget for solve() (default 30s)."""
-    no_improvement_limit_seconds: float
-    """Stop after this many seconds without a best-score improvement; 0 disables
-    it. Alias of `unimproved_spent_limit_seconds`."""
-    unimproved_spent_limit_seconds: float
-    """Wall-clock time since last best-score improvement; 0 disables it."""
-    step_count_limit: int
-    """Local-search step budget; 0 disables it."""
-    no_improvement_step_count_limit: int
-    """Stop after this many steps without a best-score improvement; 0 disables
-    it. Alias of `unimproved_step_count_limit`."""
-    unimproved_step_count_limit: int
-    """Steps since last best-score improvement; 0 disables it."""
-    random_seed: int
-    """Seed of the search; the same seed reproduces the same search (with several starts
-    and a target that is reached, the start that reaches it first can differ between runs)."""
-    parallel_solver_count: int
-    """Independent parallel starts (seed + i each); the best final score wins. A start that
-    reaches `best_score_limit` stops the others. Ignored when a calculator is passed to
-    `Solver.solve`."""
-    full_assert: bool
-    """Re-verify every incremental score against a full recompute after every
-    move (a debugging aid; much slower)."""
-    guided_moves: bool
-    """Violation/skill-guided move selection (default True). False = uniform
-    random moves."""
-    employee_greedy_construction: bool
-    """Seed unassigned shifts with a day-aware greedy construction heuristic
-    before local search (default True)."""
-    greedy_repair_budget_fraction: float
-    """Share of the time budget reserved for the post-local-search greedy
-    hard-repair; local search gets the rest, so total wall time honors the
-    limit. Default 0.0 (off). Range [0, 0.9)."""
-    late_acceptance_size: int
-    """Late-acceptance queue length (default 400)."""
-    ruin_recreate: bool
-    """Enable adaptive ruin-and-recreate kicks on stagnation."""
-    ruin_recreate_unimproved_step_trigger: int
-    """Minimum unimproved steps before a ruin-and-recreate kick."""
-    ruin_recreate_min_ruin_fraction: float
-    """Minimum fraction of entities to ruin per kick."""
-    ruin_recreate_max_ruin_fraction: float
-    """Maximum fraction of entities to ruin per kick."""
-    ruin_recreate_max_ruin_count: int
-    """Absolute cap on entities ruined per kick."""
-    ruin_recreate_operator_decay: float
-    """Adaptive operator weight decay; higher adapts more slowly."""
-    ruin_recreate_rewards: list[float]
-    """Rewards for NEW_BEST, BETTER, ACCEPTED and REJECTED outcomes."""
-    ruin_recreate_polish_steps: int
-    """Hill-climbing small-move polish steps per ruin-and-recreate kick."""
-    ruin_recreate_as_move_weight: float
-    """Probability that a step draws destroy-and-repair as an ordinary,
-    acceptor-judged move rather than only as a stagnation kick. 0 disables it
-    (the default for employee scheduling: measured, descent carries this domain
-    and the two do not stack)."""
-    ruin_recreate_as_move_max_ruin: int
-    """Ruin size for the as-a-move form; much smaller than a kick's."""
-    descent_weight: float
-    """Probability that a step draws best-improvement descent over one nearby
-    entity pair — every value of each entity plus their swap, repeated until the
-    pair is locally optimal. One sweep costs ~2x the value-range in score
-    evaluations, so the usable weight scales with how many employees there
-    are (default 0.02)."""
-    descent_max_sweeps: int
-    """Give up on a pair after this many improving passes (default 4)."""
-    change_move_weight: float
-    """Assignment-shape change move relative weight; 0 disables it."""
-    swap_move_weight: float
-    """Assignment-shape swap move relative weight; 0 disables it."""
-    nearby_shifts: bool
-    """Temporal nearby selection (default True): bias swap partners, descent
-    pairs and related-ruin clusters toward shifts whose start times are close,
-    where the pairwise hard constraints (overlap, one-per-day, min-rest)
-    actually interact. Neighbor-list size is auto-derived from the densest 24h
-    start-time window of the instance."""
-    nearby_shifts_probability: float
-    """Probability that a swap partner is drawn from the nearby list instead of
-    uniformly (default 0.65; measured best compromise across instance sizes —
-    prefer 0.8 for large-only workloads of ~1000+ shifts). Range [0, 1]."""
-    smart_change_moves: bool
-    """Enable employee-scheduling smart change moves when guided_moves is True.
-    The move samples several employees for one shift and keeps the best sampled
-    reassignment as the local-search candidate."""
-    smart_change_candidate_count: int
-    """Employees sampled per smart change move (default 6)."""
-    employee_day_repair_moves: bool
-    """Enable repair moves for one-shift-per-day violations when guided_moves is
-    True. The move relocates one duplicate-day assignment to an off employee."""
-    employee_run_repair_moves: bool
-    """Enable repair moves for overlong consecutive-work runs when guided_moves
-    is True."""
-    employee_run_repair_max_days: int
-    """Worked-day run length that triggers run repair moves (default 3)."""
-    employee_window_moves: bool
-    """Enable employee-scheduling window moves when guided_moves is True. The
-    move swaps two employees' assignments over a short day window."""
-    employee_window_max_days: int
-    """Maximum day-window length for employee window moves (default 3)."""
-    custom_move_probability: float
-    """Maximum probability of consulting the adaptive custom-move pool per
-    ordinary search step (default 0.30). This keeps expensive employee window
-    moves from monopolizing the search after a recent reward."""
-    employee_ruin_moves: bool
-    """Enable employee-aware ruin sets for adaptive ruin-and-recreate when
-    guided_moves and ruin_recreate are True."""
-    employee_unassign_moves: bool
-    """Enable the unassign move (default False): empties an over-staffed slot by
-    setting an assignment back to unassigned, so coverage slots are optional
-    rather than always filled."""
-    relocate_move_weight: float
-    """Sequence-shape relocate move relative weight; unused by employee scheduling."""
-    list_swap_move_weight: float
-    """Sequence-shape swap move relative weight; unused by employee scheduling."""
-    two_opt_move_weight: float
-    """Sequence-shape 2-opt move relative weight; unused by employee scheduling."""
-    or_opt_move_weight: float
-    """Sequence-shape Or-opt move relative weight; unused by employee scheduling."""
-    tail_swap_move_weight: float
-    """Sequence-shape 2-opt* tail-swap relative weight; unused by employee scheduling."""
-    best_score_limit: tuple[int, float]
-    """Stop early once bestScore >= (hard, soft), compared lexicographically.
-    (0, -inf) stops at the first feasible solution. Default: unreachable."""
-    on_new_best: Callable[[int, Score], None] | None
-    """Callback fired on every new best solution: on_new_best(step, score).
-    Runs on the solving thread and re-acquires the GIL, which solve() releases."""
+    """The solver settings, by stage of the solve: ``construction``, ``stop``, ``alns_trigger``, ``strategies``, ``custom_moves``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        construction: dict[str, object] | None = None,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        custom_moves: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Construction:
+        """``config.construction``: The first solution s0."""
+
+        employee_greedy: bool
+        """Seed unassigned shifts with a day-aware greedy construction heuristic
+        before local search (default True)."""
+        greedy_repair_budget_fraction: float
+        """Share of the time budget reserved for the post-local-search greedy
+        hard-repair; local search gets the rest, so total wall time honors the
+        limit. Default 0.0 (off). Range [0, 0.9)."""
+
+    construction: Construction
+    """The first solution s0."""
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget for solve() (default 30s)."""
+        unimproved_time_limit_seconds: float
+        """Wall-clock time since last best-score improvement; 0 disables it."""
+        step_limit: int
+        """Local-search step budget; 0 disables it."""
+        unimproved_step_limit: int
+        """Steps since last best-score improvement; 0 disables it."""
+        target_score: tuple[int, float]
+        """Stop early once bestScore >= (hard, soft), compared lexicographically.
+        (0, -inf) stops at the first feasible solution. Default: unreachable."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        """Enable adaptive ruin-and-recreate kicks on stagnation."""
+        unimproved_steps: int
+        """Minimum unimproved steps before a ruin-and-recreate kick."""
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        ruin_recreate_weight: float
+        """Probability that a step draws destroy-and-repair as an ordinary,
+        acceptor-judged move rather than only as a stagnation kick. 0 disables it
+        (the default for employee scheduling: measured, descent carries this domain
+        and the two do not stack)."""
+        ruin_recreate_max_ruin: int
+        """Ruin size for the as-a-move form; much smaller than a kick's."""
+        descent_weight: float
+        """Probability that a step draws best-improvement descent over one nearby
+        entity pair — every value of each entity plus their swap, repeated until the
+        pair is locally optimal. One sweep costs ~2x the value-range in score
+        evaluations, so the usable weight scales with how many employees there
+        are (default 0.02)."""
+        descent_max_sweeps: int
+        """Give up on a pair after this many improving passes (default 4)."""
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class CustomMoves:
+        """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        guided: bool
+        """Violation/skill-guided move selection (default True). False = uniform
+        random moves."""
+        smart_change: bool
+        """Enable employee-scheduling smart change moves when custom_moves.guided is True.
+        The move samples several employees for one shift and keeps the best sampled
+        reassignment as the local-search candidate."""
+        smart_change_candidate_count: int
+        """Employees sampled per smart change move (default 6)."""
+        employee_day_repair: bool
+        """Enable repair moves for one-shift-per-day violations when custom_moves.guided is
+        True. The move relocates one duplicate-day assignment to an off employee."""
+        employee_run_repair: bool
+        """Enable repair moves for overlong consecutive-work runs when
+        custom_moves.guided is True."""
+        employee_run_repair_max_days: int
+        """Worked-day run length that triggers run repair moves (default 3)."""
+        employee_window: bool
+        """Enable employee-scheduling window moves when custom_moves.guided is True. The
+        move swaps two employees' assignments over a short day window."""
+        employee_window_max_days: int
+        """Maximum day-window length for employee window moves (default 3)."""
+        share: float
+        """Maximum probability of consulting the adaptive custom-move pool per
+        ordinary search step (default 0.30). This keeps expensive employee window
+        moves from monopolizing the search after a recent reward."""
+        employee_unassign: bool
+        """Enable the unassign move (default False): empties an over-staffed slot by
+        setting an assignment back to unassigned, so coverage slots are optional
+        rather than always filled."""
+
+    custom_moves: CustomMoves
+    """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        """Assignment-shape change move relative weight; 0 disables it."""
+        swap_weight: float
+        """Assignment-shape swap move relative weight; 0 disables it."""
+        relocate_weight: float
+        """Sequence-shape relocate move relative weight; unused by employee scheduling."""
+        list_swap_weight: float
+        """Sequence-shape swap move relative weight; unused by employee scheduling."""
+        two_opt_weight: float
+        """Sequence-shape 2-opt move relative weight; unused by employee scheduling."""
+        or_opt_weight: float
+        """Sequence-shape Or-opt move relative weight; unused by employee scheduling."""
+        tail_swap_weight: float
+        """Sequence-shape 2-opt* tail-swap relative weight; unused by employee scheduling."""
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        nearby_shifts: bool
+        """Temporal nearby selection (default True): bias swap partners, descent
+        pairs and related-ruin clusters toward shifts whose start times are close,
+        where the pairwise hard constraints (overlap, one-per-day, min-rest)
+        actually interact. Neighbor-list size is auto-derived from the densest 24h
+        start-time window of the instance."""
+        nearby_shifts_probability: float
+        """Probability that a swap partner is drawn from the nearby list instead of
+        uniformly (default 0.65; measured best compromise across instance sizes —
+        prefer 0.8 for large-only workloads of ~1000+ shifts). Range [0, 1]."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """Late-acceptance queue length (default 400)."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        """Minimum fraction of entities to ruin per kick."""
+        max_ruin_fraction: float
+        """Maximum fraction of entities to ruin per kick."""
+        max_ruin_count: int
+        """Absolute cap on entities ruined per kick."""
+        operator_decay: float
+        """Adaptive operator weight decay; higher adapts more slowly."""
+        rewards: list[float]
+        """Rewards for NEW_BEST, BETTER, ACCEPTED and REJECTED outcomes."""
+        polish_steps: int
+        """Hill-climbing small-move polish steps per ruin-and-recreate kick."""
+        employee_ruin: bool
+        """Enable employee-aware ruin sets for adaptive ruin-and-recreate when
+        custom_moves.guided and alns_trigger.enabled are True."""
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        """Seed of the search; the same seed reproduces the same search (with several starts
+        and a target that is reached, the start that reaches it first can differ between runs)."""
+        parallel_solver_count: int
+        """Independent parallel starts (seed + i each); the best final score wins. A start that
+        reaches `stop.target_score` stops the others. Ignored when a calculator is passed to
+        `Solver.solve`."""
+        full_assert: bool
+        """Re-verify every incremental score against a full recompute after every
+        move (a debugging aid; much slower)."""
+        on_new_best: Callable[[int, Score], None] | None
+        """Callback fired on every new best solution: on_new_best(step, score).
+        Runs on the solving thread and re-acquires the GIL, which solve() releases."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Local-search solver (late acceptance + guided moves + adaptive

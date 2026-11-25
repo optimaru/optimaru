@@ -288,8 +288,8 @@ def test_a_refused_plan_is_left_as_it_was_and_can_still_be_scored(pair_construct
     clash.rebuild_unassigned_pool()
     waiting = list(clash.unassigned_node_indices)
     config = pdp.SolverConfig()
-    config.step_count_limit = 100
-    config.pair_construction_heuristic = pair_construction
+    config.stop.step_limit = 100
+    config.construction.pair_heuristic = pair_construction
 
     # No constraint list: the engine's own switch for a grouped plan, which with the pair
     # construction off empties the pool before it solves.
@@ -337,7 +337,7 @@ def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
     plan = to_plan(two_ends([request("a", group="g"), request("b", group="g")], vehicles))
     config = pdp.SolverConfig()
-    config.step_count_limit = 3000
+    config.stop.step_limit = 3000
 
     if entry == "solve":
         pdp.solve(plan, config=config)
@@ -357,7 +357,7 @@ def test_calculate_score_reads_a_grouped_plan_as_the_solve_scored_it():
     vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
     plan = to_plan(two_ends([request("a", group="g"), request("b", group="g"), request("c")], vehicles))
     config = pdp.SolverConfig()
-    config.step_count_limit = 3000
+    config.stop.step_limit = 3000
     pdp.solve(plan, config=config)
     solved = as_tuple(plan.score)
 
@@ -392,7 +392,7 @@ def test_groups_of_one_do_not_change_how_a_plan_is_scored():
     alone = [request("a", group="g1"), request("b", group="g2"), request("c", group="g3")]
     plan = to_plan(two_ends(alone, vehicles))
     config = pdp.SolverConfig()
-    config.step_count_limit = 2000
+    config.stop.step_limit = 2000
 
     pdp.solve(plan, config=config)
 
@@ -414,7 +414,7 @@ def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():
     vehicles = [vehicle("v", ["ap", "ad"], max_stops=2), vehicle("w", ["bp", "bd"], max_stops=2)]
     model_input = two_ends([request("a", group="g"), request("b", group="g")], vehicles)
     config = pdp.SolverConfig()
-    config.step_count_limit = 500
+    config.stop.step_limit = 500
     others = [spec for spec in get_constraints() if spec.name != "request_group_cost"]
 
     plan = to_plan(model_input)
@@ -466,10 +466,10 @@ def test_parallel_starts_return_the_best_single_start_on_the_constraint_path(pat
     # so three step-limited starts return what the best of three single-start solves does.
     def score(seed: int, starts: int) -> tuple[int, int, int]:
         config = pdp.SolverConfig()
-        config.spent_limit_seconds = 60.0  # the step limit ends the solve
-        config.step_count_limit = 2000
-        config.random_seed = seed
-        config.parallel_solver_count = starts
+        config.stop.time_limit_seconds = 60.0  # the step limit ends the solve
+        config.stop.step_limit = 2000
+        config.run.random_seed = seed
+        config.run.parallel_solver_count = starts
         plan = grouped_instance(18, 3, 3, seed=3)
         pdp.solve(plan, config=config, constraints=get_constraints() if path == "a constraint list" else None)
         return as_tuple(plan.score)
@@ -492,7 +492,7 @@ def test_a_grouped_request_with_num_workers_solves():
                 timelimit=60,
                 random_seed=seed,
                 num_workers=workers,
-                solver_parameters={"step_count_limit": 500},
+                solver_parameters={"stop": {"step_limit": 500}},
             )
         ).score
 
@@ -504,10 +504,10 @@ def test_a_grouped_request_with_num_workers_solves():
 def test_groups_stay_whole_in_a_larger_solve(request_moves):
     plan = grouped_instance(24, 4, 3, seed=3)
     config = pdp.SolverConfig()
-    config.step_count_limit = 6000
-    config.full_assert = True
-    config.request_ruin_recreate = request_moves
-    config.bundle_moves = request_moves
+    config.stop.step_limit = 6000
+    config.run.full_assert = True
+    config.alns.request_ruin = request_moves
+    config.custom_moves.bundle = request_moves
 
     pdp.solve(plan, random_seed=3, config=config, constraints=get_constraints())
 

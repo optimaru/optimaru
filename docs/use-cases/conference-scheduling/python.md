@@ -43,7 +43,8 @@ print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, b
 `solve_request` takes a pydantic request, `models.ConferenceScheduleRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `ConferenceScheduleModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 
@@ -124,7 +125,7 @@ A talk may only use timeslots and rooms that admit its talk type. The assignment
 is one global (timeslot × room) grid, so this is enforced by the hard constraint
 `talk_type_incompatibility_cost` (100k × max(min,1), per incompatible slot/room) rather than
 by narrowing each talk's choices, and the search is biased toward compatible
-cells by `compatible_value_probability` (default 0.9).
+cells by `selection.compatible_value_probability` (default 0.9).
 
 ## Demo data
 

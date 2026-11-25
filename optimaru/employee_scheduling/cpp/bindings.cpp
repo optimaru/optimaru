@@ -547,24 +547,6 @@ PYBIND11_MODULE(_core, m) {
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()),
             /*late_acceptance_auto=*/false)
             .def(py::init<>())
-            .def_property(
-                    "no_improvement_limit_seconds",
-                    [](const Solver::Config& c) {
-                        return std::chrono::duration<double>(c.stall_time_limit).count();
-                    },
-                    [](Solver::Config& c, double s) {
-                        c.stall_time_limit = optimaru::python::seconds_to_millis(
-                                s, "no_improvement_limit_seconds");
-                    })
-            .def_property(
-                    "no_improvement_step_count_limit",
-                    [](const Solver::Config& c) { return c.stall_step_limit; },
-                    [](Solver::Config& c, std::int64_t steps) {
-                        if (steps < 0)
-                            throw py::value_error(
-                                    "no_improvement_step_count_limit must be non-negative");
-                        c.stall_step_limit = steps;
-                    })
             .def_readwrite("guided_moves", &Solver::Config::guided_moves)
             .def_readwrite("employee_greedy_construction",
                            &Solver::Config::employee_greedy_construction)

@@ -164,9 +164,9 @@ def test_swap_facility_moves_find_the_better_set_of_facilities():
     million, the search keeping the facilities it first settled on."""
     problem = demo_problem(50, 200, seed=1)
     config = fl.SolverConfig()
-    assert config.swap_facility_moves is True
-    config.step_count_limit = 50_000
-    config.random_seed = 1
+    assert config.custom_moves.swap_facility is True
+    config.stop.step_limit = 50_000
+    config.run.random_seed = 1
     score = fl.solve(problem, time_limit_seconds=600.0, config=config).score
     assert score.hard == 0
     assert -score.soft < 3_170_000
@@ -175,10 +175,10 @@ def test_swap_facility_moves_find_the_better_set_of_facilities():
 def test_swap_facility_moves_can_be_switched_off():
     problem = demo_problem()
     config = fl.SolverConfig()
-    config.swap_facility_moves = False
-    assert config.swap_facility_moves is False
-    config.step_count_limit = 5_000
-    config.random_seed = 3
+    config.custom_moves.swap_facility = False
+    assert config.custom_moves.swap_facility is False
+    config.stop.step_limit = 5_000
+    config.run.random_seed = 3
     score = fl.solve(problem, time_limit_seconds=600.0, config=config).score
     recomputed = fl.calculate_score(problem)
     assert (score.hard, score.soft) == (recomputed.hard, recomputed.soft)
@@ -191,8 +191,8 @@ def test_a_solve_from_a_partial_assignment_passes_full_assert():
     consumers on no facility while a move looks at them."""
     problem = demo_problem()
     config = fl.SolverConfig()
-    config.step_count_limit = 3_000
-    config.random_seed = 1
+    config.stop.step_limit = 3_000
+    config.run.random_seed = 1
     fl.solve(problem, time_limit_seconds=600.0, config=config)
     assignment = problem.assignment()
     for index in range(0, len(assignment), 5):
@@ -200,10 +200,10 @@ def test_a_solve_from_a_partial_assignment_passes_full_assert():
     problem.set_assignment(assignment)
 
     config = fl.SolverConfig()
-    config.step_count_limit = 20_000
-    config.random_seed = 2
-    config.full_assert = True
-    config.ruin_recreate_unimproved_step_trigger = 200
+    config.stop.step_limit = 20_000
+    config.run.random_seed = 2
+    config.run.full_assert = True
+    config.alns_trigger.unimproved_steps = 200
     score = fl.solve(problem, time_limit_seconds=600.0, config=config).score
     recomputed = fl.calculate_score(problem)
     assert score.hard == 0

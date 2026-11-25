@@ -29,9 +29,9 @@ def _rescore(problem) -> int:
 
 def _run_engine(problem, seconds: float, seed: int) -> dict:
     config = assembly_line_balancing.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = seed
-    config.parallel_solver_count = 1
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = seed
+    config.run.parallel_solver_count = 1
     started = time.perf_counter()
     problem = assembly_line_balancing.solve(problem, config=config)
     elapsed = time.perf_counter() - started
