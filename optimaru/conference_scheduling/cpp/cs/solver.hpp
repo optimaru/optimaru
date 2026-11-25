@@ -46,7 +46,7 @@ public:
         double swap_weight = 0.25;
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move (engine
-        // RuinRecreateSettings::as_move_weight): probability that a step is a
+        // StrategySettings::ruin_recreate_weight): probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move. Cost per draw is
         // ~ruinCount * slotRoomCount score evaluations, so the school-
@@ -60,7 +60,7 @@ public:
         int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one entity pair (engine
-        // SearchSettings::descent_weight); same budget-share arithmetic as
+        // StrategySettings::descent_weight); same budget-share arithmetic as
         // the as-move weight. Off by default.
         double descent_weight = 0.0;
 

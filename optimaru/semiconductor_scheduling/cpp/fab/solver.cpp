@@ -116,17 +116,17 @@ void Solver::runSingle(SemiconductorSchedule& schedule,
                        optimaru::Objective<SemiconductorSchedule>& calculator) const {
     optimaru::Settings engineConfig = optimaru::settings_from(config_);
 
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config_.history_length != 0
                     ? config_.history_length
                     : std::clamp<std::size_t>(16 * schedule.rows.size(), 400, 3200);
 
-    engineConfig.search.moves.change_weight = config_.change_weight;
-    engineConfig.search.moves.swap_weight = config_.swap_weight;
-    engineConfig.search.custom_move_probability = config_.custom_move_probability;
+    engineConfig.moves.change_weight = config_.change_weight;
+    engineConfig.moves.swap_weight = config_.swap_weight;
+    engineConfig.custom_moves.share = config_.custom_move_probability;
     // The schedule outlives the engine run: the recommender reads the
     // working values through it.
-    engineConfig.search.value_hint = value_hint(&schedule, config_.machine_move_probability);
+    engineConfig.selection.value_hint = value_hint(&schedule, config_.machine_move_probability);
 
     optimaru::Solver<SemiconductorSchedule> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);

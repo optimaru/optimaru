@@ -33,7 +33,7 @@ public:
     //                          bin
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move (the
-        // engine's ruin_recreate.as_move_weight); one costs ~ruinCount * n score
+        // engine's strategies.ruin_recreate_weight); one costs ~ruinCount * n score
         // evaluations. 0 disables it.
         double ruin_recreate_as_move_weight = 0.0;
         int ruin_recreate_as_move_max_ruin = 12;

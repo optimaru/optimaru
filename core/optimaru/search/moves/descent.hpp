@@ -52,7 +52,7 @@ namespace optimaru {
 // in the pool only because it nearly always improves — which is also why the
 // weight it is drawn at has to be set against what it costs, and why on assignment
 // that cost is set by the VALUE RANGE and so the usable weight differs by two
-// orders of magnitude between domains (see SearchSettings::descent_weight).
+// orders of magnitude between domains (see StrategySettings::descent_weight).
 //
 // As a plugin this goes through the acceptor like any other move rather than
 // being applied directly on the grounds that it is improving by construction.

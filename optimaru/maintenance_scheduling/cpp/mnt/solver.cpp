@@ -74,7 +74,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const MaintenanceSchedule& schedule) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * schedule.jobs.size(), 400, 3200);
@@ -87,11 +87,11 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     // A solve that starts from a solution the caller gave has no stages: the
     // start's score is then no lower than where the search stands, and a stage
     // would take the place of the kicks that find something there.
-    if (optimaru::nothing_placed(schedule)) engineConfig.search.acceptance.history_growth = 2.0;
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
+    if (optimaru::nothing_placed(schedule)) engineConfig.acceptance.history_growth = 2.0;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.strategies.descent_max_sweeps = config.descent_max_sweeps;
     return engineConfig;
 }
 
@@ -141,8 +141,9 @@ void Solver::solve(MaintenanceSchedule& schedule) {
         const int crewCount = schedule.crewCount();
         const int free_crew_candidates = config_.free_crew_candidates;
         const MaintenanceSchedule* s = &schedule;
-        engineConfig.search.value_hint = [windows, probability, crewCount, free_crew_candidates, s,
-                                          &calculator](std::mt19937_64& rng, int jobIndex) -> int {
+        engineConfig.selection.value_hint = [windows, probability, crewCount, free_crew_candidates,
+                                             s, &calculator](std::mt19937_64& rng,
+                                                             int jobIndex) -> int {
             if (probability < 1.0) {
                 std::uniform_real_distribution<double> unit(0.0, 1.0);
                 if (unit(rng) >= probability) return -1;  // fall back to the engine's uniform draw
@@ -187,8 +188,8 @@ void Solver::solve(MaintenanceSchedule& schedule) {
                 config_.hot_job_probability *
                 static_cast<double>(std::numeric_limits<std::uint64_t>::max()));
         const MaintenanceSchedule* s = &schedule;
-        engineConfig.search.entity_hint = [&calculator, tagJobs, hotThreshold,
-                                           s](std::mt19937_64& rng) -> int {
+        engineConfig.selection.entity_hint = [&calculator, tagJobs, hotThreshold,
+                                              s](std::mt19937_64& rng) -> int {
             // Cheap first: with no tagConflictCost there is nothing to guide
             // toward.
             if (!calculator.hasHotTagCells() || rng() >= hotThreshold) return -1;

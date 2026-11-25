@@ -117,7 +117,7 @@ public:
         // The weights are deliberately small: all three cost far more than one
         // sampled move (a descent sweep scans a whole list pair, the other two
         // run a repair), so they earn their keep at a few percent of steps and
-        // starve the ordinary move mix above that. SearchSettings records
+        // starve the ordinary move mix above that. StrategySettings records
         // why these are configured rather than adaptively learned — it was
         // tried, and it is the selection schemes that are not ready for it.
         double ruin_recreate_as_move_weight = 0.05;

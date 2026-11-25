@@ -54,14 +54,14 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
                optimaru::Objective<BinPackingProblem>& calculator) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.custom_move_probability = config.custom_move_probability;
-    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.custom_moves.share = config.custom_move_probability;
+    engineConfig.strategies.descent_weight = config.descent_weight;
 
     // Guided change-move targets: the bin of a uniformly drawn other item (a
     // bin in use; -1 falls back to the engine's uniform draw over all n
@@ -70,7 +70,7 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
     if (config.value_recommender_probability > 0.0 && problem.itemCount() >= 2) {
         const BinPackingProblem& live = problem;
         const double p = config.value_recommender_probability;
-        engineConfig.search.value_hint = [&live, p](std::mt19937_64& rng, int item) -> int {
+        engineConfig.selection.value_hint = [&live, p](std::mt19937_64& rng, int item) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= p) return -1;
             const auto n = static_cast<std::uint64_t>(live.items.size());
@@ -80,7 +80,7 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
         };
     }
 
-    const std::size_t historyLength = engineConfig.search.acceptance.history_length;
+    const std::size_t historyLength = engineConfig.acceptance.history_length;
     optimaru::Solver<BinPackingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
     // Late acceptance that compares equal scores by how full the bins are.

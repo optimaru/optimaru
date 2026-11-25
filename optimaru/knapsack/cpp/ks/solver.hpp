@@ -35,7 +35,7 @@ public:
     //                          resource / group instances
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
-        // ruin_recreate.as_move_weight): a few items are dropped to undecided
+        // strategies.ruin_recreate_weight): a few items are dropped to undecided
         // and greedily re-decided, and the acceptor judges the whole trade.
         // With two values one costs only ~2 * ruinCount evaluations, and it
         // is what lets late acceptance leave a strict local optimum (a 2-for-1

@@ -61,7 +61,7 @@ public:
     //                          instances and never escape
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move (the engine's
-        // ruin_recreate.as_move_weight), in addition to the stagnation kick:
+        // strategies.ruin_recreate_weight), in addition to the stagnation kick:
         // the probability per step that a small ruin+repair candidate is drawn
         // instead of a change/swap. One repair costs ~ruinCount x
         // grainRoomCount evaluations, so this must stay orders of magnitude

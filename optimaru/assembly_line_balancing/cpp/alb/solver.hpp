@@ -25,7 +25,7 @@ public:
     //   parallel_solver_count  ignored by the constraint-assembly overload
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
-        // ruin_recreate.as_move_weight); one costs ~ruinCount * station count
+        // strategies.ruin_recreate_weight); one costs ~ruinCount * station count
         // evaluations. 0 disables it.
         double ruin_recreate_as_move_weight = 0.0;
         int ruin_recreate_as_move_max_ruin = 12;

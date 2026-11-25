@@ -381,7 +381,7 @@ void testSearchStrategiesAreConsistent() {
 }
 
 // -------------------------------------------------------------------------
-// SearchSettings::unassigned_list: a repair may not park a visit it took
+// Settings::unassigned_list: a repair may not park a visit it took
 // off a route in the unassigned pool, however much cheaper the pool is than a
 // capacity breach, while a visit the ruin took out of the pool may go back.
 // Without the exclusion the same repair does use the pool, which is what made
@@ -423,7 +423,7 @@ void testRepairNeverParksRoutedVisitsInThePool() {
         optimaru::ElementIndex<VehicleRoutePlan> index;
         index.build(plan);
         optimaru::Neighborhoods nearby;  // disabled: every position is a candidate
-        optimaru::RuinRecreateSettings config;
+        optimaru::AlnsSettings config;
         optimaru::GreedyRepair<VehicleRoutePlan> repair(index, nearby, config, unassigned_list);
 
         // Six routed visits and one pool visit.

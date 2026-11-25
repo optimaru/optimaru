@@ -16,7 +16,7 @@
 //
 //   optimaru::check_config(config);                           // before anything is touched
 //   optimaru::Settings settings = optimaru::settings_from(config);
-//   settings.search.moves.change_weight = config.change_weight;  // ... its own knobs
+//   settings.moves.change_weight = config.change_weight;  // ... its own knobs
 //
 // optimaru/python/solver_config.hpp binds the same fields to Python, under the
 // same names.
@@ -90,7 +90,7 @@ struct SolverConfigBase {
 };
 
 // The second base, for a use case that runs the engine's adaptive ruin &
-// recreate (ALNS) kicks: the knobs of RuinRecreateSettings, with its defaults.
+// recreate (ALNS) kicks: the knobs of AlnsTriggerSettings and AlnsSettings, with their defaults.
 // A use case tuned differently sets its own in its Config's constructor.
 struct RuinRecreateConfig {
     bool ruin_recreate = true;
@@ -219,18 +219,18 @@ void check_config(const Config& config) {
 template <typename Config>
 Settings settings_from(const Config& config) {
     Settings settings;
-    settings.seed = config.seed;
-    settings.score_checks = config.score_checks;
-    settings.limits.time_limit = config.time_limit;
-    settings.limits.stall_time_limit = config.stall_time_limit;
-    settings.limits.step_limit = config.step_limit;
-    settings.limits.stall_step_limit = config.stall_step_limit;
+    settings.run.seed = config.seed;
+    settings.run.score_checks = config.score_checks;
+    settings.stop.time_limit = config.time_limit;
+    settings.stop.stall_time_limit = config.stall_time_limit;
+    settings.stop.step_limit = config.step_limit;
+    settings.stop.stall_step_limit = config.stall_step_limit;
     if constexpr (std::is_base_of_v<SolverConfigBase<Score>, Config>) {
-        settings.limits.target_score = config.target_score;
-        settings.on_new_best = config.on_new_best;
+        settings.stop.target_score = config.target_score;
+        settings.run.on_new_best = config.on_new_best;
     }
     if constexpr (std::is_base_of_v<AcceptanceConfig, Config>) {
-        AcceptanceSettings& acceptance = settings.search.acceptance;
+        AcceptanceSettings& acceptance = settings.acceptance;
         acceptance.rule = config.rule;
         acceptance.tabu_tenure = config.tabu_tenure;
         acceptance.start_temperature = config.start_temperature;
@@ -241,9 +241,10 @@ Settings settings_from(const Config& config) {
         acceptance.rrt_end_gap = config.record_to_record_end_gap;
     }
     if constexpr (std::is_base_of_v<RuinRecreateConfig, Config>) {
-        RuinRecreateSettings& kicks = settings.search.ruin_recreate;
-        kicks.enabled = config.ruin_recreate;
-        kicks.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+        settings.alns_trigger.enabled = config.ruin_recreate;
+        settings.alns_trigger.unimproved_step_trigger =
+                config.ruin_recreate_unimproved_step_trigger;
+        AlnsSettings& kicks = settings.alns;
         kicks.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
         kicks.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
         kicks.max_ruin_count = config.ruin_recreate_max_ruin_count;
@@ -251,8 +252,8 @@ Settings settings_from(const Config& config) {
         kicks.rewards = config.ruin_recreate_rewards;
         kicks.polish_steps = config.ruin_recreate_polish_steps;
         if constexpr (detail::HasAsMoveKnobs<Config>::value) {
-            kicks.as_move_weight = config.ruin_recreate_as_move_weight;
-            kicks.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
+            settings.strategies.ruin_recreate_weight = config.ruin_recreate_as_move_weight;
+            settings.strategies.ruin_recreate_max_ruin = config.ruin_recreate_as_move_max_ruin;
         }
     }
     return settings;

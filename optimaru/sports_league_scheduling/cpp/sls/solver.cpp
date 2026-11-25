@@ -19,9 +19,9 @@ namespace {
 void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
                      optimaru::Settings& engineConfig) {
     engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = 1;
+    engineConfig.run.parallel_starts = 1;
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(32 * schedule.matches.size(), 400, 3200);
@@ -31,9 +31,9 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
     // A solve that starts from a solution the caller gave has no stages: the
     // start's score is then no lower than where the search stands, and a stage
     // would take the place of the kicks that find something there.
-    if (optimaru::nothing_placed(schedule)) engineConfig.search.acceptance.history_growth = 2.0;
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
+    if (optimaru::nothing_placed(schedule)) engineConfig.acceptance.history_growth = 2.0;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
 
     // Nearby selection (see Config::nearby_size): two matches are "near" when
     // they share a team — the only way two matches can directly trade travel
@@ -42,7 +42,7 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
     // team's cluster of fixtures.
     if (config.nearby_size >= 0) {
         const LeagueSchedule* s = &schedule;
-        engineConfig.search.nearby.distance = [s](int a, int b) {
+        engineConfig.selection.nearby.distance = [s](int a, int b) {
             const Match& x = s->matches[a];
             const Match& y = s->matches[b];
             const bool shared = x.homeTeam == y.homeTeam || x.homeTeam == y.awayTeam ||
@@ -52,9 +52,9 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
             return (shared ? 0.0 : 1.0e9) + venueGap;
         };
         // nearby_size 0 = auto (see Config): a match's whole shared-team set.
-        engineConfig.search.nearby.size =
+        engineConfig.selection.nearby.size =
                 config.nearby_size > 0 ? config.nearby_size : 4 * schedule.teamCount();
-        engineConfig.search.nearby.probability = config.nearby_probability;
+        engineConfig.selection.nearby.probability = config.nearby_probability;
     }
 }
 
@@ -97,7 +97,7 @@ void Solver::solve(LeagueSchedule& schedule) {
     // travel, not toward violations.
     if (config_.costliest_match_sample > 1) {
         const int sample = config_.costliest_match_sample;
-        engineConfig.search.entity_hint = [&calculator, sample](std::mt19937_64& rng) -> int {
+        engineConfig.selection.entity_hint = [&calculator, sample](std::mt19937_64& rng) -> int {
             return calculator.costliestMatch(rng, sample);
         };
     }

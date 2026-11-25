@@ -42,24 +42,24 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     if (config.on_new_best) {
         auto on_new_best = config.on_new_best;
-        engineConfig.on_new_best = [on_new_best, reportedScore = std::move(reportedScore)](
-                                           std::int64_t step, const optimaru::Score& score) {
+        engineConfig.run.on_new_best = [on_new_best, reportedScore = std::move(reportedScore)](
+                                               std::int64_t step, const optimaru::Score& score) {
             on_new_best(step, reportedScore(score));
         };
     }
-    engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
+    engineConfig.stop.target_score = toEngineScoreLimit(config.target_score);
     // history_length 0 = auto-scale with the instance (see Config).
     // 16x (up from the initial 8x) measured best once the allocation-free
     // calculator doubled moves/s: the longer horizon converts the extra
     // steps into deeper medium/soft improvements (x4 bench +31% at 16n vs
     // 8n; the clamp keeps demo-sized instances at the 400 floor).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(16 * schedule.allocations.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.custom_move_probability = config.custom_move_probability;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.custom_moves.share = config.custom_move_probability;
 
     // Guided value selection (see Config::near_current_delay_probability): a
     // recommended change-move value keeps the delay within a small geometric
@@ -73,8 +73,8 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     if (config.near_current_delay_probability > 0.0) {
         const double guidedProbability = config.near_current_delay_probability;
         const ProjectJobSchedule* working = &schedule;
-        engineConfig.search.value_hint = [working, guidedProbability](std::mt19937_64& rng,
-                                                                      int allocationIndex) -> int {
+        engineConfig.selection.value_hint =
+                [working, guidedProbability](std::mt19937_64& rng, int allocationIndex) -> int {
             const int current = working->allocations[allocationIndex].modeDelay;
             if (current < 0) return -1;
             std::uniform_real_distribution<double> unit(0.0, 1.0);

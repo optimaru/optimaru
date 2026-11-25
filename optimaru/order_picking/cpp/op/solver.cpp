@@ -387,13 +387,13 @@ namespace {
 optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const OrderPickingSolution& solution) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = 1;
+    engineConfig.run.parallel_starts = 1;
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(4 * solution.pickTasks.size(), 200, 1600);
-    auto& moves = engineConfig.search.moves;
+    auto& moves = engineConfig.moves;
     moves.relocate_weight = config.relocate_weight;
     moves.list_swap_weight = config.list_swap_weight;
     moves.two_opt_weight = config.two_opt_weight;
@@ -407,13 +407,13 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
         auto locations = std::make_shared<std::vector<WarehouseLocation>>();
         locations->reserve(solution.pickTasks.size());
         for (const PickTask& task : solution.pickTasks) locations->push_back(task.location);
-        engineConfig.search.nearby.distance = [locations](int a, int b) {
+        engineConfig.selection.nearby.distance = [locations](int a, int b) {
             return static_cast<double>(calculateDistance((*locations)[a], (*locations)[b]));
         };
-        engineConfig.search.nearby.size =
+        engineConfig.selection.nearby.size =
                 std::max(1, std::min(config.distance_nearby_size,
                                      static_cast<int>(solution.pickTasks.size()) - 1));
-        engineConfig.search.nearby.probability = config.distance_nearby_probability;
+        engineConfig.selection.nearby.probability = config.distance_nearby_probability;
     }
 
     return engineConfig;

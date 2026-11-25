@@ -28,9 +28,9 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
                                   const QuadraticAssignmentProblem& problem, int starts,
                                   bool seeded) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = starts;
+    engineConfig.run.parallel_starts = starts;
 
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.facilities.size(), 400, 3200);
@@ -39,19 +39,18 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
     // benchmarks/quadratic-assignment, none worse at 30 s on three seeds. A
     // solve that starts from an assignment the caller gave has no stages: the
     // start's score is then no lower than where the search stands.
-    if (!seeded) engineConfig.search.acceptance.history_growth = 2.0;
+    if (!seeded) engineConfig.acceptance.history_growth = 2.0;
 
-    auto& local = engineConfig.search;
-    local.moves.change_weight = 0.0;
-    local.moves.swap_weight = 1.0;
-    local.ruin_recreate.enabled = false;
-    local.ruin_recreate.as_move_weight = 0.0;
-    local.descent_weight = 0.0;
-    local.route_elimination_weight = 0.0;
-    local.ejection_chain_weight = 0.0;
-    local.iterated_local_search_weight = 0.0;
-    local.value_hint = nullptr;
-    local.entity_hint = nullptr;
+    engineConfig.moves.change_weight = 0.0;
+    engineConfig.moves.swap_weight = 1.0;
+    engineConfig.alns_trigger.enabled = false;
+    engineConfig.strategies.ruin_recreate_weight = 0.0;
+    engineConfig.strategies.descent_weight = 0.0;
+    engineConfig.strategies.route_elimination_weight = 0.0;
+    engineConfig.strategies.ejection_chain_weight = 0.0;
+    engineConfig.strategies.iterated_local_search_weight = 0.0;
+    engineConfig.selection.value_hint = nullptr;
+    engineConfig.selection.entity_hint = nullptr;
     return engineConfig;
 }
 

@@ -31,11 +31,10 @@ public:
 
     HistoryStages(const Settings& config, bool custom_acceptor, const Score& start_score,
                   double now)
-        : growth_(config.search.acceptance.history_growth),
+        : growth_(config.acceptance.history_growth),
           enabled_(growth_ > 1.0 && !custom_acceptor &&
-                   config.search.acceptance.rule == AcceptanceRule::LateAcceptance),
-          history_(
-                  std::clamp<std::size_t>(config.search.acceptance.history_length, 1, kMaxHistory)),
+                   config.acceptance.rule == AcceptanceRule::LateAcceptance),
+          history_(std::clamp<std::size_t>(config.acceptance.history_length, 1, kMaxHistory)),
           start_score_(start_score),
           stage_start_(now),
           last_best_(now) {}

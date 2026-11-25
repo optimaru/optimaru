@@ -41,9 +41,9 @@ class GreedyRepair {
 
 public:
     // `unassigned_list` (sequence shape, -1 = none) is the list the repair never
-    // places into: SearchSettings::unassigned_list.
+    // places into: Settings::unassigned_list.
     GreedyRepair(ElementIndex<Solution>& index, const Neighborhoods& nearby,
-                 const RuinRecreateSettings& config, int unassigned_list = -1)
+                 const AlnsSettings& config, int unassigned_list = -1)
         : index_(index), nearby_(nearby), config_(config), unassigned_list_(unassigned_list) {}
 
     // The list the repair is configured never to place into (-1 = none).
@@ -377,7 +377,7 @@ private:
 
     ElementIndex<Solution>& index_;
     const Neighborhoods& nearby_;
-    const RuinRecreateSettings& config_;
+    const AlnsSettings& config_;
     int unassigned_list_;
 
     // Scratch, reused across repairs so a repair allocates nothing.

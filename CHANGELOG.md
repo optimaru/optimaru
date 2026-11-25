@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Breaking (C++): the engine's `Settings` has the same groups.** `optimaru::Settings` is laid
+  out like the Python `SolverConfig`: `construction`, `stop` (was `limits`), `alns_trigger`
+  (the kick's `enabled` and `unimproved_step_trigger`), `strategies` (the built-in strategies'
+  weights and knobs, and `ruin_recreate_weight` / `ruin_recreate_max_ruin`, which were
+  `ruin_recreate.as_move_*`), `custom_moves` (`share`, was `search.custom_move_probability`),
+  `moves`, `selection` (`nearby`, `entity_hint`, `value_hint`), `acceptance`, `alns` (the rest of
+  `search.ruin_recreate`), `run` (`seed`, `score_checks`, `parallel_starts`, `on_new_best`), and
+  `unassigned_list`. `SearchSettings` and `RuinRecreateSettings` are gone. A use case's
+  `Solver::Config` is unchanged. Nothing changes in a solve: every use case's seeded results are
+  the same.
 - **Breaking: `SolverConfig` settings are grouped by stage of the solve.** Every setting moved
   under one of `construction`, `stop`, `cost`, `alns_trigger`, `strategies`, `custom_moves`,
   `moves`, `selection`, `acceptance`, `alns` and `run`, in the order a solve meets them, and

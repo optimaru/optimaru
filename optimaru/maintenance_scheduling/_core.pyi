@@ -175,7 +175,7 @@ class SolverConfig:
 
         ruin_recreate_weight: float
         """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-        ruin_recreate.as_move_weight). 0 (default) = off."""
+        strategies.ruin_recreate_weight). 0 (default) = off."""
         ruin_recreate_max_ruin: int
         """Ruin size for the as-a-move form; much smaller than a kick's."""
 

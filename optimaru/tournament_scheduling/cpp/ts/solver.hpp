@@ -26,7 +26,7 @@ public:
         double change_weight = 0.75;
         double swap_weight = 0.25;
 
-        // Engine strategy plugins (see core SearchSettings for the model).
+        // Engine strategy plugins (see core StrategySettings for the model).
         // descent_weight: probability a step runs a best-improvement descent on
         // a nearby entity pair instead of the move mix (a sweep costs
         // ~2 * teamCount evaluations here — cheap at this value range).

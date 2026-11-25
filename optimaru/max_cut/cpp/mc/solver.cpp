@@ -18,7 +18,7 @@ namespace {
 optimaru::Settings engineConfigOf(const Solver::Config& config, const MaxCutProblem& problem,
                                   bool seeded) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.vertexIds.size(), 400, 3200);
@@ -28,19 +28,19 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const MaxCutProb
     // starts from a partition the caller gave has no stages: the start's score
     // is then no lower than where the search stands, and a stage would take
     // the place of the kicks.
-    if (!seeded) engineConfig.search.acceptance.history_growth = 2.0;
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
+    if (!seeded) engineConfig.acceptance.history_growth = 2.0;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
 
     if (problem.exactSize()) {
         // Swaps only: every other move (a flip, a ruin's unassign-and-recreate,
         // a descent's change) could change a side size.
-        engineConfig.search.moves.change_weight = 0.0;
-        engineConfig.search.moves.swap_weight = 1.0;
-        engineConfig.search.descent_weight = 0.0;
-        engineConfig.search.ruin_recreate.enabled = false;
-        engineConfig.search.ruin_recreate.as_move_weight = 0.0;
+        engineConfig.moves.change_weight = 0.0;
+        engineConfig.moves.swap_weight = 1.0;
+        engineConfig.strategies.descent_weight = 0.0;
+        engineConfig.alns_trigger.enabled = false;
+        engineConfig.strategies.ruin_recreate_weight = 0.0;
     }
     return engineConfig;
 }

@@ -401,14 +401,14 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
                optimaru::Objective<FacilityLocationProblem>& calculator) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.consumers.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.custom_move_probability = config.custom_move_probability;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.custom_moves.share = config.custom_move_probability;
     // A solve that the construction starts restarts late acceptance with a
     // doubled history when it stalls (AcceptanceSettings::history_growth).
     // The first stage is the descent in which the macro moves close what the
@@ -421,18 +421,18 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
     // there is no worse score to start over from, and so the full gate
     // throughout.
     if (optimaru::nothing_placed(problem)) {
-        engineConfig.search.acceptance.history_growth = 2.0;
-        engineConfig.search.acceptance.later_stage_custom_move_share = kLaterStageGateShare;
+        engineConfig.acceptance.history_growth = 2.0;
+        engineConfig.acceptance.later_stage_custom_move_share = kLaterStageGateShare;
     }
 
     // Nearby selection: consumer-to-consumer Euclidean degree distance (the
     // ordering is what matters, so the sqrt/meter scaling is skipped). The
     // problem outlives the engine run, so capturing it by reference is safe.
     if (config.nearby_probability > 0.0 && config.nearby_size > 0) {
-        engineConfig.search.nearby.probability = config.nearby_probability;
-        engineConfig.search.nearby.size = config.nearby_size;
+        engineConfig.selection.nearby.probability = config.nearby_probability;
+        engineConfig.selection.nearby.size = config.nearby_size;
         const FacilityLocationProblem& fixed = problem;
-        engineConfig.search.nearby.distance = [&fixed](int a, int b) {
+        engineConfig.selection.nearby.distance = [&fixed](int a, int b) {
             const Location& la = fixed.consumers[a].location;
             const Location& lb = fixed.consumers[b].location;
             const double dLat = la.latitude - lb.latitude;
@@ -460,8 +460,8 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
                                   ? preference
                                   : buildFacilityPreference(problem, valueKeep);
         const double p = config.value_recommender_probability;
-        engineConfig.search.value_hint = [valuePreference, valueKeep, p](std::mt19937_64& rng,
-                                                                         int entityIndex) -> int {
+        engineConfig.selection.value_hint = [valuePreference, valueKeep, p](
+                                                    std::mt19937_64& rng, int entityIndex) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= p) return -1;
             const std::size_t base = static_cast<std::size_t>(entityIndex) * valueKeep;
