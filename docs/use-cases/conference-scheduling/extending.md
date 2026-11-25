@@ -41,7 +41,7 @@ assembly on 150 random schedules (`cs_plugin_test`), the incremental calculator 
 | Scored by | the monolithic calculators: `cpp/cs/score/incremental_calculator.cpp` keeps counters per timeslot and updates them for the talk that moves; `cpp/cs/score/score_calculator.cpp` recomputes the final score in full | the assembly: one component per constraint, `cpp/cs/constraints/`. All of them read one `Breakdown`, which `ScoreCalculator::breakdownOfPrepared()` recomputes in full, every pair of talks, once per score |
 | Constraints | the 37, at their defaults | the ones you list, with your knobs |
 | Steps per second | 833 thousand | 13.6 thousand |
-| Parallel starts | `parallel_solver_count`; the time limit is split into `restart_segments` (8) runs | one start, one run |
+| Parallel starts | `parallel_solver_count`; the time limit is split into `acceptance.restart_segments` (8) runs | one start, one run |
 
 The speeds are a generated conference (70 talks, 18 timeslots, 8 rooms), 2 million steps on the
 default path and 60,000 on the assembly, one thread of an Apple M4 Max; [step 6](#6-measure) has the
@@ -212,8 +212,8 @@ from optimaru.conference_scheduling.constraints import RoomOverflowCost
 others = [spec for spec in get_constraints() if spec.name != "room_overflow_cost"]
 picks = [*others, RoomOverflowCost(weight=1)]
 config = cs.SolverConfig()
-config.step_count_limit = 200_000
-config.random_seed = 1
+config.stop.step_limit = 200_000
+config.run.random_seed = 1
 schedule = cs.generate_demo_data()
 cs.solve(schedule, config=config, constraints=picks)
 print(cs.constraint_costs(schedule, picks)["room_overflow_cost"]["costs"][0])
@@ -498,9 +498,9 @@ def conference(days=3, seed=1):
 def solve(steps, picked):
     schedule = conference()
     config = cs.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     cs.solve(schedule, config=config, constraints=picked)
     return time.perf_counter() - start, schedule.score

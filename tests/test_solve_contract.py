@@ -114,10 +114,10 @@ def test_parallel_starts_return_the_best_single_start(use_case):
 
     def score(seed, starts):
         config = module.SolverConfig()
-        config.spent_limit_seconds = 60.0  # the step limit ends the solve
-        config.step_count_limit = 2000
-        config.random_seed = seed
-        config.parallel_solver_count = starts
+        config.stop.time_limit_seconds = 60.0  # the step limit ends the solve
+        config.stop.step_limit = 2000
+        config.run.random_seed = seed
+        config.run.parallel_solver_count = starts
         return score_of(module.solve(small_problem(use_case), config=config))
 
     for seed in (0, 10, 20):
@@ -259,12 +259,12 @@ def test_a_school_timetabling_request_is_the_dict_solve(mode):
         mode=mode,
         time_limit_seconds=60.0,
         random_seed=3,
-        solver_parameters={"step_count_limit": 300},
+        solver_parameters={"stop": {"step_limit": 300}},
     )
     before = request.model_dump()
     solved = module.solve_request(request)
     config = (module.canon.SolverConfig if mode == "canonical" else module.SolverConfig)()
-    config.step_count_limit = 300
+    config.stop.step_limit = 300
     direct = module.solve(problem, mode=mode, time_limit_seconds=60.0, random_seed=3, config=config)
     assert isinstance(solved, module.models.TimetableResultModel)
     assert (solved.status, solved.penalties, solved.objective_value) == (
@@ -295,12 +295,12 @@ def test_solve_request_is_solve_with_the_request_settings(use_case):
     problem = small_problem(use_case)
     model = problem if isinstance(problem, BaseModel) else _model_of(module, problem)
     request = _request_class(use_case)(
-        model_input=model, time_limit_seconds=60.0, random_seed=3, solver_parameters={"step_count_limit": 500}
+        model_input=model, time_limit_seconds=60.0, random_seed=3, solver_parameters={"stop": {"step_limit": 500}}
     )
     before = request.model_dump()
     solved = module.solve_request(request)
     config = module.SolverConfig()
-    config.step_count_limit = 500
+    config.stop.step_limit = 500
     direct = module.solve(model, time_limit_seconds=60.0, random_seed=3, config=config)
     assert type(solved) is type(direct)
     assert score_of(solved) == score_of(direct)

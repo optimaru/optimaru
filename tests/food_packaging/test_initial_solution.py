@@ -32,7 +32,7 @@ def no_search() -> fp.SolverConfig:
     construction, which is what `test_a_zero_time_limit_skips_construction` shows.
     """
     config = fp.SolverConfig()
-    config.best_score_limit = (-(10**15), -1e18)
+    config.stop.target_score = (-(10**15), -1e18)
     return config
 
 
@@ -270,7 +270,7 @@ def test_a_restart_from_a_plan_still_gets_its_kicks():
     for seed in (7, 8):
         restarted = with_initial_solution(problem, plan).to_core()
         config = fp.SolverConfig()
-        config.step_count_limit = 200_000
+        config.stop.step_limit = 200_000
         fp.solve(restarted, config=config, time_limit_seconds=600.0, random_seed=seed)
         assert (restarted.score.hard, restarted.score.medium) == (0, -1065)
         assert restarted.score.soft > start.score.soft

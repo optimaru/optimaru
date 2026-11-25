@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Breaking: `SolverConfig` settings are grouped by stage of the solve.** Every setting moved
+  under one of `construction`, `stop`, `cost`, `alns_trigger`, `strategies`, `custom_moves`,
+  `moves`, `selection`, `acceptance`, `alns` and `run`, in the order a solve meets them, and
+  lost the prefix its group now says: `config.spent_limit_seconds` is
+  `config.stop.time_limit_seconds`, `config.ruin_recreate_min_ruin_fraction` is
+  `config.alns.min_ruin_fraction`, `config.change_move_weight` is `config.moves.change_weight`,
+  `config.acceptor_type` is `config.acceptance.rule`. `optimaru._config.FIELDS` is the one table
+  of the moves. A flat name raises `AttributeError` naming its new place, and a compiled
+  setter's error names the grouped setting. `SolverConfig(stop={"time_limit_seconds": 10})` sets
+  whole groups; `config.to_dict()` reads them. A request's `solver_parameters` and the API's
+  `config` take settings by group (`{"alns": {"min_ruin_fraction": 0.05}}`); a flat key is
+  refused with its new place. The JSON mirrors (`models.SolveConfig`, employee scheduling's
+  `SolverSettings` and its `portfolio`) have the same groups; school timetabling's `weights`
+  setting is `cost.weights`. Employee scheduling's `no_improvement_limit_seconds` and
+  `no_improvement_step_count_limit`, old names of `stop.unimproved_time_limit_seconds` and
+  `stop.unimproved_step_limit`, are gone. The solve keywords (`time_limit_seconds`,
+  `random_seed`, `parallel_solver_count`, ...) and the C++ `Solver::Config` fields are unchanged.
 - **Benchmarks: every table measured again, on one machine.** All 29 published data sets were run
   again on 2026-11-23/24 on the Apple M4 Max Mac the other tables came from, on optimaru 0.6.0,
   which searches as 0.7.0 does (the pickup-delivery CP-SAT rows on the model the benchmark now

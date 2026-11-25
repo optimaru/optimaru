@@ -55,7 +55,7 @@ list, the second pick of a name keyed `<name>#2`. `level` is None (the default l
 "medium" raises `ValueError`, and a repeat carries its own level. `calculate_score` /
 `constraint_costs` need a complete partition (a partial one raises `ValueError`). Hard
 contributions are rounded per side, the reward refuses `level="hard"`, and `SolverConfig`
-carries the engine's knobs (`spent_limit_seconds`, `step_count_limit`, ...); see the
+carries the engine's knobs (`stop.time_limit_seconds`, `stop.step_limit`, ...); see the
 [use-case README](README.md#python-api).
 
 ## Install and test
@@ -80,10 +80,10 @@ max_cut.solve(core, time_limit_seconds=5.0, random_seed=42)
 print(core.score, core.assignment(), core.cut_weight())
 ```
 
-For finer control build `max_cut.SolverConfig()` (time budget, `step_count_limit`,
+For finer control build `max_cut.SolverConfig()` (time budget, `stop.step_limit`,
 multi-start, ALNS knobs, move weights, the `on_new_best(step, score)` callback,
-`best_score_limit` early stop, ...) and call `max_cut.Solver(cfg).solve(core)` or
-`max_cut.solve(problem, config=cfg)`. A zero budget (`spent_limit_seconds = 0`)
+`stop.target_score` early stop, ...) and call `max_cut.Solver(cfg).solve(core)` or
+`max_cut.solve(problem, config=cfg)`. A zero budget (`stop.time_limit_seconds = 0`)
 returns the start partition (vertex `i` on side `i % 2`, fixed vertices on their
 side), or a warm-start seed, unchanged. Under exact size bounds
 (`min_partition_size == max_partition_size`) the search only swaps sides, so the
@@ -98,7 +98,8 @@ write the partition in bulk with `core.set_assignment([...])`.
 `solve_request` takes a pydantic request, `models.MaxCutRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `MaxCutProblemModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 

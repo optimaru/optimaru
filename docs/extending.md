@@ -194,19 +194,22 @@ early: score after the engine returns, whatever made it return.
 
 Add a field to the use case's `Solver::Config` (`my_moves = true`), bind it in
 `optimaru/<uc>/cpp/bindings.cpp` (`.def_readwrite("my_moves", &Solver::Config::my_moves)`)
-and declare it in `optimaru/<uc>/_core.pyi`. A Config holds only the use case's own
+give it its place in `optimaru/_config.py` (`"my_moves": ("custom_moves", "my")` in
+`FIELDS`: the package does not import until every field has one), and declare it in
+`optimaru/<uc>/_core.pyi` under `class CustomMoves`. Python users then write
+`config.custom_moves.my = False`. A Config holds only the use case's own
 knobs: the limits, the seed, the parallel starts, the callback, the ruin &
 recreate knobs and, where the caller chooses it, the acceptance rule with its
 parameters (`AcceptanceConfig`) come from the bases in
 `optimaru/solver_config.hpp`, and `bind_solver_config` binds those. This lets you turn the move off for an
-A/B comparison and keeps Python users in control. Bin packing's `empty_bin_moves` /
-`empty_bin_candidates` are a complete example, including value checks in the
+A/B comparison and keeps Python users in control. Bin packing's `custom_moves.empty_bin` /
+`custom_moves.empty_bin_candidates` are a complete example, including value checks in the
 binding.
 
 ### 4. Test it
 
 - **Score consistency.** Solve once with `ScoreChecks::Full`
-  (`config.score_checks` in C++; `SolverConfig.full_assert = True` or
+  (`config.score_checks` in C++; `config.run.full_assert = True` or
   `solve(..., full_assert=True)` in Python).
   Every incremental score is then compared with a full recompute, and the solve
   throws `ScoreMismatchError` if the move leaves the score stale. Add such a
@@ -223,8 +226,9 @@ For large-neighbourhood search, implement `optimaru::RuinOperator<Solution>`.
 It only chooses which entities or elements to remove
 (`select_ruin_set(ctx, ruin_count, rng)`, without changing the solution). The
 engine removes them, recreates them greedily and adapts the operator's weight.
-Register it with `engine.add_ruin_operator(...)`. Employee scheduling's
-`EmployeeHotRuinOperator` is an example.
+Register it with `engine.add_ruin_operator(...)`; a switch for it goes in the `alns` group
+of `FIELDS`. Employee scheduling's `EmployeeHotRuinOperator` (`alns.employee_ruin`) is an
+example.
 
 ### Construction instead of search
 

@@ -451,7 +451,7 @@ def _three_talks():
 def _pinned_solve(schedule, picks):
     """A zero-budget solve of a fully pinned schedule: the engine's score of exactly that assignment."""
     config = cs.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     before = schedule.assignment()
     cs.Solver(config).solve_with_constraints(schedule, picks)
     assert schedule.assignment() == before
@@ -655,11 +655,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = cs.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 30
     cs.Solver(config).solve_with_constraints(schedule, picks)
     raw = cs.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)

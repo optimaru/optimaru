@@ -130,17 +130,17 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   `{name: {"costs": [total], "weight", "exponent", "offset", "clip", "global", "level",
   "reward", "level_flippable", "name", "label", ...}}`; the per-item lists (one item per lot,
   route pair, machine, window, ...) are `constraint_items(problem)`.
-- **`SolverConfig`**: the engine's knobs (`spent_limit_seconds`, `step_count_limit`,
-  `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptor_type` and the
+- **`SolverConfig`**: the engine's knobs (`stop.time_limit_seconds`, `stop.step_limit`,
+  `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptance.rule` and the
   parameters of each rule (see
   [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule)),
-  `late_acceptance_size`, `machine_move_probability`, `priority_swap_moves`,
-  `custom_move_probability`, `change_move_weight`, `swap_move_weight`, `ruin_recreate*`,
-  `best_score_limit`, `full_assert`,
-  `on_new_best`); `on_new_best` is called with `(step, Score)`. `spent_limit_seconds=0`
+  `acceptance.late_acceptance_size`, `selection.machine_move_probability`, `custom_moves.priority_swap`,
+  `custom_moves.share`, `moves.change_weight`, `moves.swap_weight`, `alns_trigger.*`, `alns.*`,
+  `stop.target_score`, `full_assert`,
+  `on_new_best`); `on_new_best` is called with `(step, Score)`. `stop.time_limit_seconds=0`
   returns the start as is.
 - **Search**: the engine's simulated annealing over the decoded state (auto temperature:
-  1% of the start's soft score, cooling over the time limit, or over `step_count_limit` when
+  1% of the start's soft score, cooling over the time limit, or over `stop.step_limit` when
   that is further along; change moves steered to a
   machine switch or a small priority shift, plus a priority swap of two lots' operations);
   `parallel_solver_count` runs independent

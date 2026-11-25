@@ -72,7 +72,7 @@ def test_a_facility_edited_after_validation_is_refused_by_to_core():
 
 def _steps(steps):
     config = fl.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 

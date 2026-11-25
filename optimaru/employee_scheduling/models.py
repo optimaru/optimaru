@@ -65,8 +65,18 @@ from pydantic import (
 )
 
 from .. import _api
+from .._config import set_nested
 from .._constraint import ParameterUse, _check_literal_offset, require_costs
-from .._models import SolveRequest, StrictModel, apply_solver_parameters
+from .._models import (
+    AlnsGroup,
+    AlnsTriggerGroup,
+    MovesGroup,
+    SolveRequest,
+    StopGroup,
+    StrictModel,
+    apply_solver_parameters,
+    write_groups,
+)
 from . import _core
 from . import constraints as _specs
 
@@ -320,166 +330,126 @@ def default_constraints() -> list[ConstraintModelBase]:
 # ---------------------------------------------------------------------------
 
 
-# The SolverConfig attributes a portfolio entry may override: search knobs only.
-# The time budget, the termination limits, the seed and the callback stay with
-# the request, so a request cannot widen its own budget through a portfolio.
+class _Construction(StrictModel):
+    employee_greedy: bool = True
+    # Share of the time budget reserved for the post-local-search greedy hard-repair (local
+    # search gets the rest); total wall time still honors the limit. Default 0 (off): local
+    # search already returns its best-so-far near-feasible solution, and the extra pass does
+    # not improve on it here.
+    greedy_repair_budget_fraction: float = Field(default=0.0, ge=0.0, lt=0.9)
+
+
+class _Acceptance(StrictModel):
+    late_acceptance_size: int = Field(default=400, ge=1)
+
+
+class _Strategies(StrictModel):
+    ruin_recreate_weight: float = Field(default=0.0, ge=0)
+    ruin_recreate_max_ruin: int = Field(default=12, ge=1)
+    descent_weight: float = Field(default=0.02, ge=0)
+    descent_max_sweeps: int = Field(default=4, ge=1)
+
+
+class _CustomMoves(StrictModel):
+    share: float = Field(default=0.30, ge=0, le=1)
+    guided: bool = True
+    smart_change: bool = False
+    smart_change_candidate_count: int = Field(default=6, ge=1)
+    employee_day_repair: bool = True
+    employee_run_repair: bool = True
+    employee_run_repair_max_days: int = Field(default=3, ge=1)
+    employee_window: bool = True
+    employee_window_max_days: int = Field(default=3, ge=1)
+    employee_unassign: bool = False
+
+
+class _Moves(MovesGroup):
+    relocate_weight: float = Field(default=0.5, ge=0)
+    list_swap_weight: float = Field(default=0.3, ge=0)
+    two_opt_weight: float = Field(default=0.2, ge=0)
+    or_opt_weight: float = Field(default=0.0, ge=0)
+    tail_swap_weight: float = Field(default=0.0, ge=0)
+
+
+class _Selection(StrictModel):
+    # Temporal nearby selection: bias swap partners / descent pairs / related-ruin clusters
+    # toward shifts starting close in time (where the pairwise hard constraints interact).
+    # 0.65 measured best across roster sizes; 0.8 wins bigger on ~1000+-shift rosters.
+    nearby_shifts: bool = True
+    nearby_shifts_probability: float = Field(default=0.65, ge=0, le=1)
+
+
+class _Alns(AlnsGroup):
+    employee_ruin: bool = True
+
+
+#: What a portfolio entry may change, as ``group.name``: search settings only. The time budget,
+#: the stop limits, the seed and the callback stay with the request, so a request cannot widen
+#: its own budget through a portfolio.
 _PORTFOLIO_KEYS = frozenset(
-    {
-        "guided_moves",
-        "employee_greedy_construction",
-        "greedy_repair_budget_fraction",
-        "late_acceptance_size",
-        "ruin_recreate",
-        "ruin_recreate_unimproved_step_trigger",
-        "ruin_recreate_min_ruin_fraction",
-        "ruin_recreate_max_ruin_fraction",
-        "ruin_recreate_max_ruin_count",
-        "ruin_recreate_operator_decay",
-        "ruin_recreate_rewards",
-        "ruin_recreate_polish_steps",
-        "ruin_recreate_as_move_weight",
-        "ruin_recreate_as_move_max_ruin",
-        "descent_weight",
-        "descent_max_sweeps",
-        "change_move_weight",
-        "swap_move_weight",
-        "nearby_shifts",
-        "nearby_shifts_probability",
-        "smart_change_moves",
-        "smart_change_candidate_count",
-        "employee_day_repair_moves",
-        "employee_run_repair_moves",
-        "employee_run_repair_max_days",
-        "employee_window_moves",
-        "employee_window_max_days",
-        "custom_move_probability",
-        "employee_ruin_moves",
-        "employee_unassign_moves",
-    }
+    {f"construction.{n}" for n in _Construction.model_fields}
+    | {f"acceptance.{n}" for n in _Acceptance.model_fields}
+    | {f"alns_trigger.{n}" for n in AlnsTriggerGroup.model_fields}
+    | {f"alns.{n}" for n in _Alns.model_fields}
+    | {f"strategies.{n}" for n in _Strategies.model_fields}
+    | {f"custom_moves.{n}" for n in _CustomMoves.model_fields}
+    | {f"moves.{n}" for n in ("change_weight", "swap_weight")}
+    | {f"selection.{n}" for n in _Selection.model_fields}
 )
 
 
 class SolverSettings(StrictModel):
+    """Employee scheduling's search settings: a ``SolverConfig`` in JSON, by group (`optimaru._config`).
+
+    The groups hold the config's settings under its names (``{"alns": {"min_ruin_fraction": 0.05}}``).
+    ``random_seed`` and ``stop_at_first_feasible`` are the request's own fields under another
+    name; ``multi_start``, ``portfolio`` and ``select_coverage_divisor`` steer the starts.
+    """
+
     random_seed: int = 0
-    guided_moves: bool = True
-    employee_greedy_construction: bool = True
-    # Share of the time budget reserved for the post-local-search greedy
-    # hard-repair (local search gets the rest); total wall time still honors the
-    # limit. Default 0 (off): local search already returns its best-so-far
-    # near-feasible solution, and the extra pass does not improve on it here.
-    greedy_repair_budget_fraction: float = Field(default=0.0, ge=0.0, lt=0.9)
-    late_acceptance_size: int = Field(default=400, ge=1)
     stop_at_first_feasible: bool = False
-    best_score_limit: tuple[int, float] | None = None
-    no_improvement_limit_seconds: float | None = Field(default=None, ge=0)
-    unimproved_spent_limit_seconds: float = Field(default=0.0, ge=0)
-    step_count_limit: int = Field(default=0, ge=0)
-    no_improvement_step_count_limit: int | None = Field(default=None, ge=0)
-    unimproved_step_count_limit: int = Field(default=0, ge=0)
 
-    ruin_recreate: bool = True
-    ruin_recreate_unimproved_step_trigger: int = Field(default=5000, ge=0)
-    ruin_recreate_min_ruin_fraction: float = Field(default=0.10, ge=0)
-    ruin_recreate_max_ruin_fraction: float = Field(default=0.30, ge=0)
-    ruin_recreate_max_ruin_count: int = Field(default=60, ge=1)
-    ruin_recreate_operator_decay: float = Field(default=0.8, ge=0, le=1)
-    ruin_recreate_rewards: list[float] = Field(
-        default_factory=lambda: [33.0, 9.0, 3.0, 0.0],
-        min_length=4,
-        max_length=4,
-    )
-    ruin_recreate_polish_steps: int = Field(default=5000, ge=0)
-    ruin_recreate_as_move_weight: float = Field(default=0.0, ge=0)
-    ruin_recreate_as_move_max_ruin: int = Field(default=12, ge=1)
-    descent_weight: float = Field(default=0.02, ge=0)
-    descent_max_sweeps: int = Field(default=4, ge=1)
+    construction: _Construction = Field(default_factory=_Construction)
+    stop: StopGroup = Field(default_factory=StopGroup)
+    alns_trigger: AlnsTriggerGroup = Field(default_factory=AlnsTriggerGroup)
+    strategies: _Strategies = Field(default_factory=_Strategies)
+    custom_moves: _CustomMoves = Field(default_factory=_CustomMoves)
+    moves: _Moves = Field(default_factory=_Moves)
+    selection: _Selection = Field(default_factory=_Selection)
+    acceptance: _Acceptance = Field(default_factory=_Acceptance)
+    alns: _Alns = Field(default_factory=_Alns)
 
-    change_move_weight: float = Field(default=0.75, ge=0)
-    swap_move_weight: float = Field(default=0.25, ge=0)
-    # Temporal nearby selection: bias swap partners / descent pairs /
-    # related-ruin clusters toward shifts starting close in time (where the
-    # pairwise hard constraints interact). 0.65 measured best across roster
-    # sizes; 0.8 wins bigger on ~1000+-shift rosters.
-    nearby_shifts: bool = True
-    nearby_shifts_probability: float = Field(default=0.65, ge=0, le=1)
-    smart_change_moves: bool = False
-    smart_change_candidate_count: int = Field(default=6, ge=1)
-    employee_day_repair_moves: bool = True
-    employee_run_repair_moves: bool = True
-    employee_run_repair_max_days: int = Field(default=3, ge=1)
-    employee_window_moves: bool = True
-    employee_window_max_days: int = Field(default=3, ge=1)
-    custom_move_probability: float = Field(default=0.30, ge=0, le=1)
-    employee_ruin_moves: bool = True
-    employee_unassign_moves: bool = False
-
-    # Multi-start: run this many independent solves (seed = random_seed + i) in
-    # parallel processes and keep the best. The metaheuristic has real
-    # run-to-run variance, so best-of-n is a cheap, reliable quality lift.
-    # 1 (default) = a single solve. `ScheduleRequest.parallel_solver_count` asks for the
-    # same thing; the larger of the two applies.
+    # Multi-start: run this many independent solves (seed = random_seed + i) in parallel
+    # processes and keep the best. The metaheuristic has real run-to-run variance, so best-of-n
+    # is a cheap, reliable quality lift. 1 (default) = a single solve.
+    # `ScheduleRequest.parallel_solver_count` asks for the same thing; the larger of the two applies.
     multi_start: int = Field(default=1, ge=1)
 
-    # Portfolio multi-start: per-start SolverConfig overrides, cycled across the
-    # n starts (start i uses portfolio[i % len]). Each dict maps a search knob of
-    # SolverConfig (see _PORTFOLIO_KEYS) to a value, applied for that start only;
-    # any other key is rejected here. Diversifying the search
-    # (e.g. late_acceptance_size, ruin_recreate_max_ruin_fraction) makes the
-    # starts explore complementary basins instead of n seeds of one config, which
-    # -- paired with a true-objective selector -- lifts the hardest instances at
-    # no cost to the easy ones. Empty (default) => every start identical.
-    portfolio: list[dict[str, Any]] = Field(default_factory=list)
+    # Portfolio multi-start: per-start overrides, cycled across the n starts (start i uses
+    # portfolio[i % len]). Each entry is settings by group, as ``solver_parameters`` are
+    # (``{"acceptance": {"late_acceptance_size": 800}}``), limited to the search settings of
+    # _PORTFOLIO_KEYS; anything else is rejected here. Diversifying the search makes the starts
+    # explore complementary basins instead of n seeds of one config, which -- paired with a
+    # true-objective selector -- lifts the hardest instances at no cost to the easy ones.
+    # Empty (default) => every start identical.
+    portfolio: list[dict[str, dict[str, Any]]] = Field(default_factory=list)
 
-    # Multi-start SELECTION correction. When a caller inflates a constraint's
-    # weight for the search (e.g. multiplies the shift_coverage_cost weight to
-    # prevent under-fill), the reported soft score no longer tracks the true
-    # objective, so picking the best-of-n by that score picks the wrong winner.
-    # This divisor un-inflates the shift_coverage_cost soft cost when ranking candidates
-    # (selection only; the solved scores are untouched), so best-of-n is chosen
-    # on the faithful objective. 1.0 = no correction (default); set it to the
-    # multiplier used.
+    # Multi-start SELECTION correction. When a caller inflates a constraint's weight for the
+    # search (e.g. multiplies the shift_coverage_cost weight to prevent under-fill), the reported
+    # soft score no longer tracks the true objective, so picking the best-of-n by that score
+    # picks the wrong winner. This divisor un-inflates the shift_coverage_cost soft cost when
+    # ranking candidates (selection only; the solved scores are untouched), so best-of-n is
+    # chosen on the faithful objective. 1.0 = no correction (default); set it to the multiplier used.
     select_coverage_divisor: float = Field(default=1.0, gt=0)
-
-    relocate_move_weight: float = Field(default=0.5, ge=0)
-    list_swap_move_weight: float = Field(default=0.3, ge=0)
-    two_opt_move_weight: float = Field(default=0.2, ge=0)
-    or_opt_move_weight: float = Field(default=0.0, ge=0)
-    tail_swap_move_weight: float = Field(default=0.0, ge=0)
 
     @field_validator("portfolio")
     @classmethod
     def _valid_portfolio_keys(cls, portfolio):
         for index, overrides in enumerate(portfolio):
-            unknown = set(overrides) - _PORTFOLIO_KEYS
+            unknown = {f"{g}.{n}" for g, settings in overrides.items() for n in settings} - _PORTFOLIO_KEYS
             if unknown:
-                raise ValueError(f"portfolio[{index}]: keys cannot be overridden per start: {sorted(unknown)}")
+                raise ValueError(f"portfolio[{index}]: settings cannot be overridden per start: {sorted(unknown)}")
         return portfolio
-
-    @model_validator(mode="after")
-    def _valid_ruin_fraction_range(self):
-        if self.ruin_recreate_min_ruin_fraction > self.ruin_recreate_max_ruin_fraction:
-            raise ValueError("ruin_recreate_min_ruin_fraction must be <= ruin_recreate_max_ruin_fraction")
-        return self
-
-    @model_validator(mode="after")
-    def _valid_no_improvement_aliases(self):
-        if (
-            self.no_improvement_limit_seconds is not None
-            and self.unimproved_spent_limit_seconds != 0.0
-            and abs(self.no_improvement_limit_seconds - self.unimproved_spent_limit_seconds) > 1e-9
-        ):
-            raise ValueError(
-                "no_improvement_limit_seconds and unimproved_spent_limit_seconds must match when both are set"
-            )
-        if (
-            self.no_improvement_step_count_limit is not None
-            and self.unimproved_step_count_limit != 0
-            and self.no_improvement_step_count_limit != self.unimproved_step_count_limit
-        ):
-            raise ValueError(
-                "no_improvement_step_count_limit and unimproved_step_count_limit must match when both are set"
-            )
-        return self
 
 
 class SchedulingInput(BaseModel):
@@ -562,7 +532,7 @@ class ScheduleRequest(SolveRequest):
 
     ``solver_parameters`` are applied after ``settings``, so a field named in both takes the
     value in ``solver_parameters``. Two things come later still and win over it: the stop
-    target (``settings.best_score_limit``, or ``stop_at_first_feasible``) and the per-start
+    target (``settings.stop.target_score``, or ``stop_at_first_feasible``) and the per-start
     ``settings.portfolio`` overrides. The request keeps a synced copy of the ``settings`` it
     was built with, so change ``request.settings``, not the object that was passed in.
     """
@@ -781,62 +751,16 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     calc = _core.DecomposedCalculator(_constraint_specs(model_input.constraints))
 
     cfg = _core.SolverConfig()
-    cfg.spent_limit_seconds = request.time_limit_seconds
-    cfg.random_seed = seed
-    cfg.guided_moves = request.settings.guided_moves
-    cfg.employee_greedy_construction = request.settings.employee_greedy_construction
-    cfg.greedy_repair_budget_fraction = request.settings.greedy_repair_budget_fraction
-    cfg.late_acceptance_size = request.settings.late_acceptance_size
-    cfg.no_improvement_limit_seconds = (
-        request.settings.no_improvement_limit_seconds
-        if request.settings.no_improvement_limit_seconds is not None
-        else request.settings.unimproved_spent_limit_seconds
-    )
-    cfg.step_count_limit = request.settings.step_count_limit
-    cfg.no_improvement_step_count_limit = (
-        request.settings.no_improvement_step_count_limit
-        if request.settings.no_improvement_step_count_limit is not None
-        else request.settings.unimproved_step_count_limit
-    )
-    cfg.ruin_recreate = request.settings.ruin_recreate
-    cfg.ruin_recreate_unimproved_step_trigger = request.settings.ruin_recreate_unimproved_step_trigger
-    cfg.ruin_recreate_min_ruin_fraction = request.settings.ruin_recreate_min_ruin_fraction
-    cfg.ruin_recreate_max_ruin_fraction = request.settings.ruin_recreate_max_ruin_fraction
-    cfg.ruin_recreate_max_ruin_count = request.settings.ruin_recreate_max_ruin_count
-    cfg.ruin_recreate_operator_decay = request.settings.ruin_recreate_operator_decay
-    cfg.ruin_recreate_rewards = request.settings.ruin_recreate_rewards
-    cfg.ruin_recreate_polish_steps = request.settings.ruin_recreate_polish_steps
-    cfg.ruin_recreate_as_move_weight = request.settings.ruin_recreate_as_move_weight
-    cfg.ruin_recreate_as_move_max_ruin = request.settings.ruin_recreate_as_move_max_ruin
-    cfg.descent_weight = request.settings.descent_weight
-    cfg.descent_max_sweeps = request.settings.descent_max_sweeps
-    cfg.change_move_weight = request.settings.change_move_weight
-    cfg.swap_move_weight = request.settings.swap_move_weight
-    cfg.nearby_shifts = request.settings.nearby_shifts
-    cfg.nearby_shifts_probability = request.settings.nearby_shifts_probability
-    cfg.smart_change_moves = request.settings.smart_change_moves
-    cfg.smart_change_candidate_count = request.settings.smart_change_candidate_count
-    cfg.employee_day_repair_moves = request.settings.employee_day_repair_moves
-    cfg.employee_run_repair_moves = request.settings.employee_run_repair_moves
-    cfg.employee_run_repair_max_days = request.settings.employee_run_repair_max_days
-    cfg.employee_window_moves = request.settings.employee_window_moves
-    cfg.employee_window_max_days = request.settings.employee_window_max_days
-    cfg.custom_move_probability = request.settings.custom_move_probability
-    cfg.employee_ruin_moves = request.settings.employee_ruin_moves
-    cfg.employee_unassign_moves = request.settings.employee_unassign_moves
-    cfg.relocate_move_weight = request.settings.relocate_move_weight
-    cfg.list_swap_move_weight = request.settings.list_swap_move_weight
-    cfg.two_opt_move_weight = request.settings.two_opt_move_weight
-    cfg.or_opt_move_weight = request.settings.or_opt_move_weight
-    cfg.tail_swap_move_weight = request.settings.tail_swap_move_weight
-    cfg.full_assert = request.full_assert
+    cfg.stop.time_limit_seconds = request.time_limit_seconds
+    cfg.run.random_seed = seed
+    cfg.run.full_assert = request.full_assert
+    write_groups(request.settings, cfg)
     apply_solver_parameters(cfg, request.solver_parameters)
     if request._effective("stop_at_first_feasible"):
-        cfg.best_score_limit = (0, float("-inf"))
-    if request.settings.best_score_limit is not None:
-        cfg.best_score_limit = request.settings.best_score_limit
-    for key, value in (overrides or {}).items():
-        setattr(cfg, key, value)  # per-start portfolio diversification
+        cfg.stop.target_score = (0, float("-inf"))
+    if request.settings.stop.target_score is not None:
+        cfg.stop.target_score = request.settings.stop.target_score
+    set_nested(cfg, overrides or {})  # per-start portfolio diversification
     _core.Solver(cfg).solve(schedule, calc)
 
     per_worker: dict[str, list[ShiftAssignmentModel]] = {w.id: [] for w in model_input.workers}

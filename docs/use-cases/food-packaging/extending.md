@@ -35,7 +35,7 @@ There are two scoring paths, and they give the same score for the same schedule
 | Constraints | the five, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.7 million | 0.26 million |
 | Parallel starts | `parallel_solver_count` | one start |
-| Operators of the lines | reassigned between search legs when lines share one (`operator_rounds`) | assigned once, one leg |
+| Operators of the lines | reassigned between search legs when lines share one (`run.operator_rounds`) | assigned once, one leg |
 
 The speeds are the demo plant (100 jobs, 5 lines), 500,000 steps, one thread of an
 Apple M4 Max; [step 6](#6-measure) has the script and a larger plant. Steps 1 to 4 work
@@ -202,8 +202,8 @@ from optimaru.food_packaging.constraints import BeforeIdealEndTimeCost
 others = [spec for spec in get_constraints() if spec.name != "before_ideal_end_time_cost"]
 picks = [*others, BeforeIdealEndTimeCost(weight=1000)]
 config = fp.SolverConfig()
-config.step_count_limit = 500_000
-config.random_seed = 1
+config.stop.step_limit = 500_000
+config.run.random_seed = 1
 schedule = fp.generate_demo_data()
 fp.solve(schedule, config=config, constraints=picks)
 print(sum(fp.constraint_costs(schedule, picks)["before_ideal_end_time_cost"]["costs"]))
@@ -407,9 +407,9 @@ steps = 500_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     schedule = fp.generate_demo_data()  # solve() works in place, so every run gets a fresh plant
     config = fp.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     fp.solve(schedule, config=config, constraints=picked)
     seconds = time.perf_counter() - start

@@ -580,11 +580,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = ms.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 30
     ms.Solver(config).solve_with_constraints(schedule, picks)
     raw = ms.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)
@@ -612,7 +612,7 @@ def _pinned_solve(picks):
     """A zero-budget Solver run on the fully pinned attendance clash: the engine's own score."""
     schedule = _attendance_clash()
     config = ms.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     ms.Solver(config).solve_with_constraints(schedule, picks)
     return schedule.score.hard, schedule.score.soft
 

@@ -46,8 +46,8 @@ def build_problem() -> bp.BinPackingProblem:
 
 def _config(seconds: float = 0.3) -> bp.SolverConfig:
     config = bp.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = 1
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = 1
     return config
 
 
@@ -321,7 +321,7 @@ def _hand() -> bp.BinPackingProblem:
 def _zero_budget_solve(problem, picks):
     """Score a complete assignment under ``picks`` on the engine: a warm start, no step taken."""
     config = bp.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     assignment = problem.assignment()
     problem.warm_start = True  # otherwise the solve ignores the input bins
     bp.Solver(config).solve_with_constraints(problem, picks)
@@ -546,11 +546,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     problem = _random_problem(5)
     config = bp.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 5000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 5000
+    config.stop.time_limit_seconds = 30
     bp.Solver(config).solve_with_constraints(problem, picks)
     raw = bp.constraint_costs(problem, picks)
     assert len(raw) == len(picks)

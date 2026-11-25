@@ -155,8 +155,8 @@ def test_the_score_at_the_default_weights_on_solved_states():
     for name, problem in _samples().items():
         core = Model.model_validate(problem).to_core()
         config = bp.SolverConfig()
-        config.step_count_limit = 1000
-        config.random_seed = 42
+        config.stop.step_limit = 1000
+        config.run.random_seed = 42
         bp.solve(core, config=config)
         dump = Model.from_core(core).model_dump()
         assert (core.score.hard, core.score.soft) == ref.default_score(dump), name
@@ -189,7 +189,7 @@ def test_zero_budget_construction_matches_the_oracle(name):
             continue  # the reference leaves 0..n-1 here; the engine stays inside (bp_test.cpp)
         core = Model.model_validate(data).to_core()
         config = bp.SolverConfig()
-        config.spent_limit_seconds = 0
+        config.stop.time_limit_seconds = 0
         bp.solve(core, config=config)
         assert core.assignment() == expected, (name, warm)
 
@@ -207,7 +207,7 @@ def test_zero_budget_construction_matches_the_oracle_on_random_instances():
             continue
         core = Model.model_validate(data).to_core()
         config = bp.SolverConfig()
-        config.spent_limit_seconds = 0
+        config.stop.time_limit_seconds = 0
         bp.solve(core, config=config)
         assert core.assignment() == expected
         checked += 1

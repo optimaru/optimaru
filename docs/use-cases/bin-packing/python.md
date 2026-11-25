@@ -67,13 +67,13 @@ print(problem.assignment(), problem.bins_used(), problem.bin_loads())
 ```
 
 For finer control build `bp.SolverConfig()` and set attributes (time budget
-`spent_limit_seconds`, `step_count_limit`, `parallel_solver_count`, the ALNS knobs, the
-move mix, the bin-emptying macro moves `empty_bin_moves` / `empty_bin_candidates` and
-`repack_moves` / `repack_partner_bins`, `trade_moves` and `fill_tie_break` (see the use
-case README's [Search](README.md#search)), `best_score_limit`, the
+`stop.time_limit_seconds`, `stop.step_limit`, `parallel_solver_count`, the ALNS knobs, the
+move mix, the bin-emptying macro moves `custom_moves.empty_bin` / `custom_moves.empty_bin_candidates` and
+`custom_moves.repack` / `custom_moves.repack_partner_bins`, `custom_moves.trade` and `acceptance.fill_tie_break` (see the use
+case README's [Search](README.md#search)), `stop.target_score`, the
 `on_new_best(step, score)` callback, `full_assert`, ...), then call
 `bp.Solver(cfg).solve(problem)` or `bp.solve(problem, config=cfg)`. Zero budget is
-`spent_limit_seconds = 0`, a fixed number of steps is `step_count_limit`.
+`stop.time_limit_seconds = 0`, a fixed number of steps is `stop.step_limit`.
 
 The JSON contract is `optimaru.bin_packing.models`:
 
@@ -92,7 +92,8 @@ Note: `problem.items[i]` returns a copy — write bins in bulk with
 `solve_request` takes a pydantic request, `models.BinPackingRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `BinPackingProblemModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 

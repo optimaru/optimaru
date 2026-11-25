@@ -76,70 +76,154 @@ def calculate_score(problem: BinPackingProblem, constraints: Iterable[Any] | Non
     or a bin outside -1..item count - 1."""
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget (30 s). 0 = no search: the construction / seed comes back."""
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    """Independent starts (threads), seed + i each; the best wins."""
-    late_acceptance_size: int
-    """0 = auto: clamp(8 * item count, 400, 3200)."""
-    full_assert: bool
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    ruin_recreate_as_move_weight: float
-    """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-    ruin_recreate.as_move_weight). 0 = off."""
-    ruin_recreate_as_move_max_ruin: int
-    change_move_weight: float
-    swap_move_weight: float
-    value_recommender_probability: float
-    """Probability that a change move draws the item's new bin as the bin of a
-    random other item (a bin in use) instead of uniformly over all n bins."""
-    descent_weight: float
-    """Assignment-shape best-improvement descent strategy weight. 0 = off."""
-    custom_move_probability: float
-    """Gate on how often a step may draw one of the macro moves (EmptyBinMove,
-    RepackMove, TradeMove); 1 = unrestricted."""
-    empty_bin_moves: bool
-    """Enable the bin-emptying macro move: it moves every item of one light bin
-    into the other bins in a single step, the only way past the bins-used step
-    function. It checks the capacity only."""
-    empty_bin_candidates: int
-    """EmptyBinMove and RepackMove empty one of this many lightest bins (1 =
-    always the lightest); TradeMove takes its first bin from them every second
-    time."""
-    repack_moves: bool
-    """Enable RepackMove: empty one light bin together with 1 to
-    repack_partner_bins other light bins and put their items back best fit
-    decreasing, only where they add no capacity, colour or conflict violation.
-    The move that closes bins on instances with colours or conflicts."""
-    repack_partner_bins: int
-    """Most partner bins RepackMove empties with its source (2; 0 = the source
-    alone). ValueError below 0."""
-    trade_moves: bool
-    """Enable TradeMove: trade up to two items of one bin for up to two of
-    another so that the fuller of the two bins gets fuller, or, when no trade
-    does that, so that both keep their loads with other items. The bins-used
-    score does not change until a bin is empty; this move works towards that."""
-    fill_tie_break: bool
-    """A step that keeps the score is taken when it does not lower the sum of
-    the squared bin loads, and otherwise one time in eight. False: every such
-    step is taken, as plain late acceptance does. The score itself, the limits
-    and on_new_best are the same either way."""
-    best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
-    the first feasible solution."""
-    on_new_best: Callable[[int, Score], None] | None
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``strategies``, ``custom_moves``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        custom_moves: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget (30 s). 0 = no search: the construction / seed comes back."""
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        unimproved_step_limit: int
+        target_score: tuple[int, float]
+        """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
+        the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        ruin_recreate_weight: float
+        """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
+        ruin_recreate.as_move_weight). 0 = off."""
+        ruin_recreate_max_ruin: int
+        descent_weight: float
+        """Assignment-shape best-improvement descent strategy weight. 0 = off."""
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class CustomMoves:
+        """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        share: float
+        """Gate on how often a step may draw one of the macro moves (EmptyBinMove,
+        RepackMove, TradeMove); 1 = unrestricted."""
+        empty_bin: bool
+        """Enable the bin-emptying macro move: it moves every item of one light bin
+        into the other bins in a single step, the only way past the bins-used step
+        function. It checks the capacity only."""
+        empty_bin_candidates: int
+        """EmptyBinMove and RepackMove empty one of this many lightest bins (1 =
+        always the lightest); TradeMove takes its first bin from them every second
+        time."""
+        repack: bool
+        """Enable RepackMove: empty one light bin together with 1 to
+        repack_partner_bins other light bins and put their items back best fit
+        decreasing, only where they add no capacity, colour or conflict violation.
+        The move that closes bins on instances with colours or conflicts."""
+        repack_partner_bins: int
+        """Most partner bins RepackMove empties with its source (2; 0 = the source
+        alone). ValueError below 0."""
+        trade: bool
+        """Enable TradeMove: trade up to two items of one bin for up to two of
+        another so that the fuller of the two bins gets fuller, or, when no trade
+        does that, so that both keep their loads with other items. The bins-used
+        score does not change until a bin is empty; this move works towards that."""
+
+    custom_moves: CustomMoves
+    """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        value_recommender_probability: float
+        """Probability that a change move draws the item's new bin as the bin of a
+        random other item (a bin in use) instead of uniformly over all n bins."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """0 = auto: clamp(8 * item count, 400, 3200)."""
+        fill_tie_break: bool
+        """A step that keeps the score is taken when it does not lower the sum of
+        the squared bin loads, and otherwise one time in eight. False: every such
+        step is taken, as plain late acceptance does. The score itself, the limits
+        and on_new_best are the same either way."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        """Independent starts (threads), seed + i each; the best wins."""
+        full_assert: bool
+        on_new_best: Callable[[int, Score], None] | None
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Best-fit-decreasing construction + Late Acceptance local search (+ the

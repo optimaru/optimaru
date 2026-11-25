@@ -25,11 +25,11 @@ Score (hard / medium / soft, lexicographic), at the default weights:
 The solver is the shared engine in `core/optimaru/`, with operators
 registered on top of it whose unit is the request, not the stop. The request
 moves take requests out of their routes and put each back, pickup and dropoff
-together, at its cheapest feasible slot pair (`request_ruin_recreate`), or carry
+together, at its cheapest feasible slot pair (`alns.request_ruin`), or carry
 a bundle of requests from one route to another and swap bundles between routes
-(`bundle_moves`). A pair move repairs requests whose pair is broken
-(`pair_moves`) and a pair ruin kicks whole requests, never half of one
-(`pair_ruin`). All are on by default; the switches turn them off to measure
+(`custom_moves.bundle`). A pair move repairs requests whose pair is broken
+(`custom_moves.pair`) and a pair ruin kicks whole requests, never half of one
+(`alns.pair_ruin`). All are on by default; the switches turn them off to measure
 what they are worth.
 
 Requests that share a `group` (`Delivery.group_index`, `DeliveryModel.group`) are
@@ -43,6 +43,7 @@ on) and requests it is preferred for (`TravelProfile.preferred_requests`;
 """
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -65,6 +66,9 @@ from ._core import (
 )
 from .constraints import get_constraints
 from .models import solve_request, with_initial_solution
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "AcceptorType",

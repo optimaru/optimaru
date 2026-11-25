@@ -166,9 +166,9 @@ def test_a_restart_from_a_plan_finds_the_same_under_a_larger_budget():
     def restart(steps):
         seen = []
         config = ba.SolverConfig()
-        config.random_seed = 9
-        config.step_count_limit = steps
-        config.on_new_best = lambda step, score: seen.append((step, score.hard, score.medium, score.soft))
+        config.run.random_seed = 9
+        config.stop.step_limit = steps
+        config.run.on_new_best = lambda step, score: seen.append((step, score.hard, score.medium, score.soft))
         # A time limit far above what the steps take, so that the step limit alone decides.
         out = ba.solve(ba.with_initial_solution(problem, plan), time_limit_seconds=600.0, config=config)
         return seen, (out.score_hard, out.score_medium, out.score_soft)

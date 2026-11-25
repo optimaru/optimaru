@@ -351,32 +351,29 @@ def _constraints_json(constraints: Any) -> list[dict[str, Any]]:
 
 
 def _config_json(config: Any) -> dict[str, Any]:
-    """A compiled ``SolverConfig`` as the API's ``config``: the fields that differ from the defaults.
+    """A compiled ``SolverConfig`` as the API's ``config``: the settings that differ from the defaults, by group.
 
-    The API sets each one by name on a ``SolverConfig()`` of its own, so the defaults need
-    not travel, and the ones that JSON cannot carry (``best_score_limit`` is infinite by
-    default) stay at home unless they were changed.
+    The API sets each one on a ``SolverConfig()`` of its own (``{"alns": {"min_ruin_fraction": 0.05}}``),
+    so the defaults need not travel, and the ones that JSON cannot carry (``stop.target_score``
+    is infinite by default) stay at home unless they were changed.
     """
-    if getattr(config, "on_new_best", None) is not None:
+    if config.run.on_new_best is not None:
         raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
-    defaults = type(config)()
-    fields = {}
-    # Every public attribute of a SolverConfig that is not a method is a field the API sets by
-    # name, and compares by value: tests/test_api.py checks that a default config sends nothing.
-    for name in dir(config):
-        if name.startswith("_") or name == "on_new_best":
-            continue
-        value = getattr(config, name)
-        if callable(value) or value == getattr(defaults, name):
-            continue
-        try:
-            fields[name] = _plain(value, f"config.{name}")
-        except ValueError as error:
-            if name == "best_score_limit":
-                raise ValueError(
-                    f"{error} (to stop at the first feasible solution, pass stop_at_first_feasible=True)"
-                ) from None
-            raise
+    defaults = type(config)().to_dict()
+    fields: dict[str, dict[str, Any]] = {}
+    # tests/test_api.py checks that a default config sends nothing.
+    for group, settings in config.to_dict().items():
+        for name, value in settings.items():
+            if value == defaults[group][name]:
+                continue
+            try:
+                fields.setdefault(group, {})[name] = _plain(value, f"config.{group}.{name}")
+            except ValueError as error:
+                if (group, name) == ("stop", "target_score"):
+                    raise ValueError(
+                        f"{error} (to stop at the first feasible solution, pass stop_at_first_feasible=True)"
+                    ) from None
+                raise
     return fields
 
 
@@ -394,7 +391,7 @@ def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
     body: dict[str, Any] = {}
     if callable(getattr(config, "to_core", None)):
         config = config.to_core()  # a models.SolveConfig, where a use case's solve() takes one
-    limit = getattr(config, "best_score_limit", None)
+    limit = None if config is None else config.stop.target_score
     if (
         isinstance(limit, tuple)
         and limit[:1] == (0,)
@@ -408,7 +405,7 @@ def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
         import copy
 
         config = copy.copy(config)
-        config.best_score_limit = type(config)().best_score_limit
+        config.stop.target_score = type(config)().stop.target_score
         keywords["stop_at_first_feasible"] = True
     fields = {} if config is None else _config_json(config)
     for name in _SOLVE_KEYWORDS:
@@ -419,7 +416,7 @@ def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
         if name == "time_limit_seconds" and value == 0:
             # The API takes a budget of 0 (the construction, or the warm start, as it is) only as
             # the config field, like a search that is switched off in config.
-            fields["spent_limit_seconds"] = 0
+            fields.setdefault("stop", {})["time_limit_seconds"] = 0
             continue
         body[name] = _plain(value, name)
     for name, value in keywords.items():
@@ -646,7 +643,9 @@ def _wait_limit(body: dict[str, Any]) -> float:
 
     if "problem" in body:
         # A model solve's parallel starts run at once, in threads; a request's may run one after another.
-        limit = seconds(body.get("time_limit_seconds"), (body.get("config") or {}).get("spent_limit_seconds"))
+        limit = seconds(
+            body.get("time_limit_seconds"), ((body.get("config") or {}).get("stop") or {}).get("time_limit_seconds")
+        )
     else:
         request = body.get("request") or {}
         settings = request.get("settings") or {}

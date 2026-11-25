@@ -4,6 +4,8 @@ import optimaru.bed_allocation as ba
 from optimaru.bed_allocation.demo import generate_demo_data
 from optimaru.bed_allocation.models import BedPlanModel
 
+from .._settings import get_setting, set_setting
+
 
 def test_demo_solve_reaches_feasible():
     model = generate_demo_data()
@@ -49,9 +51,9 @@ def test_solve_leaves_the_callers_config_alone():
     import copy
 
     config = ba.SolverConfig()
-    config.spent_limit_seconds = 5.0
-    config.random_seed = 3
-    before = (config.spent_limit_seconds, config.random_seed, config.best_score_limit)
+    config.stop.time_limit_seconds = 5.0
+    config.run.random_seed = 3
+    before = (config.stop.time_limit_seconds, config.run.random_seed, config.stop.target_score)
     ba.solve(
         generate_demo_data().to_core(),
         time_limit_seconds=0,
@@ -60,11 +62,11 @@ def test_solve_leaves_the_callers_config_alone():
         on_new_best=lambda step, score: None,
         config=config,
     )
-    assert (config.spent_limit_seconds, config.random_seed, config.best_score_limit) == before
-    assert config.on_new_best is None
+    assert (config.stop.time_limit_seconds, config.run.random_seed, config.stop.target_score) == before
+    assert config.run.on_new_best is None
     clone = copy.copy(config)
-    clone.random_seed = 9
-    assert config.random_seed == 3 and copy.deepcopy(config).random_seed == 3
+    clone.run.random_seed = 9
+    assert config.run.random_seed == 3 and copy.deepcopy(config).run.random_seed == 3
 
 
 def test_time_limits_must_be_finite_and_non_negative():
@@ -72,12 +74,12 @@ def test_time_limits_must_be_finite_and_non_negative():
     import pytest
 
     config = ba.SolverConfig()
-    for name in ("spent_limit_seconds", "unimproved_spent_limit_seconds"):
+    for name in ("stop.time_limit_seconds", "stop.unimproved_time_limit_seconds"):
         for bad in (-1.0, float("nan"), float("inf")):
             with pytest.raises(ValueError, match=f"{name} must be finite and >= 0"):
-                setattr(config, name, bad)
-        setattr(config, name, 0.0)  # a zero budget is valid
-    with pytest.raises(ValueError, match="spent_limit_seconds must be finite and >= 0"):
+                set_setting(config, name, bad)
+        set_setting(config, name, 0.0)  # a zero budget is valid
+    with pytest.raises(ValueError, match="time_limit_seconds must be finite and >= 0"):
         ba.solve(generate_demo_data().to_core(), time_limit_seconds=-1)
 
 
@@ -89,22 +91,22 @@ def test_time_limits_are_at_most_1e9_seconds():
     import pytest
 
     config = ba.SolverConfig()
-    for name in ("spent_limit_seconds", "unimproved_spent_limit_seconds"):
+    for name in ("stop.time_limit_seconds", "stop.unimproved_time_limit_seconds"):
         for huge in (1e9 + 1, 1e10, 1e16, float(sys.maxsize), 1e300):
             with pytest.raises(ValueError, match=f"{name} must be at most 1e9 seconds"):
-                setattr(config, name, huge)
-        setattr(config, name, 1e9)  # the limit itself is valid and reads back exactly
-        assert getattr(config, name) == 1e9
-    with pytest.raises(ValueError, match="spent_limit_seconds must be at most 1e9 seconds"):
+                set_setting(config, name, huge)
+        set_setting(config, name, 1e9)  # the limit itself is valid and reads back exactly
+        assert get_setting(config, name) == 1e9
+    with pytest.raises(ValueError, match="time_limit_seconds must be at most 1e9 seconds"):
         ba.solve(generate_demo_data().to_core(), time_limit_seconds=sys.maxsize)
 
     # The largest limit is a real budget: a step-limited solve runs the same steps as under a
     # 30 s limit instead of stopping after construction.
     def solved(limit: float) -> list[int]:
         config = ba.SolverConfig()
-        config.spent_limit_seconds = limit
-        config.step_count_limit = 2000
-        config.random_seed = 3
+        config.stop.time_limit_seconds = limit
+        config.stop.step_limit = 2000
+        config.run.random_seed = 3
         plan = generate_demo_data().to_core()
         ba.Solver(config).solve(plan)
         return plan.assignment()
@@ -166,4 +168,4 @@ def test_stop_at_first_feasible_has_no_soft_floor():
         on_new_best=None,
         config=None,
     )
-    assert cfg.best_score_limit == (0, -(2**63), -(2**63))
+    assert cfg.stop.target_score == (0, -(2**63), -(2**63))

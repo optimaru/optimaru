@@ -221,8 +221,8 @@ from optimaru.flight_crew_scheduling.constraints import UnavailabilityBufferCost
 others = [spec for spec in get_constraints() if spec.name != "unavailability_buffer_cost"]
 picks = [*others, UnavailabilityBufferCost(weight=100)]
 config = fc.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 schedule = generate_schedule()
 fc.solve(schedule, config=config, constraints=picks)
 print(sum(fc.constraint_costs(schedule, picks)["unavailability_buffer_cost"]["costs"]))
@@ -448,9 +448,9 @@ steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     schedule = generate_schedule()  # step 1
     config = fc.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     fc.solve(schedule, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -458,7 +458,7 @@ for label, picked in (("default path", None), ("assembly", get_constraints())):
 ```
 
 Both lines end on the same score: same seed, same steps, same scoring. If they differ
-after a change, the two paths no longer score alike. A step is what `step_count_limit`
+after a change, the two paths no longer score alike. A step is what `stop.step_limit`
 counts; the moves that polish a ruin-and-recreate kick are not counted, on either path.
 
 | Measured on the generated instance, median of three runs | Steps per second |

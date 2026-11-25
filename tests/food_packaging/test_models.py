@@ -123,7 +123,7 @@ def test_from_core_on_demo():
 
 def _steps(steps):
     config = fp.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 

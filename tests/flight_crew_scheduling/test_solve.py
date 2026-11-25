@@ -174,7 +174,7 @@ def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
 
     class Capture:
         def __init__(self, cfg):
-            seen.append(cfg.best_score_limit)
+            seen.append(cfg.stop.target_score)
             raise Captured
 
     monkeypatch.setattr(package, "Solver", Capture)

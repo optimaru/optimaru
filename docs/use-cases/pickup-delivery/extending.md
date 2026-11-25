@@ -246,8 +246,8 @@ others = [spec for spec in get_constraints() if spec.name != "ride_time_cost"]
 picks = [*others, RideTimeCost(weight=0.1)]
 plan = pdp.build_random_instance(request_count=100, vehicle_count=10, seed=7)
 config = pdp.SolverConfig()
-config.step_count_limit = 300_000
-config.random_seed = 1
+config.stop.step_limit = 300_000
+config.run.random_seed = 1
 pdp.solve(plan, config=config, constraints=picks)
 raw = pdp.constraint_costs(plan, picks)
 print(sum(raw["ride_time_cost"]["costs"]), sum(raw["travel_time_cost"]["costs"]))
@@ -355,7 +355,7 @@ rejected and the routes are put back from a snapshot (`SolutionSnapshot::restore
 the engine's `model/snapshot.hpp`). The moves that do that (route elimination, ruin
 and recreate as a move, the iterated local search) are off here by default, or need
 previews: the counter saw 3 calls of `on_reset()`
-in 300,000 steps. With `route_elimination_weight = 0.1` it saw 2,997 in 30,000. So
+in 300,000 steps. With `strategies.route_elimination_weight = 0.1` it saw 2,997 in 30,000. So
 a table built in `on_reset()` is cheap with the defaults and is paid every ten steps
 when such a move is switched on; keep it to a pass over the requests. A rebuild costs
 every constraint on every route, the ones at weight 0 included, so with such a move on a
@@ -507,7 +507,7 @@ With the example at weight 1 these failed, and are expected to:
   expects `-30soft`);
 - `pdp_request_moves_test`, "the request moves reach better plans in the same number
   of steps": on five seeds of a default solve it asks the solve with the request moves
-  to win more often than the one without (`request_ruin_recreate` and `bundle_moves`
+  to win more often than the one without (`alns.request_ruin` and `custom_moves.bundle`
   off). With ride time priced it won two and lost three;
 - the usage examples, the constraint tables, the score text and the "seven core
   constraints" in [README.md](README.md), [python.md](python.md), `constraints.py`,
@@ -537,9 +537,9 @@ steps = 300_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     plan = pdp.build_random_instance(request_count=100, vehicle_count=10, seed=7)  # solve() works in place
     config = pdp.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     pdp.solve(plan, config=config, constraints=picked)
     seconds = time.perf_counter() - start

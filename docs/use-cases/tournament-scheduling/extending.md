@@ -51,14 +51,14 @@ Step 5 moves a constraint to the monolithic calculators.
 
 `TeamCountMove` (`cpp/ts/solver.cpp`) empties or refills whole teams in one move. It matters for
 the medium level: on the demo instance, after 1 million seeded steps, both paths end on `0 medium`
-(soft -1.54919), on the same schedule; with `config.team_count_moves = False` both end on a medium
+(soft -1.54919), on the same schedule; with `config.custom_moves.team_count = False` both end on a medium
 of 1.19523 (soft -1195232.56348). The move steers by the per-team loads and the per-(team, day)
 counts. On the default path it reads them off the monolithic calculator; the assembly has no such
 counters, so there the move keeps its own, recounted from the schedule each time it is drawn
 (`OwnedCounts` in `solver.cpp`, `verifyTeamCountMove()` in `ts_plugin_test`). It picks its target
 team counts from the two imbalance constraints at their default weights (`idealPenaltyFor()`),
 whatever the assembly holds; the assembly's score judges every reshape, so with an assembly
-that leaves those two out the move only costs steps, and `team_count_moves = False` turns it off.
+that leaves those two out the move only costs steps, and `custom_moves.team_count = False` turns it off.
 
 ## 1. Change a constraint that exists
 
@@ -221,8 +221,8 @@ others = [spec for spec in get_constraints() if spec.name != "consecutive_days_c
 picks = [*others, ConsecutiveDaysCost(weight=1)]
 for picked in (picks, others, None):
     config = ts.SolverConfig()
-    config.step_count_limit = 1_000_000
-    config.random_seed = 1
+    config.stop.step_limit = 1_000_000
+    config.run.random_seed = 1
     result = ts.solve(generate_demo_data(), config=config, constraints=picked)
     print(sum(ts.constraint_costs(result.to_core(), picks)["consecutive_days_cost"]["costs"]))
 ```
@@ -483,7 +483,7 @@ matter whether the cell has been counted yet.
 
 That is all: with the parity checks passing, the default path ran at 2.27 million
 steps per second with the fifth constraint in it, against 2.33 million without
-(2.96 against 3.12 million with `team_count_moves` off). A `full_assert` default
+(2.96 against 3.12 million with `custom_moves.team_count` off). A `full_assert` default
 solve of the demo passed.
 
 **5. What else moves.** With the weight at 1 and the three calculators in agreement,
@@ -547,10 +547,10 @@ def tournament(day_count=100, per_day=8, penalty_count=200, team_count=20):
 def solve(steps, picked, team_count_moves=True):
     schedule = tournament()
     config = ts.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
-    config.team_count_moves = team_count_moves
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
+    config.custom_moves.team_count = team_count_moves
     start = time.perf_counter()
     ts.solve(schedule, config=config, constraints=picked)
     return time.perf_counter() - start, (schedule.score.hard, schedule.score.soft)
@@ -569,9 +569,9 @@ moves. If the two differ after a change, the two paths no longer score or search
 | Measured on `xlarge`, median of three runs | Steps per second |
 | --- | --- |
 | default path, four constraints | 2.33 million |
-| default path, four constraints, `team_count_moves` off | 3.12 million |
+| default path, four constraints, `custom_moves.team_count` off | 3.12 million |
 | assembly, four constraints | 1.20 million |
-| assembly, four constraints, `team_count_moves` off | 1.72 million |
+| assembly, four constraints, `custom_moves.team_count` off | 1.72 million |
 | assembly, four + the constraint at weight 1 (step 2, step 4) | 0.61 million, 0.88 million |
 | default path, five constraints (step 5) | 2.27 million |
 

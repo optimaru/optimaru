@@ -111,49 +111,116 @@ def calculate_score(schedule: LeagueSchedule) -> Score:
     """Full recompute of all 10 constraints (also stored in `schedule.score`)."""
 
 class SolverConfig:
-    """Termination conditions / seed / search options of `Solver`."""
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget of solve() (default 30 s)."""
-    unimproved_spent_limit_seconds: float
-    """Time limit since the last new best; 0 disables."""
-    step_count_limit: int
-    """Local-search step budget; 0 disables."""
-    unimproved_step_count_limit: int
-    """Step limit since the last new best; 0 disables."""
-    random_seed: int
-    parallel_solver_count: int
-    """Number of independent multistarts (seed+i); the best wins."""
-    late_acceptance_size: int
-    """LA history length. 0 = automatic (clamp(32 * matches, 400, 3200)). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
-    from a given solution keeps this one length."""
-    full_assert: bool
-    """Re-checks incremental == full recompute on every move (for debugging, slow)."""
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    change_move_weight: float
-    swap_move_weight: float
-    nearby_size: int
-    """Number of nearby neighbors — matches sharing a team, ordered by home ground distance.
-    0 = automatic (4 * teams), negative disables nearby selection."""
-    nearby_probability: float
-    """Probability of drawing the swap partner from the nearby neighbors."""
-    costliest_match_sample: int
-    """Random sample size when picking a match to move — the one with the largest current
-    travel penalty among them is chosen (tournament selection). 1 means uniform random.
-    While infeasible it automatically falls back to uniform random."""
-    best_score_limit: tuple[int, float]
-    """Stop early once bestScore >= (hard, soft). (0, -inf) stops at the first
-    feasible."""
-    on_new_best: Callable[[int, Score], None] | None
-    """Called on every new best: on_new_best(step, score)."""
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget of solve() (default 30 s)."""
+        unimproved_time_limit_seconds: float
+        """Time limit since the last new best; 0 disables."""
+        step_limit: int
+        """Local-search step budget; 0 disables."""
+        unimproved_step_limit: int
+        """Step limit since the last new best; 0 disables."""
+        target_score: tuple[int, float]
+        """Stop early once bestScore >= (hard, soft). (0, -inf) stops at the first
+        feasible."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        nearby_size: int
+        """Number of nearby neighbors — matches sharing a team, ordered by home ground distance.
+        0 = automatic (4 * teams), negative disables nearby selection."""
+        nearby_probability: float
+        """Probability of drawing the swap partner from the nearby neighbors."""
+        costliest_match_sample: int
+        """Random sample size when picking a match to move — the one with the largest current
+        travel penalty among them is chosen (tournament selection). 1 means uniform random.
+        While infeasible it automatically falls back to uniform random."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """LA history length. 0 = automatic (clamp(32 * matches, 400, 3200)). The first stage's length: the search restarts with
+        a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+        from a given solution keeps this one length."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        """Number of independent multistarts (seed+i); the best wins."""
+        full_assert: bool
+        """Re-checks incremental == full recompute on every move (for debugging, slow)."""
+        on_new_best: Callable[[int, Score], None] | None
+        """Called on every new best: on_new_best(step, score)."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...

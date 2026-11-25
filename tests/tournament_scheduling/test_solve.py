@@ -133,10 +133,10 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 
 def _seeded_demo(constraints, team_count_moves=True):
     config = ts.SolverConfig()
-    config.step_count_limit = 20_000
-    config.spent_limit_seconds = 60
-    config.random_seed = 1
-    config.team_count_moves = team_count_moves
+    config.stop.step_limit = 20_000
+    config.stop.time_limit_seconds = 60
+    config.run.random_seed = 1
+    config.custom_moves.team_count = team_count_moves
     core = generate_demo_data().to_core()
     ts.solve(core, config=config, constraints=constraints)
     return core.score

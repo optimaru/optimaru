@@ -126,4 +126,4 @@ def test_stop_at_first_feasible_has_no_soft_floor():
         on_new_best=None,
         config=None,
     )
-    assert cfg.best_score_limit == (0, 0, -(2**63), -(2**63))
+    assert cfg.stop.target_score == (0, 0, -(2**63), -(2**63))

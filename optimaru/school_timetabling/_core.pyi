@@ -140,74 +140,149 @@ def calculate_score(table: Timetable) -> Score:
     """Full recompute of all 7 constraints (also stored in `table.score`)."""
 
 class SolverConfig:
-    """Termination, seed and search options for `Solver`."""
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget of solve() (default 30 s)."""
-    unimproved_spent_limit_seconds: float
-    """Time limit since the last new best; 0 disables it."""
-    step_count_limit: int
-    """Local-search step budget; 0 disables it."""
-    unimproved_step_count_limit: int
-    """Step limit since the last new best; 0 disables it."""
-    random_seed: int
-    """0 is a non-deterministic seed; any other value is reproducible (with several starts
-    and a target that is reached, the start that reaches it first can differ between runs)."""
-    parallel_solver_count: int
-    """Independent parallel starts (engine multi-start): worker i gets
-    random_seed+i and the full budget; the best solution wins. A start that reaches
-    `best_score_limit` stops the others. Default 1."""
-    late_acceptance_size: int
-    """Late-acceptance queue length. 0 (default) = auto: clamp(8 * lesson count, 400,
-    3200)."""
-    full_assert: bool
-    """True checks the incremental score against a full recompute after every
-    move (debugging; very slow)."""
-    ruin_recreate: bool
-    """Enables adaptive ruin-and-recreate kicks on stagnation."""
-    ruin_recreate_unimproved_step_trigger: int
-    """Minimum unimproved steps before a kick."""
-    ruin_recreate_min_ruin_fraction: float
-    """Minimum fraction of entities ruined per kick."""
-    ruin_recreate_max_ruin_fraction: float
-    """Maximum fraction of entities ruined per kick."""
-    ruin_recreate_max_ruin_count: int
-    """Absolute cap on the entities ruined per kick."""
-    ruin_recreate_operator_decay: float
-    """Adaptive operator-weight decay; higher adapts more slowly."""
-    ruin_recreate_rewards: list[float]
-    """Rewards per outcome NEW_BEST / BETTER / ACCEPTED / REJECTED (exactly 4)."""
-    ruin_recreate_polish_steps: int
-    """Small hill-climbing polish steps per kick."""
-    ruin_recreate_as_move_weight: float
-    """Relative weight of destroy&repair mixed in as an ordinary move judged by
-    the acceptor. Negative (default) = auto: 0.2 / slotRoomCount when
-    slotRoomCount lies in the measured benefit band [900, 1300], else 0
-    (benchmarks/school-timetabling/RESULTS.md). 0 disables it; a positive value
-    is used as is. One as-move costs ruin count x slotRoomCount evaluations."""
-    ruin_recreate_as_move_max_ruin: int
-    """Cap on the lessons one as-move ruins (default 12)."""
-    descent_weight: float
-    """Relative weight of the best-improvement descent over nearby lesson pairs
-    (default 0 = off; measured weaker than the as-move in this domain,
-    benchmarks/school-timetabling/RESULTS.md)."""
-    descent_max_sweeps: int
-    """Maximum sweeps per descent (default 4)."""
-    change_move_weight: float
-    """Relative weight of the assignment-shape change move; 0 disables it."""
-    swap_move_weight: float
-    """Relative weight of the assignment-shape swap move; 0 disables it."""
-    best_score_limit: tuple[int, float]
-    """Stops early once bestScore >= (hard, soft) (lexicographic).
-    (0, -inf) stops at the first feasible solution. Default: unreachable."""
-    on_new_best: Callable[[int, Score], None] | None
-    """Called on every new best solution: on_new_best(step, score). The GIL is
-    re-acquired on entry (safe from multi-start worker threads too)."""
-    same_group_nearby: bool
-    """Registers lessons of the same studentGroup as nearby neighbours (swap
-    partner bias + related ruin). Default True."""
-    same_group_nearby_probability: float
-    """Probability of drawing the swap partner from the nearby (same group) list (default 0.5)."""
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``strategies``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget of solve() (default 30 s)."""
+        unimproved_time_limit_seconds: float
+        """Time limit since the last new best; 0 disables it."""
+        step_limit: int
+        """Local-search step budget; 0 disables it."""
+        unimproved_step_limit: int
+        """Step limit since the last new best; 0 disables it."""
+        target_score: tuple[int, float]
+        """Stops early once bestScore >= (hard, soft) (lexicographic).
+        (0, -inf) stops at the first feasible solution. Default: unreachable."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        """Enables adaptive ruin-and-recreate kicks on stagnation."""
+        unimproved_steps: int
+        """Minimum unimproved steps before a kick."""
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        ruin_recreate_weight: float
+        """Relative weight of destroy&repair mixed in as an ordinary move judged by
+        the acceptor. Negative (default) = auto: 0.2 / slotRoomCount when
+        slotRoomCount lies in the measured benefit band [900, 1300], else 0
+        (benchmarks/school-timetabling/RESULTS.md). 0 disables it; a positive value
+        is used as is. One as-move costs ruin count x slotRoomCount evaluations."""
+        ruin_recreate_max_ruin: int
+        """Cap on the lessons one as-move ruins (default 12)."""
+        descent_weight: float
+        """Relative weight of the best-improvement descent over nearby lesson pairs
+        (default 0 = off; measured weaker than the as-move in this domain,
+        benchmarks/school-timetabling/RESULTS.md)."""
+        descent_max_sweeps: int
+        """Maximum sweeps per descent (default 4)."""
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        """Relative weight of the assignment-shape change move; 0 disables it."""
+        swap_weight: float
+        """Relative weight of the assignment-shape swap move; 0 disables it."""
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        same_group_nearby: bool
+        """Registers lessons of the same studentGroup as nearby neighbours (swap
+        partner bias + related ruin). Default True."""
+        same_group_nearby_probability: float
+        """Probability of drawing the swap partner from the nearby (same group) list (default 0.5)."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """Late-acceptance queue length. 0 (default) = auto: clamp(8 * lesson count, 400,
+        3200)."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        """Minimum fraction of entities ruined per kick."""
+        max_ruin_fraction: float
+        """Maximum fraction of entities ruined per kick."""
+        max_ruin_count: int
+        """Absolute cap on the entities ruined per kick."""
+        operator_decay: float
+        """Adaptive operator-weight decay; higher adapts more slowly."""
+        rewards: list[float]
+        """Rewards per outcome NEW_BEST / BETTER / ACCEPTED / REJECTED (exactly 4)."""
+        polish_steps: int
+        """Small hill-climbing polish steps per kick."""
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        """0 is a non-deterministic seed; any other value is reproducible (with several starts
+        and a target that is reached, the start that reaches it first can differ between runs)."""
+        parallel_solver_count: int
+        """Independent parallel starts (engine multi-start): worker i gets
+        random_seed+i and the full budget; the best solution wins. A start that reaches
+        `stop.target_score` stops the others. Default 1."""
+        full_assert: bool
+        """True checks the incremental score against a full recompute after every
+        move (debugging; very slow)."""
+        on_new_best: Callable[[int, Score], None] | None
+        """Called on every new best solution: on_new_best(step, score). The GIL is
+        re-acquired on entry (safe from multi-start worker threads too)."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Local-search solver (construction heuristic + late acceptance + ALNS).
@@ -472,57 +547,145 @@ class canon:
         default weight and level (scores like `calculate_score`)."""
 
     class SolverConfig:
-        """Configuration of `canon.Solver`. The common engine fields match the
-        top-level `SolverConfig`; canonical-only additions are the fast path's
-        `weights` and the guided-search knobs (`hot_lesson_probability`,
-        `same_class_nearby*`, `smart_class_swap_*`)."""
-        def __init__(self) -> None: ...
-        spent_limit_seconds: float
-        unimproved_spent_limit_seconds: float
-        step_count_limit: int
-        unimproved_step_count_limit: int
-        random_seed: int
-        parallel_solver_count: int
-        late_acceptance_size: int
-        """0 = auto: clamp(4 * lesson count, 400, 3200). A positive value is used as is."""
-        full_assert: bool
-        ruin_recreate: bool
-        ruin_recreate_unimproved_step_trigger: int
-        ruin_recreate_min_ruin_fraction: float
-        ruin_recreate_max_ruin_fraction: float
-        ruin_recreate_max_ruin_count: int
-        ruin_recreate_operator_decay: float
-        ruin_recreate_rewards: list[float]
-        ruin_recreate_polish_steps: int
-        ruin_recreate_as_move_weight: float
-        """Relative weight of the destroy&repair as-move (default 0 = off — unlike
-        the quickstart side there is no auto rule; negative also means off)."""
-        ruin_recreate_as_move_max_ruin: int
-        descent_weight: float
-        descent_max_sweeps: int
-        change_move_weight: float
-        swap_move_weight: float
-        best_score_limit: tuple[int, float]
-        on_new_best: Callable[[int, Score], None] | None
-        weights: canon.ObjectiveWeights
-        """The soft weights of the monolithic fast path, solve(table) only (the
-        model carries none; the plugin path's components carry their own)."""
-        hot_lesson_probability: float
-        """Probability of picking a lesson involved in a hard violation as the move target (0 = off)."""
-        same_class_nearby: bool
-        """Registers lessons of the same class as nearby neighbours (swap partner / related ruin)."""
-        same_class_nearby_probability: float
-        smart_class_swap_moves: bool
-        """Best-of-k same-class swap custom move (k evaluations, soft phase only)."""
-        smart_class_swap_candidates: int
-        reassign_candidates: int
-        """Placements tried when putting an unassigned lesson back (partial timetabling only).
+        """The solver settings, by stage of the solve: ``stop``, ``cost``, ``alns_trigger``, ``strategies``, ``custom_moves``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
 
-        Used only when the assembly demotes unassigned_lessons_cost to soft. Re-inserting into a
-        tight timetable needs a slot that clashes with nobody, which a single
-        random cell almost never finds — looking wide is the point of this move,
-        hence a larger k than the swap's. Track-3 sweep (partial_M, 10 s):
-        8 -> 325 cells, 16 -> 328, 32 -> 342, 64 -> 341."""
+        Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+        ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+        def __init__(
+            self,
+            *,
+            stop: dict[str, object] | None = None,
+            cost: dict[str, object] | None = None,
+            alns_trigger: dict[str, object] | None = None,
+            strategies: dict[str, object] | None = None,
+            custom_moves: dict[str, object] | None = None,
+            moves: dict[str, object] | None = None,
+            selection: dict[str, object] | None = None,
+            acceptance: dict[str, object] | None = None,
+            alns: dict[str, object] | None = None,
+            run: dict[str, object] | None = None,
+        ) -> None: ...
+        GROUPS: tuple[str, ...]
+        def to_dict(self) -> dict[str, dict[str, object]]:
+            """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+            ...
+
+        class Stop:
+            """``config.stop``: When the search stops: the first limit reached."""
+
+            time_limit_seconds: float
+            unimproved_time_limit_seconds: float
+            step_limit: int
+            unimproved_step_limit: int
+            target_score: tuple[int, float]
+
+        stop: Stop
+        """When the search stops: the first limit reached."""
+
+        class Cost:
+            """``config.cost``: What a solution is scored on, beyond the constraints passed to solve()."""
+
+            weights: canon.ObjectiveWeights
+            """The soft weights of the monolithic fast path, solve(table) only (the
+            model carries none; the plugin path's components carry their own)."""
+
+        cost: Cost
+        """What a solution is scored on, beyond the constraints passed to solve()."""
+
+        class AlnsTrigger:
+            """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+            enabled: bool
+            unimproved_steps: int
+
+        alns_trigger: AlnsTrigger
+        """When a stalled search is kicked by ruin & recreate."""
+
+        class Strategies:
+            """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+            ruin_recreate_weight: float
+            """Relative weight of the destroy&repair as-move (default 0 = off — unlike
+            the quickstart side there is no auto rule; negative also means off)."""
+            ruin_recreate_max_ruin: int
+            descent_weight: float
+            descent_max_sweeps: int
+
+        strategies: Strategies
+        """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        class CustomMoves:
+            """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+            smart_class_swap: bool
+            """Best-of-k same-class swap custom move (k evaluations, soft phase only)."""
+            smart_class_swap_candidates: int
+            reassign_candidates: int
+            """Placements tried when putting an unassigned lesson back (partial timetabling only).
+
+            Used only when the assembly demotes unassigned_lessons_cost to soft. Re-inserting into a
+            tight timetable needs a slot that clashes with nobody, which a single
+            random cell almost never finds — looking wide is the point of this move,
+            hence a larger k than the swap's. Track-3 sweep (partial_M, 10 s):
+            8 -> 325 cells, 16 -> 328, 32 -> 342, 64 -> 341."""
+
+        custom_moves: CustomMoves
+        """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        class Moves:
+            """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+            change_weight: float
+            swap_weight: float
+
+        moves: Moves
+        """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        class Selection:
+            """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+            hot_lesson_probability: float
+            """Probability of picking a lesson involved in a hard violation as the move target (0 = off)."""
+            same_class_nearby: bool
+            """Registers lessons of the same class as nearby neighbours (swap partner / related ruin)."""
+            same_class_nearby_probability: float
+
+        selection: Selection
+        """What the move mix moves: nearby candidates and this use case's hints."""
+
+        class Acceptance:
+            """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+            late_acceptance_size: int
+            """0 = auto: clamp(4 * lesson count, 400, 3200). A positive value is used as is."""
+
+        acceptance: Acceptance
+        """Whether the candidate becomes the current solution."""
+
+        class Alns:
+            """``config.alns``: The ruin & recreate kick itself."""
+
+            min_ruin_fraction: float
+            max_ruin_fraction: float
+            max_ruin_count: int
+            operator_decay: float
+            rewards: list[float]
+            polish_steps: int
+
+        alns: Alns
+        """The ruin & recreate kick itself."""
+
+        class Run:
+            """``config.run``: Seeds, parallel starts and debugging aids."""
+
+            random_seed: int
+            parallel_solver_count: int
+            full_assert: bool
+            on_new_best: Callable[[int, Score], None] | None
+
+        run: Run
+        """Seeds, parallel starts and debugging aids."""
 
     class Solver:
         """Canonical-domain local-search solver (allowed_slot-based value
@@ -534,7 +697,7 @@ class canon:
         @overload
         def solve(self, table: canon.Timetable, calculator: canon.DecomposedCalculator) -> None:
             """Plugin-assembly path: both the search and the final `table.score`
-            use `calculator` (the weights come from the assembly — config.weights
+            use `calculator` (the weights come from the assembly — config.cost.weights
             is ignored). Single start: parallel_solver_count is ignored.
 
             When the assembly demotes `unassigned_lessons_cost` to soft or drops

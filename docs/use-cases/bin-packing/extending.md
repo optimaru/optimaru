@@ -42,7 +42,7 @@ There are two scoring paths, and they give the same score for the same packing
 The speeds are a generated instance of 120 items ("sq1" of the benchmark, 43 bins at
 best), one thread of an Apple M4 Max; [step 6](#6-measure) has the script. In the
 default search the macro moves take most of a step, so the two paths are close.
-With them off (`empty_bin_moves`, `repack_moves`, `trade_moves`, and `fill_tie_break`,
+With them off (`custom_moves.empty_bin`, `custom_moves.repack`, `custom_moves.trade`, and `acceptance.fill_tie_break`,
 which follows every step in a copy of the loads) a step is a change or a swap and
 scoring is most of it: the monolithic calculators are then 2.5 times as fast. That
 search is the worse one, though: it ends on 45 bins after 10 million steps where the
@@ -211,8 +211,8 @@ from optimaru.bin_packing.constraints import LoadBalanceCost
 others = [spec for spec in get_constraints() if spec.name != "load_balance_cost"]
 picks = [*others, LoadBalanceCost(weight=1)]
 config = bp.SolverConfig()
-config.step_count_limit = 200_000
-config.random_seed = 1
+config.stop.step_limit = 200_000
+config.run.random_seed = 1
 problem = BinPackingProblemModel.model_validate(demo).to_core()
 bp.solve(problem, config=config, constraints=picks)
 print(sum(bp.constraint_costs(problem, picks)["load_balance_cost"]["costs"]), problem.bin_loads())
@@ -461,11 +461,11 @@ for macro_moves, steps in ((True, 2_000_000), (False, 10_000_000)):
     for label, picked in (("default path", None), ("assembly", get_constraints())):
         problem = BinPackingProblemModel.model_validate(data).to_core()
         config = bp.SolverConfig()
-        config.step_count_limit = steps
-        config.spent_limit_seconds = 600
-        config.random_seed = 1
-        config.empty_bin_moves = config.repack_moves = macro_moves
-        config.trade_moves = config.fill_tie_break = macro_moves
+        config.stop.step_limit = steps
+        config.stop.time_limit_seconds = 600
+        config.run.random_seed = 1
+        config.custom_moves.empty_bin = config.custom_moves.repack = macro_moves
+        config.custom_moves.trade = config.acceptance.fill_tie_break = macro_moves
         start = time.perf_counter()
         bp.solve(problem, config=config, constraints=picked)
         seconds = time.perf_counter() - start

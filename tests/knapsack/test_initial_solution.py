@@ -18,14 +18,14 @@ def _problem() -> KnapsackProblemModel:
 def _no_search() -> SolverConfig:
     """The zero time budget: the solve returns the construction (or the seed) unchanged."""
     config = SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
 def _steps(count: int, seed: int) -> SolverConfig:
     config = SolverConfig()
-    config.step_count_limit = count
-    config.random_seed = seed
+    config.stop.step_limit = count
+    config.run.random_seed = seed
     return config
 
 

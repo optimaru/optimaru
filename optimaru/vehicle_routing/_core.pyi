@@ -194,131 +194,202 @@ def calculate_score(plan: VehicleRoutePlan) -> Score:
     """
 
 class SolverConfig:
-    def __init__(self) -> None: ...
+    """The solver settings, by stage of the solve: ``construction``, ``stop``, ``alns_trigger``, ``strategies``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
 
-    # --- termination ---
-    spent_limit_seconds: float
-    step_count_limit: int
-    unimproved_step_count_limit: int
-    unimproved_spent_limit_seconds: float
-    best_score_limit: tuple[int, int, int]
-    """(hard, medium, soft): stop early once bestScore >= this. -(2**63) on
-    medium or soft means no floor on the soft side (only hard is compared), so
-    (0, -(2**63), -(2**63)) stops at the first feasible solution."""
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
 
-    # --- engine ---
-    random_seed: int
-    parallel_solver_count: int
-    """Independent parallel starts; the best final score wins."""
-    full_assert: bool
-    """Re-verify every incremental score against a full recompute after every
-    move (a debugging aid; much slower)."""
-    first_fit_decreasing: bool
-    """Construction heuristic order: tightest time window and largest demand
-    first (True), or plain input order (False)."""
+    def __init__(
+        self,
+        *,
+        construction: dict[str, object] | None = None,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        strategies: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
 
-    # --- acceptance ---
-    acceptor_type: AcceptorType
-    late_acceptance_size: int
-    """LATE_ACCEPTANCE: 0 = auto: clamp(60000 // len(visits), 100, 400) — shorter for
-    larger instances, keeping the acceptance horizon roughly constant in wall-time."""
-    entity_tabu_size: int
-    """ENTITY_TABU: for how many steps a moved entity stays tabu (7 by default; >= 0)."""
-    simulated_annealing_starting_temperature: tuple[int, float]
-    """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
-    (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
-    |start soft| (at least 1); the soft level alone, without the medium level of the
-    unassigned visits."""
-    simulated_annealing_temperature_fraction: float
-    """The auto temperature's fraction of the start's soft level, without the medium level of
-    the unassigned visits (0.01 by default; > 0)."""
-    great_deluge_water_level_step: tuple[int, float]
-    """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
-    rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
-    above the start's are taken. A soft amount you give here, like an explicit starting
-    temperature, is on the scale the search compares in, where one unit of the medium level
-    (a penalty minute of an unassigned visit) counts 10^9: only the automatic temperature
-    leaves the medium level out."""
-    step_counting_hill_climbing_size: int
-    """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
-    steps (400 by default; > 0)."""
-    record_to_record_start_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
-    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0). The
-    medium level is included here, at 10^9 per unit: a start that leaves work unassigned
-    widens the gap."""
-    record_to_record_end_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
-    the gap shrinks from the start gap to this one."""
+    class Construction:
+        """``config.construction``: The first solution s0."""
 
-    # --- move mix (relative weights) ---
-    relocate_move_weight: float
-    list_swap_move_weight: float
-    two_opt_move_weight: float
-    or_opt_move_weight: float
-    tail_swap_move_weight: float
-    inter_exchange_move_weight: float
-    inter_exchange_max_segment: int
+        first_fit_decreasing: bool
+        """Construction heuristic order: tightest time window and largest demand
+        first (True), or plain input order (False)."""
 
-    # --- adaptive ruin & recreate (ALNS) ---
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_polish_steps: int
-    ruin_recreate_as_move_weight: float
-    ruin_recreate_as_move_max_ruin: int
-    descent_weight: float
-    descent_max_sweeps: int
-    granular_descent: bool
-    granular_descent_max_segment: int
-    granular_descent_candidate_routes: int
-    route_elimination_weight: float
-    route_elimination_max_size: int
-    ejection_chain_weight: float
-    ejection_chain_max_steps: int
-    ejection_chain_candidate_lists: int
-    ejection_chain_max_evaluations: int
-    iterated_local_search_weight: float
-    iterated_local_search_min_ruin: int
-    iterated_local_search_max_ruin: int
-    iterated_local_search_max_segment: int
-    iterated_local_search_max_evaluations: int
-    group_ruin_recreate: bool
-    """The group operator: takes a visit group out, alone or with a few more
-    visits, and puts each unit back whole at its cheapest feasible place. Only
-    registered for a plan with groups."""
-    group_ruin_max_visits: int
-    """The most visits the group operator takes out beside its first group (0 or
-    more)."""
-    ruin_recreate_selection_type: OperatorSelectionType
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    """Four rewards, indexed NEW_BEST / BETTER / ACCEPTED / REJECTED."""
-    ruin_recreate_selection_segment_length: int
-    ruin_recreate_selection_alpha: float
-    sisr_ruin: bool
-    """SISR substring removal (Christiaens & Vanden Berghe)."""
-    route_ruin: bool
-    """Whole-route removal — the only ruin that can free up a vehicle."""
-    sisr_max_string_removals: int
-    sisr_max_string_size: int
-    regret_k: int
-    """Repair strategy: >= 2 uses regret-k insertion, 0/1 plain greedy."""
-    blink_rate: float
-    """SISR blinking: probability of skipping a candidate placement."""
+    construction: Construction
+    """The first solution s0."""
 
-    # --- nearby selection ---
-    driving_time_nearby: bool
-    driving_time_nearby_size: int
-    driving_time_nearby_probability: float
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
 
-    on_new_best: Callable[[int, Score], None] | None
-    """Progress callback (steps, best score). The score has the same three
-    levels as the final plan.score: with solve_with_constraints both come
-    from the chosen constraints' hard / medium / soft totals, so a soft total
-    of 10^9 or more stays on soft instead of spilling into medium."""
+        time_limit_seconds: float
+        step_limit: int
+        unimproved_step_limit: int
+        unimproved_time_limit_seconds: float
+        target_score: tuple[int, int, int]
+        """(hard, medium, soft): stop early once bestScore >= this. -(2**63) on
+        medium or soft means no floor on the soft side (only hard is compared), so
+        (0, -(2**63), -(2**63)) stops at the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Strategies:
+        """``config.strategies``: A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+        ruin_recreate_weight: float
+        ruin_recreate_max_ruin: int
+        descent_weight: float
+        descent_max_sweeps: int
+        granular_descent: bool
+        granular_descent_max_segment: int
+        granular_descent_candidate_routes: int
+        route_elimination_weight: float
+        route_elimination_max_size: int
+        ejection_chain_weight: float
+        ejection_chain_max_steps: int
+        ejection_chain_candidate_lists: int
+        ejection_chain_max_evaluations: int
+        iterated_local_search_weight: float
+        iterated_local_search_min_ruin: int
+        iterated_local_search_max_ruin: int
+        iterated_local_search_max_segment: int
+        iterated_local_search_max_evaluations: int
+
+    strategies: Strategies
+    """A step's move, first: built-in strategies, each drawn by its own weight in a fixed order."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        relocate_weight: float
+        list_swap_weight: float
+        two_opt_weight: float
+        or_opt_weight: float
+        tail_swap_weight: float
+        inter_exchange_weight: float
+        inter_exchange_max_segment: int
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        driving_time_nearby: bool
+        driving_time_nearby_size: int
+        driving_time_nearby_probability: float
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        rule: AcceptorType
+        late_acceptance_size: int
+        """LATE_ACCEPTANCE: 0 = auto: clamp(60000 // len(visits), 100, 400) — shorter for
+        larger instances, keeping the acceptance horizon roughly constant in wall-time."""
+        entity_tabu_size: int
+        """ENTITY_TABU: for how many steps a moved entity stays tabu (7 by default; >= 0)."""
+        simulated_annealing_starting_temperature: tuple[int, float]
+        """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
+        (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
+        |start soft| (at least 1); the soft level alone, without the medium level of the
+        unassigned visits."""
+        simulated_annealing_temperature_fraction: float
+        """The auto temperature's fraction of the start's soft level, without the medium level of
+        the unassigned visits (0.01 by default; > 0)."""
+        great_deluge_water_level_step: tuple[int, float]
+        """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
+        rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
+        above the start's are taken. A soft amount you give here, like an explicit starting
+        temperature, is on the scale the search compares in, where one unit of the medium level
+        (a penalty minute of an unassigned visit) counts 10^9: only the automatic temperature
+        leaves the medium level out."""
+        step_counting_hill_climbing_size: int
+        """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
+        steps (400 by default; > 0)."""
+        record_to_record_start_gap: float
+        """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
+        start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0). The
+        medium level is included here, at 10^9 per unit: a start that leaves work unassigned
+        widens the gap."""
+        record_to_record_end_gap: float
+        """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
+        the gap shrinks from the start gap to this one."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        polish_steps: int
+        group_ruin: bool
+        """The group operator: takes a visit group out, alone or with a few more
+        visits, and puts each unit back whole at its cheapest feasible place. Only
+        registered for a plan with groups."""
+        group_ruin_max_visits: int
+        """The most visits the group operator takes out beside its first group (0 or
+        more)."""
+        selection_type: OperatorSelectionType
+        operator_decay: float
+        rewards: list[float]
+        """Four rewards, indexed NEW_BEST / BETTER / ACCEPTED / REJECTED."""
+        selection_segment_length: int
+        selection_alpha: float
+        sisr_ruin: bool
+        """SISR substring removal (Christiaens & Vanden Berghe)."""
+        route_ruin: bool
+        """Whole-route removal — the only ruin that can free up a vehicle."""
+        sisr_max_string_removals: int
+        sisr_max_string_size: int
+        regret_k: int
+        """Repair strategy: >= 2 uses regret-k insertion, 0/1 plain greedy."""
+        blink_rate: float
+        """SISR blinking: probability of skipping a candidate placement."""
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        """Independent parallel starts; the best final score wins."""
+        full_assert: bool
+        """Re-verify every incremental score against a full recompute after every
+        move (a debugging aid; much slower)."""
+        on_new_best: Callable[[int, Score], None] | None
+        """Progress callback (steps, best score). The score has the same three
+        levels as the final plan.score: with solve_with_constraints both come
+        from the chosen constraints' hard / medium / soft totals, so a soft total
+        of 10^9 or more stays on soft instead of spilling into medium."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate

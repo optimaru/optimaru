@@ -167,25 +167,31 @@ ObjectiveWeightsModel = _create_model(
 )
 
 
+class CostGroup(StrictModel):
+    """``config.cost`` of canonical mode: the fast path's soft weights."""
+
+    weights: ObjectiveWeightsModel = Field(default_factory=ObjectiveWeightsModel)
+
+
 class SolveConfig(SolveConfigBase):
     """Serializable mirror of `_core.SolverConfig` / `_core.canon.SolverConfig`.
 
-    The common engine fields are the same in both modes; ``weights`` (the fast
+    The common engine settings are the same in both modes; ``cost.weights`` (the fast
     path's soft weights, keyed by the soft constraint names) applies to
     canonical mode only (`to_canon()`) — the quickstart config (`to_core()`)
-    has no such field.
+    has no such setting.
 
-    ``late_acceptance_size`` 0 is automatic: ``clamp(4 * lesson count, 400, 3200)`` in
+    ``acceptance.late_acceptance_size`` 0 is automatic: ``clamp(4 * lesson count, 400, 3200)`` in
     canonical mode and ``clamp(8 * lesson count, 400, 3200)`` in quickstart mode. A positive
     value is used as it is.
     """
 
-    weights: ObjectiveWeightsModel = Field(default_factory=ObjectiveWeightsModel)
+    cost: CostGroup = Field(default_factory=lambda: CostGroup())
 
     def to_canon(self) -> "_core.canon.SolverConfig":
         """Canonical-mode config (with the fast path's soft weights)."""
         cfg = self._apply_to(_core.canon.SolverConfig())
-        cfg.weights = self.weights.to_core()
+        cfg.cost.weights = self.cost.weights.to_core()
         return cfg
 
     def to_core(self) -> "_core.SolverConfig":

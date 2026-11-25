@@ -139,7 +139,7 @@ constraints = [
 ]
 
 config = SolverConfig()
-config.spent_limit_seconds = 1.0
+config.stop.time_limit_seconds = 1.0
 schedule = make_random_roster(days=5, shifts_per_day=4, employees=6, seed=1)
 calc = DecomposedCalculator(constraints)
 Solver(config).solve(schedule, calc)       # search AND final score use these constraints
@@ -382,41 +382,41 @@ says what it costs.
 from optimaru import employee_scheduling as es
 
 config = es.SolverConfig()
-config.spent_limit_seconds = 5.0        # how long it may think (default 30)
-config.step_count_limit = 100_000       # 0 disables step-count termination
-config.no_improvement_limit_seconds = 0.5   # stop after no new best
-config.no_improvement_step_count_limit = 50_000
-config.random_seed = 42                 # same seed, same search
-config.parallel_solver_count = 1        # independent parallel starts (seed + i each); ignored with a calculator
-config.full_assert = False              # re-verify every incremental score (a debugging aid; much slower)
-config.guided_moves = True
-config.employee_greedy_construction = True
-config.late_acceptance_size = 400
-config.ruin_recreate = True
-config.ruin_recreate_unimproved_step_trigger = 2_000
-config.descent_weight = 0.02            # best-improvement descent over a shift pair
-config.descent_max_sweeps = 4
-config.ruin_recreate_as_move_weight = 0.0    # ruin+repair as an ordinary move
-config.ruin_recreate_as_move_max_ruin = 12
-config.change_move_weight = 0.8         # assignment-shape move mix; weights are relative
-config.swap_move_weight = 0.2
-config.smart_change_moves = False       # sample several employees for one shift
-config.smart_change_candidate_count = 6
-config.employee_day_repair_moves = True # move duplicate same-day assignments to off employees
-config.employee_run_repair_moves = True # break overlong consecutive-work runs
-config.employee_run_repair_max_days = 3
-config.employee_window_moves = True     # swap two employees' assignments over days
-config.employee_window_max_days = 3
-config.custom_move_probability = 0.30   # cap the adaptive custom-move pool
-config.nearby_shifts = True             # temporal nearby swap/descent/ruin bias
-config.nearby_shifts_probability = 0.65 # 0.8 pays on large-only (1000+ shift) rosters
-config.employee_ruin_moves = True       # LNS targets hot employee/day regions
-config.best_score_limit = (0, float("-inf"))    # stop at the first feasible schedule
-config.on_new_best = lambda step, score: print(step, score)   # progress callback
+config.stop.time_limit_seconds = 5.0        # how long it may think (default 30)
+config.stop.step_limit = 100_000       # 0 disables step-count termination
+config.stop.unimproved_time_limit_seconds = 0.5   # stop after no new best
+config.stop.unimproved_step_limit = 50_000
+config.run.random_seed = 42                 # same seed, same search
+config.run.parallel_solver_count = 1        # independent parallel starts (seed + i each); ignored with a calculator
+config.run.full_assert = False              # re-verify every incremental score (a debugging aid; much slower)
+config.custom_moves.guided = True
+config.construction.employee_greedy = True
+config.acceptance.late_acceptance_size = 400
+config.alns_trigger.enabled = True
+config.alns_trigger.unimproved_steps = 2_000
+config.strategies.descent_weight = 0.02            # best-improvement descent over a shift pair
+config.strategies.descent_max_sweeps = 4
+config.strategies.ruin_recreate_weight = 0.0    # ruin+repair as an ordinary move
+config.strategies.ruin_recreate_max_ruin = 12
+config.moves.change_weight = 0.8         # assignment-shape move mix; weights are relative
+config.moves.swap_weight = 0.2
+config.custom_moves.smart_change = False       # sample several employees for one shift
+config.custom_moves.smart_change_candidate_count = 6
+config.custom_moves.employee_day_repair = True # move duplicate same-day assignments to off employees
+config.custom_moves.employee_run_repair = True # break overlong consecutive-work runs
+config.custom_moves.employee_run_repair_max_days = 3
+config.custom_moves.employee_window = True     # swap two employees' assignments over days
+config.custom_moves.employee_window_max_days = 3
+config.custom_moves.share = 0.30   # cap the adaptive custom-move pool
+config.selection.nearby_shifts = True             # temporal nearby swap/descent/ruin bias
+config.selection.nearby_shifts_probability = 0.65 # 0.8 pays on large-only (1000+ shift) rosters
+config.alns.employee_ruin = True       # LNS targets hot employee/day regions
+config.stop.target_score = (0, float("-inf"))    # stop at the first feasible schedule
+config.run.on_new_best = lambda step, score: print(step, score)   # progress callback
 solver = es.Solver(config)
 ```
 
-`guided_moves=False` also disables the employee-aware moves and falls back to the
+`custom_moves.guided=False` also disables the employee-aware moves and falls back to the
 generic assignment-shape change/swap search. The `relocate/list_swap/two_opt/or_opt/tail_swap`
 weights are generic sequence-shaped options and do not affect this domain.
 

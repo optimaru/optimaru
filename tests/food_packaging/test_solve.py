@@ -101,15 +101,15 @@ def test_pinned_jobs_are_kept():
 
 def test_solver_config_roundtrip():
     config = fp.SolverConfig()
-    config.spent_limit_seconds = 1.5
-    config.random_seed = 11
-    config.parallel_solver_count = 2
-    config.operator_rounds = 2
-    config.best_score_limit = (0, float("-inf"))
-    assert config.spent_limit_seconds == 1.5
-    assert config.parallel_solver_count == 2
-    assert config.operator_rounds == 2
-    assert config.best_score_limit == (0, float("-inf"))
+    config.stop.time_limit_seconds = 1.5
+    config.run.random_seed = 11
+    config.run.parallel_solver_count = 2
+    config.run.operator_rounds = 2
+    config.stop.target_score = (0, float("-inf"))
+    assert config.stop.time_limit_seconds == 1.5
+    assert config.run.parallel_solver_count == 2
+    assert config.run.operator_rounds == 2
+    assert config.stop.target_score == (0, float("-inf"))
 
     schedule = fp.generate_demo_data(line_count=2, job_count=8)
     fp.solve(schedule, config=config)

@@ -19,15 +19,15 @@ def _problem() -> BinPackingProblemModel:
 def _no_search() -> SolverConfig:
     """Zero budget: the engine stops before its first step."""
     config = SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
 def _steps(count: int, seed: int) -> SolverConfig:
     """A deterministic search of `count` steps."""
     config = SolverConfig()
-    config.step_count_limit = count
-    config.random_seed = seed
+    config.stop.step_limit = count
+    config.run.random_seed = seed
     return config
 
 

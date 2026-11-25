@@ -418,11 +418,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     solution = build_solution()
     config = op.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 30
     op.Solver(config).solve_with_constraints(solution, picks)
     raw = op.constraint_costs(solution, picks)
     assert len(raw) == len(picks)
@@ -516,7 +516,7 @@ def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
     assert _refusal(lambda: op.solve(build_solution(), time_limit_seconds=0.1, constraints=[spec])) == message
     assert _refusal(lambda: _zero_budget(repeated)) == message
     config = op.SolverConfig()
-    config.spent_limit_seconds = 0.1
+    config.stop.time_limit_seconds = 0.1
     assert _refusal(lambda: op.Solver(config).solve_with_constraints(_hand_solution(), [spec])) == message
     assert _refusal(lambda: op.constraint_costs(_hand_solution(), [spec])) == message
     assert _refusal(lambda: op.constraint_costs(_hand_solution(), repeated)) == message

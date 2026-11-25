@@ -211,8 +211,8 @@ from optimaru.facility_location.constraints import DemandDistanceCost, get_const
 others = [spec for spec in get_constraints() if spec.name != "demand_distance_cost"]
 picks = [*others, DemandDistanceCost(weight=1)]
 config = fl.SolverConfig()
-config.step_count_limit = 4_000_000
-config.random_seed = 1
+config.stop.step_limit = 4_000_000
+config.run.random_seed = 1
 problem = build_problem()
 fl.solve(problem, config=config, constraints=picks)
 print(sum(fl.constraint_costs(problem, picks)["demand_distance_cost"]["costs"]))
@@ -445,9 +445,9 @@ steps = 4_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     problem = build_problem()
     config = fl.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     fl.solve(problem, config=config, constraints=picked)
     seconds = time.perf_counter() - start

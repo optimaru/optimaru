@@ -30,8 +30,8 @@ def test_every_extra_instance_validates() -> None:
 
 def test_a_short_step_limited_solve_is_no_worse_than_the_baseline() -> None:
     config = bin_packing.SolverConfig()
-    config.step_count_limit = 50_000
-    config.random_seed = 1
+    config.stop.step_limit = 50_000
+    config.run.random_seed = 1
     for name, reference in quality_bench.BASELINE_BINS.items():
         core = BinPackingProblemModel.model_validate(quality_bench.instances()[name]()).to_core()
         score = bin_packing.solve(core, config=config).score

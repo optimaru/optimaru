@@ -129,13 +129,13 @@ rejects an exponent other than 1).
 ### Python API
 
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
-  `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
-  `parallel_solver_count`, `late_acceptance_size` (the first stage's:
-  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `ruin_recreate*`,
-  `change/swap_move_weight`, `descent_weight`, `nearby_probability` /
-  `nearby_size`, `core_repack_moves`, `best_score_limit`, `on_new_best`), set by attribute. Zero budget =
-  `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search =
-  `step_count_limit = N`. Without a time limit a solve runs the 30 s budget.
+  `stop.time_limit_seconds`, `stop.step_limit`, `unimproved_*`, `random_seed`,
+  `parallel_solver_count`, `acceptance.late_acceptance_size` (the first stage's:
+  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `alns_trigger.*`, `alns.*`,
+  `moves.change_weight`, `moves.swap_weight`, `strategies.descent_weight`, `selection.nearby_probability` /
+  `selection.nearby_size`, `custom_moves.core_repack`, `stop.target_score`, `on_new_best`), set by attribute. Zero budget =
+  `stop.time_limit_seconds = 0` (`stop.step_limit = 0` means "no limit"); a bounded search =
+  `stop.step_limit = N`. Without a time limit a solve runs the 30 s budget.
   `on_new_best(step, score)`.
 - `solve()` returns the solved problem: the engine object it was given, solved in place (its
   `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`), or, for a model, a new
@@ -165,7 +165,7 @@ rejects an exponent other than 1).
 - `score_calculator` — `prepare()` (validation + derived indexes) and the full
   recompute (the reference)
 - `incremental_calculator` — O(resources + groups + dependencies of the item) per flip
-- `moves` — the domain's macro move, `CoreRepackMove` (`core_repack_moves`, on by
+- `moves` — the domain's macro move, `CoreRepackMove` (`custom_moves.core_repack`, on by
   default). Sorted by value per weight, what is left to decide after the greedy sits
   in a narrow band around the first item the capacity leaves out, and an improving
   exchange there is two items for one or larger: no single flip or swap reaches it.
@@ -216,7 +216,7 @@ search starts from `solution`, a solved model or the same thing as a JSON dict.
 Items are matched by id. `selected: false` means not selected and is kept as it
 is; items the solution leaves out go through the greedy selection around the
 seeded load (`optimaru.knapsack._core.greedy_selection`). With a zero budget
-(`spent_limit_seconds = 0`) the seed comes back unchanged. Unknown ids,
+(`stop.time_limit_seconds = 0`) the seed comes back unchanged. Unknown ids,
 duplicates and non-boolean values raise `ValueError`.
 
 ```python
@@ -240,7 +240,7 @@ A new move is an `optimaru::MoveOperator<…>` next to it, registered with
 `engine.add_move_operator(...)` in `optimaru/knapsack/cpp/ks/solver.cpp` (`runEngine`).
 Registered operators do not reach the engine's multi-start threads, which is why the
 solver runs its parallel starts itself (`optimaru::solve_parallel_starts`). A move
-that costs much more than a flip wants the gate `custom_move_probability` there.
+that costs much more than a flip wants the gate `custom_moves.share` there.
 
 **Changing the construction heuristic.** `optimaru/knapsack/cpp/ks/construct/construction.cpp` decides every item
 before the engine starts. It is the reference's greedy; `ks_test` and the

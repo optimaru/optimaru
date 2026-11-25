@@ -92,19 +92,11 @@ def _constraints(package: str, items: list[dict[str, Any]]) -> list[Any]:
 
 
 def _config(package: str, fields: dict[str, Any]) -> Any:
-    """The ``config`` of a body on a compiled ``SolverConfig``: a list for a tuple, a name for an enum member."""
+    """The ``config`` of a body (settings by group) on a compiled ``SolverConfig``, as the API sets it."""
+    from optimaru._config import set_nested
+
     config = importlib.import_module(f"optimaru.{package}._core").SolverConfig()
-    for name, value in fields.items():
-        if name.startswith("_") or name == "on_new_best" or not hasattr(config, name):
-            raise ValueError(f"unknown solver parameter: {name}")
-        if value is None:
-            continue
-        current = getattr(config, name)
-        if isinstance(value, list) and isinstance(current, tuple):
-            value = tuple(value)
-        if isinstance(value, str) and hasattr(type(current), value):
-            value = getattr(type(current), value)
-        setattr(config, name, value)
+    set_nested(config, fields)
     return config
 
 
@@ -320,7 +312,7 @@ def _refused(body: dict[str, Any]) -> tuple[list[Any], str] | None:
     Worded and placed as the API reports it (checked against optimaru/server): a field's own
     rule under the field, a rule over several fields under ``body`` as a "Value error". Its
     rules beside the problem: a time limit above 0 and at most 1e9 s
-    (``config.spent_limit_seconds`` from 0), 1 to 16 parallel starts (in ``config`` too),
+    (``config.stop.time_limit_seconds`` from 0), 1 to 16 parallel starts (in ``config`` too),
     and in a request the same for its time limit and its starts, each given under one name.
     For a pick: a name, a weight that is a number or null (0 or more), a level by its name,
     an exponent above 0, a number as offset and a boolean as clip, the last two never null.
@@ -343,14 +335,14 @@ def _refused(body: dict[str, Any]) -> tuple[list[Any], str] | None:
     settings = request.get("settings") if isinstance(request.get("settings"), dict) else {}
     for name, count in (
         ("parallel_solver_count", body.get("parallel_solver_count")),
-        ("config.parallel_solver_count", (config or {}).get("parallel_solver_count")),
+        ("config.run.parallel_solver_count", (config or {}).get("parallel_solver_count")),
         ("request.parallel_solver_count", request.get("parallel_solver_count", request.get("num_workers"))),
         ("request.settings.multi_start", settings.get("multi_start")),
     ):
         if count is not None and not (isinstance(count, int) and not isinstance(count, bool) and 1 <= count <= 16):
             return [], f"Value error, {name} must be between 1 and 16"
     for name, seconds in (
-        ("config.spent_limit_seconds", (config or {}).get("spent_limit_seconds")),
+        ("config.stop.time_limit_seconds", ((config or {}).get("stop") or {}).get("time_limit_seconds")),
         ("request.time_limit_seconds", request.get("time_limit_seconds", request.get("timelimit"))),
     ):
         if seconds is not None and not (_number(seconds) and 0 <= seconds <= longest):

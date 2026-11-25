@@ -234,64 +234,140 @@ class AcceptorType:
     def value(self) -> int: ...
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget (30 s); 0 returns the start as is."""
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    """0 = no limit."""
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    """Independent starts, one thread each (seed + i); the strictly best wins. The
-    constraints path runs one start."""
-    full_assert: bool
-    acceptor_type: AcceptorType
-    """SIMULATED_ANNEALING by default."""
-    entity_tabu_size: int
-    """ENTITY_TABU: for how many steps a moved entity stays tabu (7 by default; >= 0)."""
-    simulated_annealing_starting_temperature: tuple[int, float]
-    """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
-    (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
-    |start soft| (at least 1)."""
-    simulated_annealing_temperature_fraction: float
-    """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
-    great_deluge_water_level_step: tuple[int, float]
-    """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
-    rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
-    above the start's are taken."""
-    step_counting_hill_climbing_size: int
-    """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
-    steps (400 by default; > 0)."""
-    record_to_record_start_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
-    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
-    record_to_record_end_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
-    the gap shrinks from the start gap to this one."""
-    late_acceptance_size: int
-    """LATE_ACCEPTANCE: 0 = auto: clamp(16 * operation rows, 400, 3200)."""
-    change_move_weight: float
-    swap_move_weight: float
-    """The engine's whole-value swap; off (0) by default."""
-    machine_move_probability: float
-    """Share of change moves that switch a row's machine (the rest shift its priority)."""
-    priority_swap_moves: bool
-    """Swap the priorities of two operations (machines kept)."""
-    custom_move_probability: float
-    """Gate on how often a step may draw the priority swap."""
-    ruin_recreate: bool
-    """Off: a recreate evaluates every value of every ruined row, each one a decode."""
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    best_score_limit: tuple[int, float]
-    """(hard, soft): stop once bestScore >= this; (0, -inf) stops at the first feasible."""
-    on_new_best: Callable[[int, Score], None] | None
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``custom_moves``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        custom_moves: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget (30 s); 0 returns the start as is."""
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        """0 = no limit."""
+        unimproved_step_limit: int
+        target_score: tuple[int, float]
+        """(hard, soft): stop once bestScore >= this; (0, -inf) stops at the first feasible."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        """Off: a recreate evaluates every value of every ruined row, each one a decode."""
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class CustomMoves:
+        """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        priority_swap: bool
+        """Swap the priorities of two operations (machines kept)."""
+        share: float
+        """Gate on how often a step may draw the priority swap."""
+
+    custom_moves: CustomMoves
+    """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+        """The engine's whole-value swap; off (0) by default."""
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        machine_move_probability: float
+        """Share of change moves that switch a row's machine (the rest shift its priority)."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        rule: AcceptorType
+        """SIMULATED_ANNEALING by default."""
+        entity_tabu_size: int
+        """ENTITY_TABU: for how many steps a moved entity stays tabu (7 by default; >= 0)."""
+        simulated_annealing_starting_temperature: tuple[int, float]
+        """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
+        (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
+        |start soft| (at least 1)."""
+        simulated_annealing_temperature_fraction: float
+        """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
+        great_deluge_water_level_step: tuple[int, float]
+        """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
+        rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
+        above the start's are taken."""
+        step_counting_hill_climbing_size: int
+        """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
+        steps (400 by default; > 0)."""
+        record_to_record_start_gap: float
+        """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
+        start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
+        record_to_record_end_gap: float
+        """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
+        the gap shrinks from the start gap to this one."""
+        late_acceptance_size: int
+        """LATE_ACCEPTANCE: 0 = auto: clamp(16 * operation rows, 400, 3200)."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        """Independent starts, one thread each (seed + i); the strictly best wins. The
+        constraints path runs one start."""
+        full_assert: bool
+        on_new_best: Callable[[int, Score], None] | None
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Simulated annealing over the decoded search state. Solves IN PLACE: assignments, score,

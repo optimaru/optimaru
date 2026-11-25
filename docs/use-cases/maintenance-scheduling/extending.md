@@ -37,7 +37,7 @@ There are two scoring paths, and they give the same score for the same schedule
 | Constraints | the six, at their defaults | the ones you list, with your knobs |
 | Steps per second | 5.8 million | 3.8 million |
 | Parallel starts | `parallel_solver_count` | one start |
-| Guided moves | `window_value_probability`, `hot_job_probability` | none |
+| Guided moves | `selection.window_value_probability`, `selection.hot_job_probability` | none |
 
 The speeds are the benchmark's `large` instance (48 jobs, 5 crews, 80 start dates),
 2 million steps, one thread of an Apple M4 Max; [step 6](#6-measure) has the script.
@@ -198,8 +198,8 @@ from optimaru.maintenance_scheduling.constraints import WeekendSpanCost
 others = [spec for spec in get_constraints() if spec.name != "weekend_span_cost"]
 picks = [*others, WeekendSpanCost(weight=10)]
 config = mnt.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 result = mnt.solve(mnt.generate_demo_data("LARGE", 20_454), config=config, constraints=picks)
 print(sum(mnt.constraint_costs(result, picks)["weekend_span_cost"]["costs"]))
 ```
@@ -423,12 +423,12 @@ for label, picked, guided in (
     ("assembly", get_constraints(), True),
 ):
     config = mnt.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     if not guided:  # the assembly has no guided moves
-        config.window_value_probability = 0.0
-        config.hot_job_probability = 0.0
+        config.selection.window_value_probability = 0.0
+        config.selection.hot_job_probability = 0.0
     schedule = mnt.generate_demo_data("LARGE", 20_454)
     start = time.perf_counter()
     result = mnt.solve(schedule, config=config, constraints=picked)

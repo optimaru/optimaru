@@ -70,15 +70,15 @@ def three() -> QuadraticAssignmentProblemModel:
 
 def _zero() -> qap.SolverConfig:
     config = qap.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
 def solved(constraints=None, problem=None) -> QuadraticAssignmentProblemModel:
     problem = problem if problem is not None else three()
     config = qap.SolverConfig()
-    config.step_count_limit = 2000
-    config.random_seed = 1
+    config.stop.step_limit = 2000
+    config.run.random_seed = 1
     return qap.solve(problem, config=config, constraints=constraints)
 
 
@@ -320,8 +320,8 @@ def test_score_matches_the_engine_for_arbitrary_specs(specs):
     problem.assignment_costs = [[1, -4, 2], [0, 3, -1], [5, 2, 0]]
     core = problem.to_core()
     config = qap.SolverConfig()
-    config.step_count_limit = 500
-    config.random_seed = 2
+    config.stop.step_limit = 500
+    config.run.random_seed = 2
     qap.Solver(config).solve_with_constraints(core, specs)
     python = score(qap.constraint_costs(core), specs)
     assert python.hard == core.score.hard
@@ -554,10 +554,10 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     data = json.loads((Path(__file__).parent / "fixtures" / "web_demo.json").read_text())
     core = QuadraticAssignmentProblemModel.model_validate(data).to_core()
     config = qap.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 30
     qap.Solver(config).solve_with_constraints(core, picks)
     raw = qap.constraint_costs(core, picks)
     assert len(raw) == len(picks)

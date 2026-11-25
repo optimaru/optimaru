@@ -203,9 +203,9 @@ def test_the_assignment_key_order_does_not_matter(name):
 def test_a_solved_sample_matches_the_oracle(name):
     model = Model.model_validate(_samples()[name])
     config = qap.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = 500
-    config.random_seed = 42
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = 500
+    config.run.random_seed = 42
     model = qap.solve(model, config=config)
     data = model.model_dump()
     _assert_parity(data)
@@ -290,7 +290,7 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
     for spec in specs[: rng.randint(1, len(specs))]:
         picked.append(type(spec)(weight=rng.choice([None, 0, 1, 2, 5]), level=rng.choice([None, "hard", "soft"])))
     zero = qap.SolverConfig()
-    zero.spent_limit_seconds = 0
+    zero.stop.time_limit_seconds = 0
     hard = {spec.name for spec in picked if spec.level == "hard"}
     # In the engine's order (the assembly's, which constraint_costs() lists): it checks at reset.
     refused = [name for name in raw if name in hard and raw[name].get("signed")]

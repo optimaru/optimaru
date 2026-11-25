@@ -307,7 +307,7 @@ def _two_rounds():
 def _zero_budget_solve(schedule, picks):
     """Score a complete assignment under ``picks`` on the engine: no step is taken."""
     config = sl.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     assignment = schedule.assignment()
     sl.Solver(config).solve_with_constraints(schedule, picks)
     assert schedule.assignment() == assignment
@@ -505,11 +505,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = sl.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 60
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 60
     sl.Solver(config).solve_with_constraints(schedule, picks)
     raw = sl.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)

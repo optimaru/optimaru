@@ -18,6 +18,7 @@ The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models
 """
 
 from .. import _api
+from .._config import grouped as _grouped
 from .._solve import solver_config
 from ._core import (
     CONSTRAINT_NAMES,
@@ -72,6 +73,9 @@ from .constraints import (
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
 from .models import solve_request, with_initial_solution
+
+# The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
+SolverConfig = _grouped(SolverConfig, module=__name__)
 
 __all__ = [
     "CONSTRAINT_NAMES",

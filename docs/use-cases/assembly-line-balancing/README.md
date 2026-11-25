@@ -135,13 +135,13 @@ integral offsets.
 
 ### Python API
 
-- **`SolverConfig`** is the engine's: `spent_limit_seconds`, `step_count_limit`,
-  `unimproved_*`, `random_seed`, `parallel_solver_count`, `late_acceptance_size`,
-  `full_assert`, `ruin_recreate*`, `change/swap_move_weight`,
-  `value_recommender_probability`, `descent_weight`, `custom_move_probability`,
-  `close_station_moves`, `best_score_limit`, `on_new_best(step, score)`. Zero budget =
-  `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search
-  = `step_count_limit = N`.
+- **`SolverConfig`** is the engine's: `stop.time_limit_seconds`, `stop.step_limit`,
+  `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptance.late_acceptance_size`,
+  `full_assert`, `alns_trigger.*`, `alns.*`, `moves.change_weight`, `moves.swap_weight`,
+  `selection.value_recommender_probability`, `strategies.descent_weight`, `custom_moves.share`,
+  `custom_moves.close_station`, `stop.target_score`, `on_new_best(step, score)`. Zero budget =
+  `stop.time_limit_seconds = 0` (`stop.step_limit = 0` means "no limit"); a bounded search
+  = `stop.step_limit = N`.
 - `solve()` takes the engine object (solved in place and returned) or the model (left as
   it was: a new, solved model is returned, with `warm_start` back to False). The
   score is on the result: `.score` (`.hard`, `.soft`) of the engine object, `score_hard` /
@@ -189,7 +189,7 @@ overrides, raw costs by hand per station, the catalog.
 search starts from `solution`, a solved model or the same thing as a JSON dict.
 Tasks are matched by id; tasks left out or at station -1 are placed by the
 normal construction, and a complete seed skips it (with a zero budget,
-`spent_limit_seconds = 0`, it comes back unchanged). Any result of `solve` is
+`stop.time_limit_seconds = 0`, it comes back unchanged). Any result of `solve` is
 accepted, feasible or not: `max_stations`, station domains and `fixed_station`
 stay hard penalties. Unknown ids, duplicates, stations below -1 and non-integer
 stations raise `ValueError`.

@@ -22,11 +22,17 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from ._config import set_nested
 from ._solve import FIRST_FEASIBLE_LIMIT
 
 __all__ = [
+    "AcceptanceGroup",
+    "AlnsGroup",
+    "AlnsTriggerGroup",
+    "MovesGroup",
     "SolveConfigBase",
     "SolveRequest",
+    "StopGroup",
     "StrictModel",
     "apply_solver_parameters",
     "entities_by_id",
@@ -34,6 +40,7 @@ __all__ = [
     "solution_dict",
     "solve_model_request",
     "valid_positions",
+    "write_groups",
 ]
 
 
@@ -43,78 +50,127 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# ---------------------------------------------------------------------------
+# A SolverConfig in JSON: the same groups as the compiled one (optimaru._config)
+# ---------------------------------------------------------------------------
+
+
+class StopGroup(StrictModel):
+    """``config.stop`` beyond the time limit (that one is the request's ``time_limit_seconds``)."""
+
+    unimproved_time_limit_seconds: float = Field(default=0.0, ge=0)
+    step_limit: int = Field(default=0, ge=0)
+    unimproved_step_limit: int = Field(default=0, ge=0)
+    target_score: tuple[int, float] | None = None
+
+
+class AcceptanceGroup(StrictModel):
+    """``config.acceptance``: late acceptance's history, 0 for the use case's automatic size."""
+
+    late_acceptance_size: int = Field(default=0, ge=0)
+
+
+class AlnsTriggerGroup(StrictModel):
+    """``config.alns_trigger``: whether a stalled search is kicked, and after how many steps."""
+
+    enabled: bool = True
+    unimproved_steps: int = Field(default=5000, ge=0)
+
+
+class AlnsGroup(StrictModel):
+    """``config.alns``: the kick."""
+
+    min_ruin_fraction: float = Field(default=0.10, ge=0)
+    max_ruin_fraction: float = Field(default=0.30, ge=0)
+    max_ruin_count: int = Field(default=60, ge=1)
+    operator_decay: float = Field(default=0.8, ge=0, le=1)
+    rewards: list[float] = Field(default_factory=lambda: [33.0, 9.0, 3.0, 0.0], min_length=4, max_length=4)
+    polish_steps: int = Field(default=5000, ge=0)
+
+    @model_validator(mode="after")
+    def _valid_ruin_fraction_range(self):
+        if self.min_ruin_fraction > self.max_ruin_fraction:
+            raise ValueError("alns.min_ruin_fraction must be <= alns.max_ruin_fraction")
+        return self
+
+
+class MovesGroup(StrictModel):
+    """``config.moves`` of an assignment use case: the move mix."""
+
+    change_weight: float = Field(default=0.75, ge=0)
+    swap_weight: float = Field(default=0.25, ge=0)
+
+
+#: The groups a JSON config may hold, in `optimaru._config.GROUPS` order.
+_GROUP_FIELDS = (
+    "construction",
+    "stop",
+    "cost",
+    "alns_trigger",
+    "strategies",
+    "custom_moves",
+    "moves",
+    "selection",
+    "acceptance",
+    "alns",
+    "run",
+)
+
+
+def write_groups(model: BaseModel, cfg, *, skip: frozenset[str] = frozenset({"cost"})) -> None:
+    """Copy every group of ``model`` (a JSON config) onto ``cfg``, a compiled ``SolverConfig``, by name.
+
+    A group field of the model holds the settings of the config's group of the same name,
+    under the same names, so the copy needs no list of its own. ``None`` leaves a setting
+    as the config has it. ``cost`` is left to the use case: its settings are objects of the
+    use case's own (school timetabling's weights), which it converts itself.
+    """
+    for group in _GROUP_FIELDS:
+        settings = getattr(model, group, None)
+        if settings is None or group in skip:
+            continue
+        view = getattr(cfg, group)
+        for name, value in settings.model_dump().items():
+            if value is not None:
+                setattr(view, name, value)
+
+
 class SolveConfigBase(StrictModel):
-    """The solver settings of a ``models.SolveConfig``, where they are exactly these.
+    """The solver settings of a ``models.SolveConfig``: a ``SolverConfig`` in JSON.
 
-    A serializable mirror of the ``SolverConfig`` fields that flight crew scheduling,
-    sports league scheduling and school timetabling have in common: their ``SolveConfig``
-    builds on it and adds ``to_core()``. On the compiled config ``time_limit_seconds`` is
-    ``spent_limit_seconds`` and ``stop_at_first_feasible`` sets ``best_score_limit``; every
-    other field keeps its name. ``late_acceptance_size`` 0 is automatic, by the use case's
-    own rule; a positive value is used as it is.
-
-    Conference scheduling keeps a mirror of its own: its ``SolverConfig`` has more fields,
-    and its mirror does not check the ruin fraction range.
+    The settings a solve call takes as keywords sit at the top under those names
+    (``time_limit_seconds``, ``random_seed``, ``parallel_solver_count``,
+    ``stop_at_first_feasible``, ``full_assert``); everything else is grouped as the compiled
+    ``SolverConfig`` groups it (`optimaru._config`), under the same names:
+    ``{"alns": {"min_ruin_fraction": 0.05}}``. Flight crew scheduling, sports league
+    scheduling and school timetabling use these groups as they are; conference scheduling
+    adds settings of its own to some of them.
     """
 
     time_limit_seconds: float = Field(default=30.0, ge=0)
     random_seed: int = 0
     parallel_solver_count: int = Field(default=1, ge=1)
-    late_acceptance_size: int = Field(default=0, ge=0)
     stop_at_first_feasible: bool = False
-    best_score_limit: tuple[int, float] | None = None
-    unimproved_spent_limit_seconds: float = Field(default=0.0, ge=0)
-    step_count_limit: int = Field(default=0, ge=0)
-    unimproved_step_count_limit: int = Field(default=0, ge=0)
     full_assert: bool = False
 
-    ruin_recreate: bool = True
-    ruin_recreate_unimproved_step_trigger: int = Field(default=5000, ge=0)
-    ruin_recreate_min_ruin_fraction: float = Field(default=0.10, ge=0)
-    ruin_recreate_max_ruin_fraction: float = Field(default=0.30, ge=0)
-    ruin_recreate_max_ruin_count: int = Field(default=60, ge=1)
-    ruin_recreate_operator_decay: float = Field(default=0.8, ge=0, le=1)
-    ruin_recreate_rewards: list[float] = Field(
-        default_factory=lambda: [33.0, 9.0, 3.0, 0.0],
-        min_length=4,
-        max_length=4,
-    )
-    ruin_recreate_polish_steps: int = Field(default=5000, ge=0)
+    stop: StopGroup = Field(default_factory=StopGroup)
+    acceptance: AcceptanceGroup = Field(default_factory=AcceptanceGroup)
+    alns_trigger: AlnsTriggerGroup = Field(default_factory=AlnsTriggerGroup)
+    alns: AlnsGroup = Field(default_factory=AlnsGroup)
+    moves: MovesGroup = Field(default_factory=MovesGroup)
 
-    change_move_weight: float = Field(default=0.75, ge=0)
-    swap_move_weight: float = Field(default=0.25, ge=0)
-
-    @model_validator(mode="after")
-    def _valid_ruin_fraction_range(self):
-        if self.ruin_recreate_min_ruin_fraction > self.ruin_recreate_max_ruin_fraction:
-            raise ValueError("ruin_recreate_min_ruin_fraction must be <= ruin_recreate_max_ruin_fraction")
-        return self
+    #: The target "stop at the first feasible solution" sets on this use case's score.
+    _first_feasible: tuple = FIRST_FEASIBLE_LIMIT
 
     def _apply_to(self, cfg):
         """Write these settings into ``cfg``, a compiled ``SolverConfig``, and return it."""
-        cfg.spent_limit_seconds = self.time_limit_seconds
-        cfg.random_seed = self.random_seed
-        cfg.parallel_solver_count = self.parallel_solver_count
-        cfg.late_acceptance_size = self.late_acceptance_size  # 0 = auto
-        cfg.unimproved_spent_limit_seconds = self.unimproved_spent_limit_seconds
-        cfg.step_count_limit = self.step_count_limit
-        cfg.unimproved_step_count_limit = self.unimproved_step_count_limit
-        cfg.full_assert = self.full_assert
-        cfg.ruin_recreate = self.ruin_recreate
-        cfg.ruin_recreate_unimproved_step_trigger = self.ruin_recreate_unimproved_step_trigger
-        cfg.ruin_recreate_min_ruin_fraction = self.ruin_recreate_min_ruin_fraction
-        cfg.ruin_recreate_max_ruin_fraction = self.ruin_recreate_max_ruin_fraction
-        cfg.ruin_recreate_max_ruin_count = self.ruin_recreate_max_ruin_count
-        cfg.ruin_recreate_operator_decay = self.ruin_recreate_operator_decay
-        cfg.ruin_recreate_rewards = list(self.ruin_recreate_rewards)
-        cfg.ruin_recreate_polish_steps = self.ruin_recreate_polish_steps
-        cfg.change_move_weight = self.change_move_weight
-        cfg.swap_move_weight = self.swap_move_weight
-        if self.stop_at_first_feasible:
-            # The use cases built on this base all score (hard, soft).
-            cfg.best_score_limit = FIRST_FEASIBLE_LIMIT
-        if self.best_score_limit is not None:
-            cfg.best_score_limit = self.best_score_limit
+        cfg.stop.time_limit_seconds = self.time_limit_seconds
+        cfg.run.random_seed = self.random_seed
+        cfg.run.parallel_solver_count = self.parallel_solver_count
+        cfg.run.full_assert = self.full_assert
+        write_groups(self, cfg)
+        if self.stop_at_first_feasible and self.stop.target_score is None:
+            cfg.stop.target_score = self._first_feasible
         return cfg
 
 
@@ -163,28 +219,21 @@ def valid_positions(count: int) -> str:
 def apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
     """Set a request's ``solver_parameters`` on ``config``, a compiled ``SolverConfig``.
 
-    Each name is a field of ``config``. The four the solve request controls (the time
-    limit, the seed, the worker count and the callback) are refused, and so is a name that
-    is no field. ``None`` leaves a field as it is, a JSON list becomes the
-    ``best_score_limit`` tuple, and the name of an enum member (``"HILL_CLIMBING"``)
-    becomes the member. Raises ValueError naming the parameter.
+    The parameters come by group, as the config has them (`optimaru._config`):
+    ``{"alns": {"min_ruin_fraction": 0.05}, "moves": {"two_opt_weight": 0.2}}``. The four
+    the solve request controls (the time limit, the seed, the worker count and the
+    callback) are refused, and so is a group or a name that does not exist (a flat name
+    of an earlier version is refused with its new place). ``None`` leaves a setting as it
+    is, a JSON list becomes the ``stop.target_score`` tuple, and the name of an enum member
+    (``"HILL_CLIMBING"``) becomes the member. Raises ValueError naming the parameter.
     """
-    for name, value in parameters.items():
-        if name in {"spent_limit_seconds", "random_seed", "parallel_solver_count", "on_new_best"}:
-            raise ValueError(f"solver parameter {name!r} is controlled by the solve request")
-        if name.startswith("_") or not hasattr(config, name) or callable(getattr(config, name)):
-            raise ValueError(f"unknown solver parameter: {name}")
-        if value is None:
-            continue
-        if name == "best_score_limit" and isinstance(value, list):
-            value = tuple(value)
-        current = getattr(config, name)
-        if isinstance(value, str) and hasattr(type(current), value):
-            value = getattr(type(current), value)
-        try:
-            setattr(config, name, value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid solver parameter {name!r}: {exc}") from exc
+    set_nested(config, parameters, refused=_REQUEST_CONTROLLED)
+
+
+#: Settings a solve request sets with its own fields, so ``solver_parameters`` may not.
+_REQUEST_CONTROLLED = frozenset(
+    {"stop.time_limit_seconds", "run.random_seed", "run.parallel_solver_count", "run.on_new_best"}
+)
 
 
 class SolveRequest(StrictModel):
@@ -193,13 +242,13 @@ class SolveRequest(StrictModel):
     The fields are named like the keywords of ``solve()``, so a request and a call say
     the same thing in the same words: ``time_limit_seconds``, ``random_seed``,
     ``parallel_solver_count``, ``stop_at_first_feasible`` and ``full_assert``.
-    ``solver_parameters`` sets further ``SolverConfig`` fields by name (see
+    ``solver_parameters`` sets further ``SolverConfig`` settings by group (see
     `apply_solver_parameters`). The names of earlier versions are accepted as aliases:
     ``timelimit`` for ``time_limit_seconds`` and ``num_workers`` for
     ``parallel_solver_count``, in JSON, as keywords and as attributes.
 
     ``name`` is a label for the caller's own use; no solve reads it. Where a request has
-    both ``stop_at_first_feasible`` and a ``best_score_limit`` (in ``solver_parameters``
+    both ``stop_at_first_feasible`` and a ``stop.target_score`` (in ``solver_parameters``
     or, for employee scheduling, in ``settings``), the solve stops at the first feasible
     solution; employee scheduling is the exception and keeps the explicit limit.
     """
@@ -225,7 +274,8 @@ class SolveRequest(StrictModel):
         default=False, description="Check every incremental score against a full recompute (slow; for debugging)."
     )
     solver_parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Further SolverConfig fields by name, such as step_count_limit."
+        default_factory=dict,
+        description='Further SolverConfig settings by group, such as {"stop": {"step_limit": 1000}}.',
     )
 
     def model_copy(self, *, update=None, deep: bool = False):

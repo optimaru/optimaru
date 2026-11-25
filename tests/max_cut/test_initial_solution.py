@@ -19,15 +19,15 @@ def _problem(**fields) -> MaxCutProblemModel:
 def _no_search() -> SolverConfig:
     """The zero time budget: the solve returns the start partition (or the seed) unchanged."""
     config = SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
 def _steps(count: int, seed: int, parallel_solver_count: int = 1) -> SolverConfig:
     config = SolverConfig()
-    config.step_count_limit = count
-    config.random_seed = seed
-    config.parallel_solver_count = parallel_solver_count
+    config.stop.step_limit = count
+    config.run.random_seed = seed
+    config.run.parallel_solver_count = parallel_solver_count
     return config
 
 

@@ -63,8 +63,8 @@ def small_plan():
 def solve(constraints=None, seconds=0.4, seed=7):
     plan = small_plan()
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = seconds
-    cfg.random_seed = seed
+    cfg.stop.time_limit_seconds = seconds
+    cfg.run.random_seed = seed
     vrp.Solver(cfg).solve_with_constraints(plan, constraints)
     return plan
 
@@ -399,9 +399,9 @@ def test_on_new_best_reports_the_levels_of_the_final_score():
     reports = []
     plan = small_plan()
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = 0.4
-    cfg.random_seed = 7
-    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    cfg.stop.time_limit_seconds = 0.4
+    cfg.run.random_seed = 7
+    cfg.run.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
     vrp.Solver(cfg).solve_with_constraints(plan, picks)
     final = (plan.score.hard, plan.score.medium, plan.score.soft)
     assert final[2] <= -MEDIUM_UNIT
@@ -425,10 +425,10 @@ def test_the_weight_zero_objectives_are_opt_in(spec_class):
 def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
     """Solver.solve releases the GIL, so two workers can call back (and raise) into Python."""
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = 0.3
-    cfg.parallel_solver_count = 2
+    cfg.stop.time_limit_seconds = 0.3
+    cfg.run.parallel_solver_count = 2
     calls = []
-    cfg.on_new_best = lambda _step, best: calls.append(best)
+    cfg.run.on_new_best = lambda _step, best: calls.append(best)
     plan = small_plan()
     vrp.Solver(cfg).solve(plan)
     assert calls  # returned (a held GIL deadlocked here)
@@ -436,7 +436,7 @@ def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
     def boom(_step, _best):
         raise RuntimeError("boom")
 
-    cfg.on_new_best = boom
+    cfg.run.on_new_best = boom
     with pytest.raises(RuntimeError, match="boom"):
         vrp.Solver(cfg).solve(small_plan())
 
@@ -450,9 +450,9 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
         raise RuntimeError("boom")
 
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = 30.0
-    cfg.parallel_solver_count = 4
-    cfg.on_new_best = boom
+    cfg.stop.time_limit_seconds = 30.0
+    cfg.run.parallel_solver_count = 4
+    cfg.run.on_new_best = boom
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
         vrp.Solver(cfg).solve(small_plan())
@@ -468,8 +468,8 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     from optimaru.vehicle_routing import _core
 
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = 30.0
-    cfg.parallel_solver_count = 4
+    cfg.stop.time_limit_seconds = 30.0
+    cfg.run.parallel_solver_count = 4
     _core._fail_worker_thread_start(1)
     try:
         started = time.monotonic()
@@ -519,8 +519,8 @@ def _zero_budget(picks):
     """The engine's score of the hand plan under `picks`: a solve with no time keeps it as it is."""
     plan = _hand_plan()
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = 0
-    cfg.random_seed = 1
+    cfg.stop.time_limit_seconds = 0
+    cfg.run.random_seed = 1
     vrp.Solver(cfg).solve_with_constraints(plan, picks)
     assert [list(vehicle.visit_indices) for vehicle in plan.vehicles] == [[0, 1], [2], []]
     assert list(plan.unassigned_visit_indices) == [3, 4]
@@ -873,10 +873,10 @@ def test_a_long_solve_with_negative_thresholds_scores_exactly(picks):
     reports = []
     plan = _random_plan(min_load_ratio=0.55 if picks is REAL_VALUED else 0.0)
     cfg = vrp.SolverConfig()
-    cfg.spent_limit_seconds = 60
-    cfg.step_count_limit = 15_000
-    cfg.random_seed = 5
-    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
+    cfg.stop.time_limit_seconds = 60
+    cfg.stop.step_limit = 15_000
+    cfg.run.random_seed = 5
+    cfg.run.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
     vrp.Solver(cfg).solve_with_constraints(plan, picks)
     final = (plan.score.hard, plan.score.medium, plan.score.soft)
     assert len(reports) > 1 and reports[-1] == final

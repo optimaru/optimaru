@@ -113,9 +113,9 @@ def fixture_h():
 
 def _config(steps=400, seed=1):
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = steps
-    config.random_seed = seed
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = steps
+    config.run.random_seed = seed
     return config
 
 
@@ -364,7 +364,7 @@ def test_unassigned_tasks_contribute_nothing():
 def _zero_budget_solve(problem, picks):
     """Score a complete assignment under ``picks`` on the engine: a warm start, no step taken."""
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     assignment = problem.assignment()
     problem.warm_start = True  # otherwise the solve clears the stations and constructs
     alb.Solver(config).solve_with_constraints(problem, picks)
@@ -555,8 +555,8 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     problem.tasks[2].forbidden_stations = [0, 1]
     core = problem.to_core()
     config = _config(steps=5000, seed=3)
-    config.full_assert = True
-    config.parallel_solver_count = 1
+    config.run.full_assert = True
+    config.run.parallel_solver_count = 1
     alb.Solver(config).solve_with_constraints(core, picks)
     raw = alb.constraint_costs(core, picks)
     assert len(raw) == len(picks)

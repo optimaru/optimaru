@@ -20,16 +20,16 @@ def _problem(**fields) -> AssemblyLineBalancingProblemModel:
 def _no_search() -> SolverConfig:
     """Construction only: a zero time budget stops before the first step (step_count_limit = 0 means "no limit")."""
     config = SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
 def _steps(count: int, seed: int) -> SolverConfig:
     """A bounded, deterministic search: `count` steps, a wall clock that is never reached."""
     config = SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = count
-    config.random_seed = seed
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = count
+    config.run.random_seed = seed
     return config
 
 

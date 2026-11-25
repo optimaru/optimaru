@@ -54,8 +54,8 @@ print(problem.total_cost(), problem.total_distance_meters())
 ```
 
 For finer control build `fl.SolverConfig()` (time budget, multistart, ALNS knobs,
-the macro moves `close_facility_moves` and `swap_facility_moves` with their gate
-`custom_move_probability`, the `on_new_best` callback, `best_score_limit` early stop, ...;
+the macro moves `custom_moves.close_facility` and `custom_moves.swap_facility` with their gate
+`custom_moves.share`, the `on_new_best` callback, `stop.target_score` early stop, ...;
 see the guide's [Search](README.md#search)) and call
 `fl.Solver(cfg).solve(problem)` or `fl.solve(problem, config=cfg)`.
 
@@ -76,7 +76,8 @@ Note: `problem.consumers[i]` returns a copy — write assignments in bulk with
 `solve_request` takes a pydantic request, `models.FacilityLocationRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `FacilityLocationProblemModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 

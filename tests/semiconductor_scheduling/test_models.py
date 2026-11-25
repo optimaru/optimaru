@@ -192,5 +192,5 @@ def test_score_is_a_comparable_pair():
 
 def _steps(count: int) -> fab.SolverConfig:
     config = fab.SolverConfig()
-    config.step_count_limit = count
+    config.stop.step_limit = count
     return config

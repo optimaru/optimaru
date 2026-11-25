@@ -60,8 +60,8 @@ def reference_objective(name: str, source, reference) -> int:
 
 def _run_engine(problem, seconds: float, seed: int) -> dict:
     config = quadratic_assignment.SolverConfig()
-    config.spent_limit_seconds = seconds
-    config.random_seed = seed
+    config.stop.time_limit_seconds = seconds
+    config.run.random_seed = seed
     started = time.perf_counter()
     problem = quadratic_assignment.solve(problem, config=config)
     elapsed = time.perf_counter() - started

@@ -127,7 +127,7 @@ def test_an_initial_route_is_where_the_solve_starts():
     request_model = PdpRequest(
         model_input=model_input,
         timelimit=0,
-        solver_parameters={"step_count_limit": 1, "ruin_recreate": False},
+        solver_parameters={"stop": {"step_limit": 1}, "alns_trigger": {"enabled": False}},
     )
 
     solution = solve_request(request_model)
@@ -302,14 +302,16 @@ def test_the_search_takes_a_misplaced_required_request_to_its_vehicle():
     places = {name: 0 for name in names} | {"ap": 1, "ad": 2}
     model_input = line_input(vehicles, [bound("a", "v39")], places)
     only_the_pair_move = {
-        "step_count_limit": 8,
-        "pair_assignment_probability": 0.0,
-        "relocate_move_weight": 0.0,
-        "list_swap_move_weight": 0.0,
-        "two_opt_move_weight": 0.0,
-        "or_opt_move_weight": 0.0,
-        "tail_swap_move_weight": 0.0,
-        "ruin_recreate": False,
+        "stop": {"step_limit": 8},
+        "alns_trigger": {"enabled": False},
+        "custom_moves": {"pair_assignment_probability": 0.0},
+        "moves": {
+            "relocate_weight": 0.0,
+            "list_swap_weight": 0.0,
+            "two_opt_weight": 0.0,
+            "or_opt_weight": 0.0,
+            "tail_swap_weight": 0.0,
+        },
     }
 
     for seed in range(5):
@@ -352,7 +354,7 @@ def search(model_input: PdpInput, seed: int = 0):
             model_input=model_input,
             timelimit=60,
             random_seed=seed,
-            solver_parameters={"step_count_limit": 20000},
+            solver_parameters={"stop": {"step_limit": 20000}},
         )
     )
 
@@ -480,7 +482,7 @@ def test_stop_at_first_feasible_request_sets_the_hard_only_limit(monkeypatch):
         pass
 
     def capture(cfg):
-        seen.append(cfg.best_score_limit)
+        seen.append(cfg.stop.target_score)
         raise Captured
 
     monkeypatch.setattr(models._core, "Solver", capture)

@@ -21,8 +21,8 @@ def test_solve_releases_the_gil_and_on_new_best_still_fires(use_calculator):
     schedule = es.make_random_roster(days=8, shifts_per_day=6, employees=9, seed=23)
     steps = []
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 0.3
-    cfg.on_new_best = lambda step, score: steps.append(step)
+    cfg.stop.time_limit_seconds = 0.3
+    cfg.run.on_new_best = lambda step, score: steps.append(step)
 
     ticks = 0
     stop = threading.Event()
@@ -50,77 +50,71 @@ def test_solve_releases_the_gil_and_on_new_best_still_fires(use_calculator):
 
 def test_solver_config_exposes_engine_knobs():
     cfg = es.SolverConfig()
-    cfg.step_count_limit = 123
-    cfg.unimproved_step_count_limit = 45
-    cfg.unimproved_spent_limit_seconds = 0.25
-    cfg.no_improvement_step_count_limit = 44
-    cfg.no_improvement_limit_seconds = 0.15
-    cfg.ruin_recreate = False
-    cfg.employee_greedy_construction = False
-    cfg.ruin_recreate_unimproved_step_trigger = 50
-    cfg.ruin_recreate_min_ruin_fraction = 0.2
-    cfg.ruin_recreate_max_ruin_fraction = 0.4
-    cfg.ruin_recreate_max_ruin_count = 12
-    cfg.ruin_recreate_operator_decay = 0.6
-    cfg.ruin_recreate_rewards = [10.0, 5.0, 1.0, 0.0]
-    cfg.ruin_recreate_polish_steps = 20
-    cfg.ruin_recreate_as_move_weight = 0.05
-    cfg.ruin_recreate_as_move_max_ruin = 8
-    cfg.descent_weight = 0.02
-    cfg.descent_max_sweeps = 3
-    cfg.change_move_weight = 1.0
-    cfg.swap_move_weight = 0.0
-    cfg.smart_change_moves = True
-    cfg.smart_change_candidate_count = 4
-    cfg.employee_day_repair_moves = True
-    cfg.employee_run_repair_moves = False
-    cfg.employee_run_repair_max_days = 5
-    cfg.employee_window_moves = True
-    cfg.employee_window_max_days = 3
-    cfg.custom_move_probability = 0.15
-    cfg.employee_ruin_moves = False
-    cfg.or_opt_move_weight = 0.15
+    cfg.stop.step_limit = 123
+    cfg.stop.unimproved_step_limit = 45
+    cfg.stop.unimproved_time_limit_seconds = 0.25
+    cfg.alns_trigger.enabled = False
+    cfg.construction.employee_greedy = False
+    cfg.alns_trigger.unimproved_steps = 50
+    cfg.alns.min_ruin_fraction = 0.2
+    cfg.alns.max_ruin_fraction = 0.4
+    cfg.alns.max_ruin_count = 12
+    cfg.alns.operator_decay = 0.6
+    cfg.alns.rewards = [10.0, 5.0, 1.0, 0.0]
+    cfg.alns.polish_steps = 20
+    cfg.strategies.ruin_recreate_weight = 0.05
+    cfg.strategies.ruin_recreate_max_ruin = 8
+    cfg.strategies.descent_weight = 0.02
+    cfg.strategies.descent_max_sweeps = 3
+    cfg.moves.change_weight = 1.0
+    cfg.moves.swap_weight = 0.0
+    cfg.custom_moves.smart_change = True
+    cfg.custom_moves.smart_change_candidate_count = 4
+    cfg.custom_moves.employee_day_repair = True
+    cfg.custom_moves.employee_run_repair = False
+    cfg.custom_moves.employee_run_repair_max_days = 5
+    cfg.custom_moves.employee_window = True
+    cfg.custom_moves.employee_window_max_days = 3
+    cfg.custom_moves.share = 0.15
+    cfg.alns.employee_ruin = False
+    cfg.moves.or_opt_weight = 0.15
 
-    assert cfg.step_count_limit == 123
-    assert cfg.unimproved_step_count_limit == 44
-    assert cfg.no_improvement_step_count_limit == 44
-    assert cfg.unimproved_spent_limit_seconds == pytest.approx(0.15)
-    assert cfg.no_improvement_limit_seconds == pytest.approx(0.15)
-    assert cfg.ruin_recreate is False
-    assert cfg.employee_greedy_construction is False
-    assert cfg.ruin_recreate_rewards == [10.0, 5.0, 1.0, 0.0]
-    assert cfg.change_move_weight == 1.0
-    assert cfg.swap_move_weight == 0.0
-    assert cfg.smart_change_moves is True
-    assert cfg.smart_change_candidate_count == 4
-    assert cfg.employee_day_repair_moves is True
-    assert cfg.employee_run_repair_moves is False
-    assert cfg.employee_run_repair_max_days == 5
-    assert cfg.employee_window_moves is True
-    assert cfg.employee_window_max_days == 3
-    assert cfg.custom_move_probability == 0.15
-    assert cfg.employee_ruin_moves is False
-    assert cfg.or_opt_move_weight == 0.15
-    assert cfg.ruin_recreate_as_move_weight == 0.05
-    assert cfg.ruin_recreate_as_move_max_ruin == 8
-    assert cfg.descent_weight == 0.02
-    assert cfg.descent_max_sweeps == 3
+    assert cfg.stop.step_limit == 123
+    assert cfg.stop.unimproved_step_limit == 45
+    assert cfg.stop.unimproved_time_limit_seconds == pytest.approx(0.25)
+    assert cfg.alns_trigger.enabled is False
+    assert cfg.construction.employee_greedy is False
+    assert cfg.alns.rewards == [10.0, 5.0, 1.0, 0.0]
+    assert cfg.moves.change_weight == 1.0
+    assert cfg.moves.swap_weight == 0.0
+    assert cfg.custom_moves.smart_change is True
+    assert cfg.custom_moves.smart_change_candidate_count == 4
+    assert cfg.custom_moves.employee_day_repair is True
+    assert cfg.custom_moves.employee_run_repair is False
+    assert cfg.custom_moves.employee_run_repair_max_days == 5
+    assert cfg.custom_moves.employee_window is True
+    assert cfg.custom_moves.employee_window_max_days == 3
+    assert cfg.custom_moves.share == 0.15
+    assert cfg.alns.employee_ruin is False
+    assert cfg.moves.or_opt_weight == 0.15
+    assert cfg.strategies.ruin_recreate_weight == 0.05
+    assert cfg.strategies.ruin_recreate_max_ruin == 8
+    assert cfg.strategies.descent_weight == 0.02
+    assert cfg.strategies.descent_max_sweeps == 3
     with pytest.raises(ValueError, match="positive"):
-        cfg.late_acceptance_size = 0
+        cfg.acceptance.late_acceptance_size = 0
     with pytest.raises(ValueError, match="positive"):
-        cfg.smart_change_candidate_count = 0
+        cfg.custom_moves.smart_change_candidate_count = 0
     with pytest.raises(ValueError, match="positive"):
-        cfg.employee_run_repair_max_days = 0
+        cfg.custom_moves.employee_run_repair_max_days = 0
     with pytest.raises(ValueError, match="positive"):
-        cfg.employee_window_max_days = 0
+        cfg.custom_moves.employee_window_max_days = 0
     with pytest.raises(ValueError, match="between 0 and 1"):
-        cfg.custom_move_probability = 1.1
+        cfg.custom_moves.share = 1.1
     with pytest.raises(ValueError, match="finite and >= 0"):
-        cfg.no_improvement_limit_seconds = -0.1
-    with pytest.raises(ValueError, match="non-negative"):
-        cfg.no_improvement_step_count_limit = -1
+        cfg.stop.unimproved_time_limit_seconds = -0.1
     with pytest.raises(ValueError, match="exactly 4"):
-        cfg.ruin_recreate_rewards = [1.0, 2.0, 3.0]
+        cfg.alns.rewards = [1.0, 2.0, 3.0]
 
 
 def test_reference_score_is_the_hand_computed_one():
@@ -141,12 +135,12 @@ def test_default_assembly_grouped_search_matches_builtin_trajectory():
     def solve(schedule, calculator=None):
         trajectory = []
         cfg = es.SolverConfig()
-        cfg.spent_limit_seconds = 10.0
-        cfg.step_count_limit = 5000
-        cfg.random_seed = 23
-        cfg.guided_moves = False
-        cfg.ruin_recreate = False
-        cfg.on_new_best = lambda step, score: trajectory.append((step, str(score)))
+        cfg.stop.time_limit_seconds = 10.0
+        cfg.stop.step_limit = 5000
+        cfg.run.random_seed = 23
+        cfg.custom_moves.guided = False
+        cfg.alns_trigger.enabled = False
+        cfg.run.on_new_best = lambda step, score: trajectory.append((step, str(score)))
         solver = es.Solver(cfg)
         if calculator is None:
             solver.solve(schedule)
@@ -181,12 +175,12 @@ def test_modified_default_assembly_keeps_grouping_and_custom_score():
 
     trajectory = []
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 10.0
-    cfg.step_count_limit = 5000
-    cfg.random_seed = 29
-    cfg.guided_moves = False
-    cfg.ruin_recreate = False
-    cfg.on_new_best = lambda step, score: trajectory.append((step, str(score)))
+    cfg.stop.time_limit_seconds = 10.0
+    cfg.stop.step_limit = 5000
+    cfg.run.random_seed = 29
+    cfg.custom_moves.guided = False
+    cfg.alns_trigger.enabled = False
+    cfg.run.on_new_best = lambda step, score: trajectory.append((step, str(score)))
     es.Solver(cfg).solve(schedule, calculator)
 
     assert calculator.delta_group_count == 1
@@ -295,8 +289,8 @@ def test_assembly_solve_matches_fresh_recompute(spec):
 
     schedule = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=11)
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 0.3
-    cfg.random_seed = 11
+    cfg.stop.time_limit_seconds = 0.3
+    cfg.run.random_seed = 11
     es.Solver(cfg).solve(schedule, build())
     assert str(schedule.score) == str(build().score(schedule))
 
@@ -311,8 +305,8 @@ def test_shaped_assembly_solves_on_the_incremental_path():
 
     schedule = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=7)
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 0.3
-    cfg.random_seed = 7
+    cfg.stop.time_limit_seconds = 0.3
+    cfg.run.random_seed = 7
     es.Solver(cfg).solve(schedule, calc)
 
     fresh = es.DecomposedCalculator()
@@ -329,17 +323,17 @@ def test_employee_specific_moves_keep_incremental_score_exact():
 
     schedule = es.make_random_roster(days=10, shifts_per_day=5, employees=9, seed=17)
     cfg = es.SolverConfig()
-    cfg.random_seed = 17
-    cfg.step_count_limit = 1500
-    cfg.spent_limit_seconds = 5.0
-    cfg.smart_change_moves = True
-    cfg.smart_change_candidate_count = 4
-    cfg.employee_day_repair_moves = True
-    cfg.employee_run_repair_moves = True
-    cfg.employee_run_repair_max_days = 3
-    cfg.employee_window_moves = True
-    cfg.employee_window_max_days = 3
-    cfg.employee_ruin_moves = True
+    cfg.run.random_seed = 17
+    cfg.stop.step_limit = 1500
+    cfg.stop.time_limit_seconds = 5.0
+    cfg.custom_moves.smart_change = True
+    cfg.custom_moves.smart_change_candidate_count = 4
+    cfg.custom_moves.employee_day_repair = True
+    cfg.custom_moves.employee_run_repair = True
+    cfg.custom_moves.employee_run_repair_max_days = 3
+    cfg.custom_moves.employee_window = True
+    cfg.custom_moves.employee_window_max_days = 3
+    cfg.alns.employee_ruin = True
     es.Solver(cfg).solve(schedule, es.default_calculator())
 
     assert str(schedule.score) == str(es.default_calculator().score(schedule))
@@ -359,12 +353,12 @@ def test_search_strategies_keep_incremental_score_exact(descent, as_move):
 
     schedule = es.make_random_roster(days=10, shifts_per_day=5, employees=9, seed=23)
     cfg = es.SolverConfig()
-    cfg.random_seed = 23
-    cfg.spent_limit_seconds = 2.0
-    cfg.descent_weight = descent
-    cfg.ruin_recreate_as_move_weight = as_move
-    cfg.ruin_recreate_unimproved_step_trigger = 200
-    cfg.ruin_recreate_polish_steps = 50
+    cfg.run.random_seed = 23
+    cfg.stop.time_limit_seconds = 2.0
+    cfg.strategies.descent_weight = descent
+    cfg.strategies.ruin_recreate_weight = as_move
+    cfg.alns_trigger.unimproved_steps = 200
+    cfg.alns.polish_steps = 50
     es.Solver(cfg).solve(schedule, es.default_calculator())
 
     assert str(schedule.score) == str(es.default_calculator().score(schedule))
@@ -530,7 +524,7 @@ def test_a_fully_pinned_schedule_is_scored_but_not_searched(use_calculator):
         shift.pinned = True
     expected = es.calculate_score(schedule)
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 0.1
+    cfg.stop.time_limit_seconds = 0.1
     if use_calculator:
         es.Solver(cfg).solve(schedule, es.default_calculator())
     else:
@@ -573,8 +567,8 @@ def test_a_pinned_shift_skips_the_per_shift_terms_on_both_paths(pin_skill_shift,
     ]
     if pin_skill_shift:  # nothing to search: the solves return the score of the given roster
         cfg = es.SolverConfig()
-        cfg.step_count_limit = 10
-        cfg.random_seed = 1
+        cfg.stop.step_limit = 10
+        cfg.run.random_seed = 1
         scores.append(es.solve(_pinned_schedule(pin_skill_shift), config=cfg).score)
         scores.append(es.solve(_pinned_schedule(pin_skill_shift), config=cfg, constraints=get_constraints()).score)
     assert [(score.hard, score.soft) for score in scores] == [(hard, pytest.approx(soft))] * len(scores)
@@ -588,8 +582,8 @@ def test_a_full_assert_solve_with_pinned_violations_stays_exact(use_constraints)
     for index in (2, 3, 4):  # Shift 3 (undesired day), Shift 4 (unavailable day), Shift 5 (skill miss)
         schedule.shifts[index].pinned = True
     cfg = es.SolverConfig()
-    cfg.step_count_limit = 5_000
-    cfg.random_seed = 3
+    cfg.stop.step_limit = 5_000
+    cfg.run.random_seed = 3
     es.solve(schedule, config=cfg, full_assert=True, constraints=get_constraints() if use_constraints else None)
     assert [schedule.shifts[i].employee_index for i in (2, 3, 4)] == [1, 0, 2]
     assert str(schedule.score) == str(es.calculate_score(schedule))
@@ -640,7 +634,7 @@ def test_a_solve_sees_a_time_changed_after_the_first_score(use_calculator):
     es.calculate_score(schedule)
     schedule.shifts[1].start, schedule.shifts[1].end = es.minutes(0, 19), es.minutes(0, 22)
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 0.1
+    cfg.stop.time_limit_seconds = 0.1
     if use_calculator:
         es.Solver(cfg).solve(schedule, es.DecomposedCalculator([es.MaxOneShiftPerDayCost()]))
     else:
@@ -850,8 +844,8 @@ def test_extended_assembly_solves_and_matches_recompute():
 
     schedule = es.make_random_roster(days=10, shifts_per_day=5, employees=8, seed=13)
     cfg = es.SolverConfig()
-    cfg.spent_limit_seconds = 0.5
-    cfg.random_seed = 13
+    cfg.stop.time_limit_seconds = 0.5
+    cfg.run.random_seed = 13
     es.Solver(cfg).solve(schedule, build())
     assert str(schedule.score) == str(build().score(schedule))
 
@@ -1006,7 +1000,7 @@ def test_add_refuses_a_hard_keyword():
 
 def _steps(steps):
     config = es.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 
@@ -1015,7 +1009,7 @@ def test_package_solve_solves_in_place_and_returns_the_schedule():
     config = _steps(2000)
     assert es.solve(schedule, config=config, random_seed=5, full_assert=True) is schedule
     assert schedule.score is not None
-    assert config.full_assert is False  # the keyword overrides go to a copy
+    assert config.run.full_assert is False  # the keyword overrides go to a copy
 
 
 def test_package_solve_with_constraints_equals_a_calculator_solve():
@@ -1025,17 +1019,17 @@ def test_package_solve_with_constraints_equals_a_calculator_solve():
     by_solver = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3)
     es.solve(by_package, config=_steps(2000), random_seed=5, constraints=get_constraints())
     config = _steps(2000)
-    config.random_seed = 5
+    config.run.random_seed = 5
     es.Solver(config).solve(by_solver, es.DecomposedCalculator(get_constraints()))
     assert str(by_package.score) == str(by_solver.score)
 
 
 def test_parallel_solver_count_is_a_checked_config_field():
     config = es.SolverConfig()
-    config.parallel_solver_count = 2
-    assert config.parallel_solver_count == 2
+    config.run.parallel_solver_count = 2
+    assert config.run.parallel_solver_count == 2
     with pytest.raises(ValueError, match="must be positive"):
-        config.parallel_solver_count = 0
+        config.run.parallel_solver_count = 0
 
 
 def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
@@ -1043,8 +1037,8 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
     class Recorder:
         def __init__(self, config):
-            seen["limit"] = config.best_score_limit
-            seen["callback"] = config.on_new_best
+            seen["limit"] = config.stop.target_score
+            seen["callback"] = config.run.on_new_best
 
         def solve(self, problem):
             seen["solved"] = problem

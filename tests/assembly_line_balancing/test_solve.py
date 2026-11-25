@@ -60,9 +60,9 @@ def test_seeded_step_limited_runs_are_reproducible():
     def run():
         problem = salbp()
         config = alb.SolverConfig()
-        config.spent_limit_seconds = 600
-        config.step_count_limit = 3000
-        config.random_seed = 3
+        config.stop.time_limit_seconds = 600
+        config.stop.step_limit = 3000
+        config.run.random_seed = 3
         alb.solve(problem, config=config)
         return problem.assignment(), str(problem.score)
 
@@ -72,10 +72,10 @@ def test_seeded_step_limited_runs_are_reproducible():
 def test_parallel_multi_start_returns_the_best_worker():
     problem = salbp(seed=4)
     config = alb.SolverConfig()
-    config.spent_limit_seconds = 600
-    config.step_count_limit = 2000
-    config.random_seed = 5
-    config.parallel_solver_count = 3
+    config.stop.time_limit_seconds = 600
+    config.stop.step_limit = 2000
+    config.run.random_seed = 5
+    config.run.parallel_solver_count = 3
     score = alb.solve(problem, config=config).score
     assert score.hard == 0
     recomputed = alb.calculate_score(problem)

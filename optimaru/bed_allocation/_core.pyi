@@ -171,41 +171,109 @@ def calculate_score(plan: BedPlan) -> Score:
     """Full recompute of the hard / medium / soft score (also stored in plan.score)."""
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    late_acceptance_size: int
-    """0 = automatic: clamp(8 * stays, 8000, 12000). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
-    from a given solution keeps this one length."""
-    full_assert: bool
-    """Full score checks: compares the incremental score to a full recompute after every move
-    (for debugging; very slow)."""
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    change_move_weight: float
-    swap_move_weight: float
-    nearby_probability: float
-    """Biases swap partners / related ruin toward stays with nearby date ranges.
-    0 disables nearby selection."""
-    nearby_size: int
-    """Size of the nearby neighbor list."""
-    best_score_limit: tuple[int, int, int]
-    """Stop early once (hard, medium, soft) is reached. -(2**63) on medium or
-    soft means no floor on the soft side (only hard is compared), so
-    (0, -(2**63), -(2**63)) stops at the first feasible solution."""
-    on_new_best: Callable[[int, Score], None] | None
-    """Called with (step, score) on every new best solution."""
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``moves``, ``selection``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        selection: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        unimproved_step_limit: int
+        target_score: tuple[int, int, int]
+        """Stop early once (hard, medium, soft) is reached. -(2**63) on medium or
+        soft means no floor on the soft side (only hard is compared), so
+        (0, -(2**63), -(2**63)) stops at the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        nearby_probability: float
+        """Biases swap partners / related ruin toward stays with nearby date ranges.
+        0 disables nearby selection."""
+        nearby_size: int
+        """Size of the nearby neighbor list."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """0 = automatic: clamp(8 * stays, 8000, 12000). The first stage's length: the search restarts with
+        a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+        from a given solution keeps this one length."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        full_assert: bool
+        """Full score checks: compares the incremental score to a full recompute after every move
+        (for debugging; very slow)."""
+        on_new_best: Callable[[int, Score], None] | None
+        """Called with (step, score) on every new best solution."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...

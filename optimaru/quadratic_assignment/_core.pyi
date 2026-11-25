@@ -129,50 +129,86 @@ class AcceptorType:
     def value(self) -> int: ...
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    """Wall-clock budget (30 s by default). 0 returns the start unchanged."""
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    """0 = no step limit."""
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    """Independent starts (seed + i each); ignored by solve_with_constraints."""
-    acceptor_type: AcceptorType
-    """LATE_ACCEPTANCE by default."""
-    late_acceptance_size: int
-    """LATE_ACCEPTANCE: 0 = auto: clamp(8 * facility count, 400, 3200). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
-    from a given solution keeps this one length."""
-    entity_tabu_size: int
-    """ENTITY_TABU: for how many steps a moved facility stays tabu (7 by default; >= 0).
-    ENTITY_TABU accepts only non-worsening swaps (sideways ones blocked on tabu facilities),
-    so it climbs like HILL_CLIMBING."""
-    simulated_annealing_starting_temperature: tuple[int, float]
-    """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
-    (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
-    |start soft| (at least 1)."""
-    simulated_annealing_temperature_fraction: float
-    """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
-    great_deluge_water_level_step: tuple[int, float]
-    """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
-    rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
-    above the start's are taken."""
-    step_counting_hill_climbing_size: int
-    """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
-    steps (400 by default; > 0)."""
-    record_to_record_start_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
-    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
-    record_to_record_end_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
-    the gap shrinks from the start gap to this one."""
-    full_assert: bool
-    best_score_limit: tuple[int, float]
-    """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
-    the first feasible solution."""
-    on_new_best: Callable[[int, Score], None] | None
+    """The solver settings, by stage of the solve: ``stop``, ``acceptance``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        """Wall-clock budget (30 s by default). 0 returns the start unchanged."""
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        """0 = no step limit."""
+        unimproved_step_limit: int
+        target_score: tuple[int, float]
+        """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
+        the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        rule: AcceptorType
+        """LATE_ACCEPTANCE by default."""
+        late_acceptance_size: int
+        """LATE_ACCEPTANCE: 0 = auto: clamp(8 * facility count, 400, 3200). The first stage's length: the search restarts with
+        a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+        from a given solution keeps this one length."""
+        entity_tabu_size: int
+        """ENTITY_TABU: for how many steps a moved facility stays tabu (7 by default; >= 0).
+        ENTITY_TABU accepts only non-worsening swaps (sideways ones blocked on tabu facilities),
+        so it climbs like HILL_CLIMBING."""
+        simulated_annealing_starting_temperature: tuple[int, float]
+        """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
+        (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
+        |start soft| (at least 1)."""
+        simulated_annealing_temperature_fraction: float
+        """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
+        great_deluge_water_level_step: tuple[int, float]
+        """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
+        rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
+        above the start's are taken."""
+        step_counting_hill_climbing_size: int
+        """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
+        steps (400 by default; > 0)."""
+        record_to_record_start_gap: float
+        """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
+        start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
+        record_to_record_end_gap: float
+        """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
+        the gap shrinks from the start gap to this one."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        """Independent starts (seed + i each); ignored by solve_with_constraints."""
+        full_assert: bool
+        on_new_best: Callable[[int, Score], None] | None
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     """Identity (or warm-start) start + local search over swap moves (late

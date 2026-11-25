@@ -1,6 +1,7 @@
 """optimaru._solve: the steps every use case's solve() shares (pure Python, no extension)."""
 
 import copy
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,27 +9,31 @@ from optimaru._solve import FIRST_FEASIBLE_LIMIT, solve_in_place, solver_config
 
 
 class Config:
-    """A stand-in for a compiled SolverConfig: the fields solver_config() writes."""
+    """A stand-in for a compiled SolverConfig: the groups and settings solver_config() writes."""
 
     def __init__(self):
-        self.spent_limit_seconds = 30.0
-        self.random_seed = 0
-        self.parallel_solver_count = 1
-        self.best_score_limit = None
-        self.full_assert = False
-        self.on_new_best = None
+        self.stop = SimpleNamespace(time_limit_seconds=30.0, target_score=None)
+        self.run = SimpleNamespace(random_seed=0, parallel_solver_count=1, full_assert=False, on_new_best=None)
+
+    def __copy__(self):
+        twin = Config()
+        twin.stop, twin.run = copy.copy(self.stop), copy.copy(self.run)
+        return twin
+
+    def state(self):
+        return vars(self.stop) | vars(self.run)
 
 
 def test_no_config_starts_from_the_defaults():
     config = solver_config(Config)
     assert isinstance(config, Config)
-    assert vars(config) == vars(Config())
+    assert config.state() == Config().state()
 
 
 def test_overrides_go_on_a_copy_and_leave_the_callers_config_alone():
     base = Config()
-    base.random_seed = 7
-    before = copy.copy(vars(base))
+    base.run.random_seed = 7
+    before = base.state()
     report = print
     config = solver_config(
         Config,
@@ -41,27 +46,27 @@ def test_overrides_go_on_a_copy_and_leave_the_callers_config_alone():
         on_new_best=report,
     )
     assert config is not base
-    assert vars(base) == before
-    assert (config.spent_limit_seconds, config.random_seed, config.parallel_solver_count) == (2.5, 11, 4)
-    assert config.best_score_limit == FIRST_FEASIBLE_LIMIT == (0, float("-inf"))
-    assert config.full_assert is True and config.on_new_best is report
+    assert base.state() == before
+    assert (config.stop.time_limit_seconds, config.run.random_seed, config.run.parallel_solver_count) == (2.5, 11, 4)
+    assert config.stop.target_score == FIRST_FEASIBLE_LIMIT == (0, float("-inf"))
+    assert config.run.full_assert is True and config.run.on_new_best is report
 
 
 def test_a_keyword_left_out_keeps_the_base_setting():
     base = Config()
-    base.spent_limit_seconds = 9.0
-    base.full_assert = True
-    base.best_score_limit = (0, -5.0)
+    base.stop.time_limit_seconds = 9.0
+    base.run.full_assert = True
+    base.stop.target_score = (0, -5.0)
     config = solver_config(Config, base)
-    assert config.spent_limit_seconds == 9.0
-    assert config.full_assert is True  # full_assert=False never turns it off
-    assert config.best_score_limit == (0, -5.0)
+    assert config.stop.time_limit_seconds == 9.0
+    assert config.run.full_assert is True  # full_assert=False never turns it off
+    assert config.stop.target_score == (0, -5.0)
 
 
 def test_a_use_case_with_more_score_levels_passes_its_own_first_feasible_limit():
     limit = (0, -(2**63), -(2**63))
     config = solver_config(Config, stop_at_first_feasible=True, first_feasible_limit=limit)
-    assert config.best_score_limit == limit
+    assert config.stop.target_score == limit
 
 
 def test_a_misspelled_keyword_is_refused():

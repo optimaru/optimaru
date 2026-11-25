@@ -207,8 +207,8 @@ from optimaru.max_cut.constraints import UncutEdgesCost
 others = [spec for spec in get_constraints() if spec.name != "uncut_edges_cost"]
 picks = [*others, UncutEdgesCost(weight=2)]
 config = max_cut.SolverConfig()
-config.step_count_limit = 500_000
-config.random_seed = 1
+config.stop.step_limit = 500_000
+config.run.random_seed = 1
 result = max_cut.solve(problem, config=config, constraints=picks)
 print(max_cut.constraint_costs(result, picks)["uncut_edges_cost"]["costs"], result.cut_weight)
 ```
@@ -464,9 +464,9 @@ steps = 10_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     core = problem.to_core()
     config = max_cut.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     max_cut.solve(core, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -498,8 +498,8 @@ at the same budget over several seeds, with and without it:
 ```python
 for seed in range(1, 6):
     config = max_cut.SolverConfig()
-    config.step_count_limit = 500_000
-    config.random_seed = seed
+    config.stop.step_limit = 500_000
+    config.run.random_seed = seed
     for picked in (others, picks):
         result = max_cut.solve(problem, config=config, constraints=picked)
         uncut = sum(max_cut.constraint_costs(result, picks)["uncut_edges_cost"]["costs"])

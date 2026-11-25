@@ -355,9 +355,9 @@ def _engine_solve(request, routes, selection):
     plan = _routed_plan(request, routes)
     kept = [list(vehicle.node_indices) for vehicle in plan.vehicles]
     cfg = domain.SolverConfig()
-    cfg.spent_limit_seconds = 0
-    cfg.random_seed = 1
-    cfg.pair_construction_heuristic = False
+    cfg.stop.time_limit_seconds = 0
+    cfg.run.random_seed = 1
+    cfg.construction.pair_heuristic = False
     domain.Solver(cfg).solve_with_constraints(plan, selection)
     assert [list(vehicle.node_indices) for vehicle in plan.vehicles] == kept
     return plan.score.hard, plan.score.medium * MEDIUM_UNIT + plan.score.soft

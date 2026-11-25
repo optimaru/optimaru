@@ -235,8 +235,8 @@ from optimaru.employee_scheduling.constraints import UnusedSkillCost
 picks = [*get_constraints(), UnusedSkillCost(weight=5)]
 for picked in (None, picks):
     config = es.SolverConfig()
-    config.step_count_limit = 2_000_000
-    config.random_seed = 1
+    config.stop.step_limit = 2_000_000
+    config.run.random_seed = 1
     schedule = to_schedule(generate_demo_data().model_input)
     es.solve(schedule, config=config, constraints=picked)
     print(sum(es.constraint_costs(schedule, picks)["unused_skill_cost"]["costs"]))
@@ -505,11 +505,11 @@ steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     schedule = to_schedule(request.model_input)
     config = es.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
-    config.parallel_solver_count = 1
-    # config.guided_moves = False    # makes both paths take the same steps: a check
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
+    config.run.parallel_solver_count = 1
+    # config.custom_moves.guided = False    # makes both paths take the same steps: a check
     start = time.perf_counter()
     es.solve(schedule, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -519,7 +519,7 @@ for label, picked in (("default path", None), ("assembly", get_constraints())):
 Each path repeats itself exactly, but the two do not take the same steps: guided moves pick from
 the list of employees with a hard violation, which the monolith and the assembly keep in
 different orders. Both ended on `0hard/23040soft` here, but not at 200,000 steps (23039 and
-23040). With `config.guided_moves = False` they took the same steps and ended on the same score,
+23040). With `config.custom_moves.guided = False` they took the same steps and ended on the same score,
 before step 2 and after step 5 alike; if they differ then, the two paths no longer score alike.
 
 | Measured at the medium size, median of three runs | Steps per second |

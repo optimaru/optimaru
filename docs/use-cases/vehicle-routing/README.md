@@ -26,7 +26,7 @@ solved = vrp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in p
 print(solved.score, solved.routes())            # 0hard/0medium/-38soft {'V1': ['C1']}
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`vrp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.vehicle_routing.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`vrp.SolverConfig`, whose fields include `stop.time_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.vehicle_routing.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
@@ -173,7 +173,7 @@ A group partly on a caller's `initial_route` is completed on that vehicle; when
 the rest does not fit there, it waits and the group starts split, for the search
 to mend.
 A domain move operator, `groupRuinRecreate` (`vrp/search/moves/group_moves.hpp`), then takes a
-group out of its route, alone or with up to `group_ruin_max_visits` more visits
+group out of its route, alone or with up to `alns.group_ruin_max_visits` more visits
 (the groups and single visits of nearby stops, or other groups), and puts each
 unit back on one vehicle, the larger units first. That is how a group changes
 vehicle, how groups trade places, and how a waiting group gets routed; the

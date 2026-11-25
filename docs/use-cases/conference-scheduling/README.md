@@ -169,7 +169,7 @@ Two changed defaults / structures:
   by the full-vs-incremental 3000-move random walk / ScoreChecks::Full / plugin equivalence
   gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
   in the table above, especially at 120/200.
-- **Automatic `ruin_recreate_as_move_weight` default** — ruin & recreate also runs as an
+- **Automatic `strategies.ruin_recreate_weight` default** — ruin & recreate also runs as an
   ordinary move judged by the acceptor (engine `RuinRecreateSettings::as_move_weight`). The
   default negative value = automatic `0.2 / slotRoomCount` (the budget-share rule of
   benchmarks/school-timetabling/RESULTS.md; 1.6e-3 for this domain's 126 cells). Sweeping
@@ -179,12 +179,12 @@ Two changed defaults / structures:
 
 Knobs that were measured but stay off by default (bench key = config field):
 
-- `hot=` / `hot_talk_probability` — targets talks with hard violations (type-incompatible
+- `hot=` / `selection.hot_talk_probability` — targets talks with hard violations (type-incompatible
   cell, tag violations, speaker/room unavailable, shared cell — O(1) checks) via rejection
   sampling. Wins hard 4-2 at scaled:120 but loses 1-5 at scaled:200 (the hot set is 70%+
   of talks, so the bias goes blunt); 45/60 tie. Too few data points for a per-size rule,
   so the default is 0. It does reach feasibility faster (84->19 ms at 60).
-- `descent=` / `descent_weight` — default 0 for the same reason as ST (not unmeasured: in ST
+- `descent=` / `strategies.descent_weight` — default 0 for the same reason as ST (not unmeasured: in ST
   assignment-shape descent was weaker than as-move, and here as-move replaces it).
 - `la=` (`history_length`) — even after aggregation raised throughput 3-10x,
   480/2000 (@120) and 3200/6400 (@200) all failed to beat the automatic value
@@ -194,7 +194,7 @@ Protocol: 6-seed interleaved A/B; per-seed win/loss is a lexicographic
 hard-then-soft comparison. The measurements are from 2026-08. The raw campaign logs are not checked in.
 
 On the comparison's instances, which the bench solves now, the automatic
-`ruin_recreate_as_move_weight` against `asMove=0` (2026-11-24, one Apple M4 Max Mac (16 cores),
+`strategies.ruin_recreate_weight` against `asMove=0` (2026-11-24, one Apple M4 Max Mac (16 cores),
 single-threaded runs one after another, interleaved by seed, beside the other benchmark lanes
 (at most ten solver threads on the twelve performance cores), 10 s per run; mean soft, hard 0
 in every run):

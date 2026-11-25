@@ -249,8 +249,8 @@ problem = generate("M")
 others = [spec for spec in get_constraints() if spec.name != "special_room_last_period_cost"]
 picks = [*others, SpecialRoomLastPeriodCost(weight=20)]
 config = canon.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 result = st.solve(problem, config=config, constraints=picks)
 print(result["penalties"]["special_room_last_period_cost"])
 ```
@@ -514,9 +514,9 @@ problem = generate("M")
 steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     config = canon.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     result = st.solve(problem, config=config, constraints=picked)
     seconds = time.perf_counter() - start

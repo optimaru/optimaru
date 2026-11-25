@@ -65,7 +65,7 @@ def test_a_complete_seed_with_no_budget_comes_back_unchanged(request_):
 
 @pytest.mark.parametrize("greedy", [True, False], ids=["greedy-construction", "engine-construction"])
 def test_construction_leaves_a_complete_seed_alone(request_, greedy):
-    request_.settings.employee_greedy_construction = greedy
+    request_.settings.construction.employee_greedy = greedy
     seed = round_robin_seed(request_)
     solved = solve_request(zero_step(with_initial_solution(request_, as_solution(request_, seed))))
     assert assignment_of(solved) == seed
@@ -109,7 +109,7 @@ def test_only_the_shift_id_of_an_assignment_is_read(request_):
 
 @pytest.mark.parametrize("greedy", [True, False], ids=["greedy-construction", "engine-construction"])
 def test_a_partial_seed_keeps_its_part_and_fills_the_rest(request_, greedy):
-    request_.settings.employee_greedy_construction = greedy
+    request_.settings.construction.employee_greedy = greedy
     full = round_robin_seed(request_)
     kept = dict(list(full.items())[::2])
     assert len(kept) < len(full)
@@ -197,13 +197,10 @@ def test_a_heavily_pinned_roster_keeps_every_pinned_shift():
         shift.pinned = index % 10 != 0
     request.timelimit = 0.6
     request.settings = SolverSettings(
-        smart_change_moves=True,
-        employee_unassign_moves=True,
-        custom_move_probability=0.6,
-        ruin_recreate_unimproved_step_trigger=50,
-        ruin_recreate_as_move_weight=0.2,
-        greedy_repair_budget_fraction=0.5,
-        employee_run_repair_max_days=1,
+        construction={"greedy_repair_budget_fraction": 0.5},
+        alns_trigger={"unimproved_steps": 50},
+        strategies={"ruin_recreate_weight": 0.2},
+        custom_moves={"smart_change": True, "employee_unassign": True, "share": 0.6, "employee_run_repair_max_days": 1},
     )
 
     solved = solve_request(request)
@@ -247,10 +244,9 @@ def test_repair_stops_at_the_time_limit_on_a_large_infeasible_roster():
         shift.worker = worker_ids[index * 2 + (day >= days // 2)]
     request.timelimit = 1.0
     request.settings = SolverSettings(
-        step_count_limit=1,
-        greedy_repair_budget_fraction=0.8,
-        employee_run_repair_max_days=1,
-        employee_day_repair_moves=False,
+        construction={"greedy_repair_budget_fraction": 0.8},
+        stop={"step_limit": 1},
+        custom_moves={"employee_run_repair_max_days": 1, "employee_day_repair": False},
     )
 
     started = time.perf_counter()
@@ -266,7 +262,7 @@ def test_a_fully_pinned_roster_comes_back_unchanged(request_):
     for shift in request_.model_input.shifts:
         shift.worker, shift.pinned = worker, True
     request_.timelimit = 0.2
-    request_.settings = SolverSettings(smart_change_moves=True, custom_move_probability=0.9)
+    request_.settings = SolverSettings(custom_moves={"smart_change": True, "share": 0.9})
 
     assert set(assignment_of(solve_request(request_)).values()) == {worker}
 

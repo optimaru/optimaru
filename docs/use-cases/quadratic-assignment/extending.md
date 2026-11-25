@@ -231,8 +231,8 @@ from optimaru.quadratic_assignment.constraints import UnusedLocationCapacityCost
 others = [spec for spec in get_constraints() if spec.name != "unused_location_capacity_cost"]
 picks = [*others, UnusedLocationCapacityCost(weight=20)]
 config = qap.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 result = qap.solve(problem, config=config, constraints=picks)
 raw = qap.constraint_costs(result, picks)
 print(sum(raw["unused_location_capacity_cost"]["costs"]), raw["flow_distance_cost"]["costs"])
@@ -509,9 +509,9 @@ steps = 5_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     core = problem.to_core()
     config = qap.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     qap.solve(core, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -549,8 +549,8 @@ at the same budget over several seeds, with and without it:
 ```python
 for seed in range(1, 6):
     config = qap.SolverConfig()
-    config.step_count_limit = 2_000_000
-    config.random_seed = seed
+    config.stop.step_limit = 2_000_000
+    config.run.random_seed = seed
     for picked in (others, picks):
         raw = qap.constraint_costs(qap.solve(problem, config=config, constraints=picked), picks)
         print(seed, sum(raw["unused_location_capacity_cost"]["costs"]), raw["flow_distance_cost"]["costs"])

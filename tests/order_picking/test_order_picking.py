@@ -11,9 +11,11 @@ from optimaru.order_picking import models
 
 def test_request_solver_parameters_are_applied():
     config = op.SolverConfig()
-    models.apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
-    assert config.late_acceptance_size == 7
-    assert config.ruin_recreate is False
+    models.apply_solver_parameters(
+        config, {"alns_trigger": {"enabled": False}, "acceptance": {"late_acceptance_size": 7}}
+    )
+    assert config.acceptance.late_acceptance_size == 7
+    assert config.alns_trigger.enabled is False
     with pytest.raises(ValueError, match="unknown solver parameter"):
         models.apply_solver_parameters(config, {"not_a_parameter": 1})
 
@@ -194,9 +196,9 @@ def test_seeded_runs_are_reproducible():
         config = op.SolverConfig()
         # Step-count termination (not wall clock) so both runs stop at the
         # exact same point of the same seeded trajectory.
-        config.step_count_limit = 5000
-        config.spent_limit_seconds = 30.0
-        config.random_seed = 3
+        config.stop.step_limit = 5000
+        config.stop.time_limit_seconds = 30.0
+        config.run.random_seed = 3
         return op.solve(op.generate_demo_data(), config=config)
 
     a = run()
@@ -365,4 +367,4 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 
 def test_config_rejects_a_rewards_list_that_is_not_four_values():
     with pytest.raises(ValueError, match="exactly 4 values"):
-        op.SolverConfig().ruin_recreate_rewards = [1.0, 2.0]
+        op.SolverConfig().alns.rewards = [1.0, 2.0]

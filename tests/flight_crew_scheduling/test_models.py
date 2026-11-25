@@ -115,43 +115,40 @@ def test_solve_config_to_core():
         time_limit_seconds=1.5,
         random_seed=9,
         parallel_solver_count=2,
-        late_acceptance_size=50,
         stop_at_first_feasible=True,
-        unimproved_spent_limit_seconds=0.5,
-        step_count_limit=100,
-        unimproved_step_count_limit=40,
-        ruin_recreate=False,
-        ruin_recreate_rewards=[10.0, 5.0, 1.0, 0.0],
-        change_move_weight=1.0,
-        swap_move_weight=0.0,
+        stop={"unimproved_time_limit_seconds": 0.5, "step_limit": 100, "unimproved_step_limit": 40},
+        alns_trigger={"enabled": False},
+        moves={"change_weight": 1.0, "swap_weight": 0.0},
+        acceptance={"late_acceptance_size": 50},
+        alns={"rewards": [10.0, 5.0, 1.0, 0.0]},
     )
     clone = SolveConfig.model_validate_json(config.model_dump_json())
     assert clone == config
 
     cfg = clone.to_core()
-    assert cfg.spent_limit_seconds == pytest.approx(1.5)
-    assert cfg.random_seed == 9
-    assert cfg.parallel_solver_count == 2
-    assert cfg.late_acceptance_size == 50
-    assert cfg.best_score_limit == (0, float("-inf"))  # stop_at_first_feasible
-    assert cfg.unimproved_spent_limit_seconds == pytest.approx(0.5)
-    assert cfg.step_count_limit == 100
-    assert cfg.unimproved_step_count_limit == 40
-    assert cfg.ruin_recreate is False
-    assert cfg.ruin_recreate_rewards == [10.0, 5.0, 1.0, 0.0]
-    assert cfg.change_move_weight == 1.0
-    assert cfg.swap_move_weight == 0.0
+    assert cfg.stop.time_limit_seconds == pytest.approx(1.5)
+    assert cfg.run.random_seed == 9
+    assert cfg.run.parallel_solver_count == 2
+    assert cfg.acceptance.late_acceptance_size == 50
+    assert cfg.stop.target_score == (0, float("-inf"))  # stop_at_first_feasible
+    assert cfg.stop.unimproved_time_limit_seconds == pytest.approx(0.5)
+    assert cfg.stop.step_limit == 100
+    assert cfg.stop.unimproved_step_limit == 40
+    assert cfg.alns_trigger.enabled is False
+    assert cfg.alns.rewards == [10.0, 5.0, 1.0, 0.0]
+    assert cfg.moves.change_weight == 1.0
+    assert cfg.moves.swap_weight == 0.0
 
 
 def test_solve_config_validation():
     with pytest.raises(ValueError):
-        SolveConfig(ruin_recreate_min_ruin_fraction=0.5, ruin_recreate_max_ruin_fraction=0.2)
+        SolveConfig(alns={"min_ruin_fraction": 0.5, "max_ruin_fraction": 0.2})
     with pytest.raises(ValueError):
-        SolveConfig(ruin_recreate_rewards=[1.0, 2.0, 3.0])
+        SolveConfig(alns={"rewards": [1.0, 2.0, 3.0]})
     cfg = fc.SolverConfig()
     with pytest.raises(ValueError, match="auto"):
-        cfg.late_acceptance_size = -1
+        cfg.acceptance.late_acceptance_size = -1
     with pytest.raises(ValueError, match="positive"):
-        cfg.parallel_solver_count = 0
+        cfg.run.parallel_solver_count = 0
     with pytest.raises(ValueError, match="exactly 4"):
-        cfg.ruin_recreate_rewards = [1.0, 2.0, 3.0]
+        cfg.alns.rewards = [1.0, 2.0, 3.0]

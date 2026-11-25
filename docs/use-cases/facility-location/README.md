@@ -129,9 +129,9 @@ ruin-and-recreate kicks, and two macro moves of the domain
 `facility_setup_cost` is a step function: a facility stops costing only when its last
 consumer leaves, and starts costing with its first.
 
-- **`CloseFacilityMove`** (`close_facility_moves`) empties one used facility in one move:
+- **`CloseFacilityMove`** (`custom_moves.close_facility`) empties one used facility in one move:
   its consumers go to the nearest facilities with room, or all together to one other site.
-- **`SwapFacilityMove`** (`swap_facility_moves`) opens a closed facility and closes the one
+- **`SwapFacilityMove`** (`custom_moves.swap_facility`) opens a closed facility and closes the one
   that serves its surroundings. The closed one's consumers go to their nearest facility
   with room, and then each facility with room takes the consumers that are nearer to it
   than to where they are. Without this move the search keeps the facilities it first
@@ -139,7 +139,7 @@ consumer leaves, and starts costing with its first.
 
 A solve that starts from nothing runs
 [late acceptance in stages](../README.md#late-acceptance-in-stages), and from the first
-restart on it draws the two macro moves on a tenth of the steps `custom_move_probability`
+restart on it draws the two macro moves on a tenth of the steps `custom_moves.share`
 allows: a later stage takes worse solutions for a long while, and the macro moves, which
 each make a pass over every consumer, would take the steps that settle who goes where. A
 solve from a given assignment has no stages and keeps the full gate.

@@ -43,7 +43,7 @@ another level`. On soft (and on the soft reward) it is allowed.
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
 repeat carries its own level. Hard contributions are rounded per constraint, the reward
 refuses `level="hard"`, and `SolverConfig` carries the engine's knobs
-(`spent_limit_seconds`, `step_count_limit`, ...); see the
+(`stop.time_limit_seconds`, `stop.step_limit`, ...); see the
 [use-case README](README.md#python-api).
 
 ## Install and test
@@ -68,11 +68,11 @@ knapsack.solve(core, time_limit_seconds=5.0, random_seed=42)   # solved in place
 print(core.score, core.assignment(), core.total_value())
 ```
 
-For finer control build `knapsack.SolverConfig()` (time budget, `step_count_limit`,
-multi-start, ALNS knobs, move weights, nearby swaps, `core_repack_moves` (the move that
+For finer control build `knapsack.SolverConfig()` (time budget, `stop.step_limit`,
+multi-start, ALNS knobs, move weights, nearby swaps, `custom_moves.core_repack` (the move that
 re-decides the items around the capacity boundary exactly), the `on_new_best(step, score)`
-callback, `best_score_limit` early stop, ...) and call `knapsack.Solver(cfg).solve(core)`
-or `knapsack.solve(problem, config=cfg)`. A zero budget (`spent_limit_seconds = 0`)
+callback, `stop.target_score` early stop, ...) and call `knapsack.Solver(cfg).solve(core)`
+or `knapsack.solve(problem, config=cfg)`. A zero budget (`stop.time_limit_seconds = 0`)
 returns the greedy construction, or a warm-start seed, unchanged.
 
 Note: `core.items[i]` returns a copy — write the selection in bulk with
@@ -83,7 +83,8 @@ Note: `core.items[i]` returns a copy — write the selection in bulk with
 `solve_request` takes a pydantic request, `models.KnapsackRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+`full_assert`, and `solver_parameters` for further `SolverConfig` settings by group, such as
+`{"alns": {"min_ruin_fraction": 0.05}}`). It
 returns the solved `KnapsackProblemModel`, as `solve(model, ...)` does, and leaves the request
 unchanged. `constraints=` is the selection `solve` takes.
 

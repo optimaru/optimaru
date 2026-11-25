@@ -353,9 +353,9 @@ def _solve_reporting(run, schedule):
     """Solve `schedule` single-start with `run(solver, schedule)`, recording every on_new_best score."""
     reported = []
     cfg = pjs.SolverConfig()
-    cfg.spent_limit_seconds = 0.4
-    cfg.random_seed = 1
-    cfg.on_new_best = lambda _step, best: reported.append((best.hard, best.medium, best.soft))
+    cfg.stop.time_limit_seconds = 0.4
+    cfg.run.random_seed = 1
+    cfg.run.on_new_best = lambda _step, best: reported.append((best.hard, best.medium, best.soft))
     run(pjs.Solver(cfg), schedule)
     return reported
 
@@ -411,7 +411,7 @@ def _zero_budget(schedule, picks):
     """The engine's score of `schedule` under `picks`: a solve with no time keeps it as it is."""
     before = schedule.assignment()
     config = pjs.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     pjs.Solver(config).solve_with_constraints(schedule, picks)
     assert schedule.assignment() == before
     return _engine(schedule.score)
@@ -574,11 +574,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = pjs.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 2000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 2000
+    config.stop.time_limit_seconds = 30
     pjs.Solver(config).solve_with_constraints(schedule, picks)
     raw = pjs.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)

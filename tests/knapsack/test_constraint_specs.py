@@ -90,8 +90,8 @@ def with_its_costs(problem: KnapsackProblemModel, picks) -> list:
 def solved(constraints=None, problem=None) -> KnapsackProblemModel:
     problem = problem if problem is not None else extended()
     config = knapsack.SolverConfig()
-    config.step_count_limit = 2000
-    config.random_seed = 1
+    config.stop.step_limit = 2000
+    config.run.random_seed = 1
     return knapsack.solve(problem, config=config, constraints=constraints)
 
 
@@ -193,7 +193,7 @@ def test_globals_shape_their_total():
 
 def _zero() -> knapsack.SolverConfig:
     config = knapsack.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     return config
 
 
@@ -335,8 +335,8 @@ def test_score_matches_the_engine_for_arbitrary_specs(specs):
     problem = extended()
     core = problem.to_core()
     config = knapsack.SolverConfig()
-    config.step_count_limit = 500
-    config.random_seed = 2
+    config.stop.step_limit = 500
+    config.run.random_seed = 2
     knapsack.Solver(config).solve_with_constraints(core, specs)
     python = score(knapsack.constraint_costs(core), specs)
     assert python.hard == core.score.hard
@@ -542,10 +542,10 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     problem = extended()
     core = problem.to_core()
     config = knapsack.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.step_count_limit = 3000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.stop.step_limit = 3000
+    config.stop.time_limit_seconds = 30
     knapsack.Solver(config).solve_with_constraints(core, picks)
     raw = knapsack.constraint_costs(core, picks)
     assert len(raw) == len(picks)

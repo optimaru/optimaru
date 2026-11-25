@@ -24,9 +24,9 @@ def test_pinned_lesson_survives_solve(problem):
     pinned_index = next(i for i, l in enumerate(conv.table.lessons) if l.id == "C1-PE#1")
 
     cfg = canon.SolverConfig()
-    cfg.spent_limit_seconds = 10.0
-    cfg.random_seed = 7
-    cfg.best_score_limit = (0, float("-inf"))  # stop at the first feasible solution
+    cfg.stop.time_limit_seconds = 10.0
+    cfg.run.random_seed = 7
+    cfg.stop.target_score = (0, float("-inf"))  # stop at the first feasible solution
     canon.Solver(cfg).solve(conv.table)
 
     assert conv.table.assignment()[pinned_index] == expected
@@ -43,15 +43,15 @@ def _solved_table(problem, pin):
     """The lessons at reversed slots, so moving a pin would improve the score."""
     conv = convert_problem(problem)
     cfg = canon.SolverConfig()
-    cfg.spent_limit_seconds = 0.1
-    cfg.random_seed = 1
+    cfg.stop.time_limit_seconds = 0.1
+    cfg.run.random_seed = 1
     canon.Solver(cfg).solve(conv.table)
     values = conv.table.assignment()[::-1]
     for index, lesson in enumerate(conv.table.lessons):
         lesson.slot = values[index]
         lesson.pinned = pin(index)
-    cfg.spent_limit_seconds = 0.2
-    cfg.random_seed = 2
+    cfg.stop.time_limit_seconds = 0.2
+    cfg.run.random_seed = 2
     canon.Solver(cfg).solve(conv.table)
     return values, conv.table.assignment()
 
@@ -71,6 +71,6 @@ def test_a_pinned_lesson_without_a_slot_is_refused(problem):
     conv.table.lessons[0].pinned = True
     conv.table.lessons[0].slot = -1
     cfg = canon.SolverConfig()
-    cfg.spent_limit_seconds = 0.1
+    cfg.stop.time_limit_seconds = 0.1
     with pytest.raises(ValueError, match="is pinned but has no value"):
         canon.Solver(cfg).solve(conv.table)

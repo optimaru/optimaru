@@ -384,7 +384,7 @@ def _zero_budget(schedule, picks):
     """The engine's score of the fully pinned `schedule` under `picks` (a solve keeps it)."""
     before = schedule.assignment()
     config = ts.SolverConfig()
-    config.spent_limit_seconds = 0
+    config.stop.time_limit_seconds = 0
     ts.Solver(config).solve_with_constraints(schedule, picks)
     assert schedule.assignment() == before
     return schedule.score
@@ -540,7 +540,7 @@ def test_offset_zero_is_the_plain_shaping():
         schedule = build_schedule()
         schedule.set_assignment(solved.assignment())
         config = ts.SolverConfig()
-        config.spent_limit_seconds = 0
+        config.stop.time_limit_seconds = 0
         ts.Solver(config).solve_with_constraints(schedule, picks)
         copies.append((schedule.score.hard, schedule.score.soft))
     assert copies[0] == copies[1]
@@ -580,11 +580,11 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = ts.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.parallel_solver_count = 1
-    config.step_count_limit = 2000
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.run.parallel_solver_count = 1
+    config.stop.step_limit = 2000
+    config.stop.time_limit_seconds = 30
     ts.Solver(config).solve_with_constraints(schedule, picks)
     raw = ts.constraint_costs(schedule, picks)
     assert len(raw) == len(picks)

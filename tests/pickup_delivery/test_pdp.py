@@ -13,23 +13,24 @@ import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery import models
 from optimaru.pickup_delivery.constraints import TravelDistanceCost, get_constraints
 
+from .._settings import set_setting
+
 
 def test_request_solver_parameters_are_applied():
     config = pdp.SolverConfig()
     models.apply_solver_parameters(
         config,
         {
-            "late_acceptance_size": 7,
-            "ruin_recreate": False,
-            "acceptor_type": "HILL_CLIMBING",
-            "best_score_limit": None,
+            "stop": {"target_score": None},
+            "alns_trigger": {"enabled": False},
+            "acceptance": {"late_acceptance_size": 7, "rule": "HILL_CLIMBING"},
         },
     )
-    assert config.late_acceptance_size == 7
-    assert config.ruin_recreate is False
-    assert config.acceptor_type == pdp.AcceptorType.HILL_CLIMBING
+    assert config.acceptance.late_acceptance_size == 7
+    assert config.alns_trigger.enabled is False
+    assert config.acceptance.rule == pdp.AcceptorType.HILL_CLIMBING
     with pytest.raises(ValueError, match="controlled by the solve request"):
-        models.apply_solver_parameters(config, {"random_seed": 3})
+        models.apply_solver_parameters(config, {"run": {"random_seed": 3}})
 
 
 def hour_minute(hour: int, minute: int) -> int:
@@ -112,8 +113,8 @@ def test_solve_produces_a_feasible_coherent_plan():
     plan = pdp.build_random_instance(request_count=20, vehicle_count=3, seed=7)
 
     config = pdp.SolverConfig()
-    config.spent_limit_seconds = 3.0
-    config.random_seed = 7
+    config.stop.time_limit_seconds = 3.0
+    config.run.random_seed = 7
     pdp.Solver(config).solve(plan)
 
     assert plan.score.is_feasible()
@@ -133,53 +134,53 @@ def test_solve_produces_a_feasible_coherent_plan():
 
 def test_alns_knobs_are_settable():
     config = pdp.SolverConfig()
-    config.acceptor_type = pdp.AcceptorType.RECORD_TO_RECORD_TRAVEL
-    config.ruin_recreate_selection_type = pdp.OperatorSelectionType.ALPHA_UCB
-    config.regret_k = 4
-    config.blink_rate = 0.02
-    config.sisr_ruin = False
-    config.pair_moves = False
-    assert config.regret_k == 4
-    assert config.acceptor_type == pdp.AcceptorType.RECORD_TO_RECORD_TRAVEL
+    config.acceptance.rule = pdp.AcceptorType.RECORD_TO_RECORD_TRAVEL
+    config.alns.selection_type = pdp.OperatorSelectionType.ALPHA_UCB
+    config.alns.regret_k = 4
+    config.alns.blink_rate = 0.02
+    config.alns.sisr_ruin = False
+    config.custom_moves.pair = False
+    assert config.alns.regret_k == 4
+    assert config.acceptance.rule == pdp.AcceptorType.RECORD_TO_RECORD_TRAVEL
 
     with pytest.raises(TypeError):
-        config.regret_k = "three"
+        config.alns.regret_k = "three"
 
 
 def test_request_move_knobs_are_settable():
     config = pdp.SolverConfig()
-    assert config.request_ruin_recreate is True
-    assert config.bundle_moves is True
-    assert config.request_ruin_max_requests == 20
-    assert config.bundle_max_requests == 3
-    config.request_ruin_recreate = False
-    config.bundle_moves = False
-    config.request_ruin_max_requests = 5
-    config.bundle_max_requests = 2
-    assert (config.request_ruin_recreate, config.bundle_moves) == (False, False)
-    assert (config.request_ruin_max_requests, config.bundle_max_requests) == (5, 2)
+    assert config.alns.request_ruin is True
+    assert config.custom_moves.bundle is True
+    assert config.alns.request_ruin_max_requests == 20
+    assert config.custom_moves.bundle_max_requests == 3
+    config.alns.request_ruin = False
+    config.custom_moves.bundle = False
+    config.alns.request_ruin_max_requests = 5
+    config.custom_moves.bundle_max_requests = 2
+    assert (config.alns.request_ruin, config.custom_moves.bundle) == (False, False)
+    assert (config.alns.request_ruin_max_requests, config.custom_moves.bundle_max_requests) == (5, 2)
 
 
 @pytest.mark.parametrize(
     "switches",
     [
-        {"request_ruin_recreate": True, "bundle_moves": False},
-        {"request_ruin_recreate": False, "bundle_moves": True},
+        {"custom_moves": {"bundle": False}, "alns": {"request_ruin": True}},
+        {"custom_moves": {"bundle": True}, "alns": {"request_ruin": False}},
     ],
 )
 def test_request_moves_alone_keep_every_request_whole(switches):
     """Only the operators under test: no stop-granular kick, no older pair move."""
     plan = pdp.build_random_instance(request_count=20, vehicle_count=3, seed=7)
     config = pdp.SolverConfig()
-    config.step_count_limit = 3000
-    config.random_seed = 7
-    config.full_assert = True
-    config.ruin_recreate = False
-    config.pair_moves = False
-    config.pair_exchange_moves = False
-    config.pair_ruin = False
-    for name, value in switches.items():
-        setattr(config, name, value)
+    config.stop.step_limit = 3000
+    config.run.random_seed = 7
+    config.run.full_assert = True
+    config.alns_trigger.enabled = False
+    config.custom_moves.pair = False
+    config.custom_moves.pair_exchange = False
+    config.alns.pair_ruin = False
+    for group, settings in switches.items():
+        setattr(config, group, settings)
     pdp.Solver(config).solve(plan)
 
     assert plan.score.is_feasible()
@@ -214,8 +215,8 @@ def test_soft_time_windows_are_broken_by_the_stop_moves_not_the_request_moves():
     picks = [pick for pick in get_constraints() if pick.name != "max_end_time_cost"]
     picks.append(MaxEndTimeCost(level="soft"))
     config = pdp.SolverConfig()
-    config.step_count_limit = 20_000
-    config.random_seed = 3
+    config.stop.step_limit = 20_000
+    config.run.random_seed = 3
     pdp.Solver(config).solve_with_constraints(plan, picks)
 
     assert plan.unassigned_node_indices == []
@@ -389,7 +390,7 @@ def test_each_vehicle_drives_on_its_profile():
 
 def _steps(steps):
     config = pdp.SolverConfig()
-    config.step_count_limit = steps
+    config.stop.step_limit = steps
     return config
 
 
@@ -399,7 +400,7 @@ def test_package_solve_solves_in_place_and_returns_the_plan():
     assert pdp.solve(plan, config=config, random_seed=7, full_assert=True) is plan
     assert any(vehicle.node_indices for vehicle in plan.vehicles)
     assert str(plan.score) == str(pdp.calculate_score(plan))
-    assert config.full_assert is False  # the keyword overrides go to a copy
+    assert config.run.full_assert is False  # the keyword overrides go to a copy
 
 
 def test_package_solve_with_constraints_equals_solve_with_constraints():
@@ -409,7 +410,7 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
     by_solver = pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7)
     pdp.solve(by_package, config=_steps(1500), random_seed=7, constraints=get_constraints())
     config = _steps(1500)
-    config.random_seed = 7
+    config.run.random_seed = 7
     pdp.Solver(config).solve_with_constraints(by_solver, get_constraints())
     assert str(by_package.score) == str(by_solver.score)
 
@@ -417,16 +418,16 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("parallel_solver_count", 0, "must be positive"),
-        ("late_acceptance_size", -1, "must be >= 0"),
-        ("ruin_recreate_rewards", [1.0, 2.0], "exactly 4 values"),
-        ("request_ruin_max_requests", 0, "must be positive"),
-        ("bundle_max_requests", 0, "must be positive"),
+        ("run.parallel_solver_count", 0, "must be positive"),
+        ("acceptance.late_acceptance_size", -1, "must be >= 0"),
+        ("alns.rewards", [1.0, 2.0], "exactly 4 values"),
+        ("alns.request_ruin_max_requests", 0, "must be positive"),
+        ("custom_moves.bundle_max_requests", 0, "must be positive"),
     ],
 )
 def test_config_rejects_out_of_range_values(field, value, message):
     with pytest.raises(ValueError, match=message):
-        setattr(pdp.SolverConfig(), field, value)
+        set_setting(pdp.SolverConfig(), field, value)
 
 
 def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
@@ -434,8 +435,8 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
     class Recorder:
         def __init__(self, config):
-            seen["limit"] = config.best_score_limit
-            seen["callback"] = config.on_new_best
+            seen["limit"] = config.stop.target_score
+            seen["callback"] = config.run.on_new_best
 
         def solve(self, problem):
             seen["solved"] = problem
@@ -462,9 +463,9 @@ def _new_bests(acceptor) -> list:
     # A step limit only: the 4,000 steps end long before the default 30 s, so the cooling
     # follows the step count and a seed repeats.
     config = pdp.SolverConfig()
-    config.step_count_limit = 4000
-    config.random_seed = 5
-    config.acceptor_type = acceptor
+    config.stop.step_limit = 4000
+    config.run.random_seed = 5
+    config.acceptance.rule = acceptor
     calls = []
     plan = pdp.build_random_instance(request_count=30, vehicle_count=5, seed=3)
     pdp.solve(plan, config=config, on_new_best=lambda step, score: calls.append(step))

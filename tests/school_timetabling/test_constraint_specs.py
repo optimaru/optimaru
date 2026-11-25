@@ -525,10 +525,10 @@ def test_full_assert_solves_with_repeats_and_offsets(problem, picks):
     teacher-mask instances share the calculator's one TeacherMaskHub."""
     converted = st.convert_problem(problem)
     config = canon.SolverConfig()
-    config.full_assert = True
-    config.random_seed = 3
-    config.step_count_limit = 1500
-    config.spent_limit_seconds = 30
+    config.run.full_assert = True
+    config.run.random_seed = 3
+    config.stop.step_limit = 1500
+    config.stop.time_limit_seconds = 30
     calculator = canon.DecomposedCalculator(picks)
     canon.Solver(config).solve(converted.table, calculator)
     reported = converted.table.score

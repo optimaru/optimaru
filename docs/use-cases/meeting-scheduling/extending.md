@@ -198,8 +198,8 @@ from optimaru.meeting_scheduling.constraints import LateStartCost
 others = [spec for spec in get_constraints() if spec.name != "late_start_cost"]
 picks = [*others, LateStartCost(weight=5)]
 config = ms.SolverConfig()
-config.step_count_limit = 2_000_000
-config.random_seed = 1
+config.stop.step_limit = 2_000_000
+config.run.random_seed = 1
 schedule = ms.generate_demo_data()
 ms.solve(schedule, config=config, constraints=picks)
 print(sum(ms.constraint_costs(schedule, picks)["late_start_cost"]["costs"]))
@@ -459,9 +459,9 @@ steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
     schedule = ms.generate_demo_data()
     config = ms.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
     start = time.perf_counter()
     ms.solve(schedule, config=config, constraints=picked)
     seconds = time.perf_counter() - start

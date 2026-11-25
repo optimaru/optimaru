@@ -38,7 +38,7 @@ There are two scoring paths, and they give the same score for the same schedule
 | Constraints | the ten, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.6 million | 1.3 million |
 | Parallel starts | `parallel_solver_count` | one start |
-| The match a move takes | the costliest of `costliest_match_sample` random ones (4) | a random one |
+| The match a move takes | the costliest of `selection.costliest_match_sample` random ones (4) | a random one |
 
 The last row is why the two paths do not make the same moves: the default path
 reads what each match costs off the monolithic calculator and moves the expensive
@@ -211,8 +211,8 @@ from optimaru.sports_league_scheduling.constraints import WorkdayAwayTripCost
 others = [spec for spec in get_constraints() if spec.name != "workday_away_trip_cost"]
 picks = [*others, WorkdayAwayTripCost(weight=1)]
 config = sl.SolverConfig()
-config.step_count_limit = 5_000_000
-config.random_seed = 1
+config.stop.step_limit = 5_000_000
+config.run.random_seed = 1
 schedule = sl.generate_demo_data()
 sl.solve(schedule, config=config, constraints=picks)
 print(sum(sl.constraint_costs(schedule, picks)["workday_away_trip_cost"]["costs"]))
@@ -450,10 +450,10 @@ lines = (("default path", None, 4), ("default path, uniform pick", None, 1), ("a
 for label, picked, sample in lines:
     schedule = sl.generate_demo_data()
     config = sl.SolverConfig()
-    config.step_count_limit = steps
-    config.spent_limit_seconds = 600
-    config.random_seed = 1
-    config.costliest_match_sample = sample  # 4 is the default; the assembly does not use it
+    config.stop.step_limit = steps
+    config.stop.time_limit_seconds = 600
+    config.run.random_seed = 1
+    config.selection.costliest_match_sample = sample  # 4 is the default; the assembly does not use it
     start = time.perf_counter()
     sl.solve(schedule, config=config, constraints=picked)
     seconds = time.perf_counter() - start
@@ -467,13 +467,13 @@ The first line makes other moves, so it ends elsewhere.
 | Measured on the demo league, 5 million steps | Steps per second |
 | --- | --- |
 | default path, ten constraints | 2.65 million |
-| default path, ten constraints, `costliest_match_sample = 1` | 2.63 million |
+| default path, ten constraints, `selection.costliest_match_sample = 1` | 2.63 million |
 | assembly, ten constraints | 1.34 million |
 | assembly, ten constraints and the constraint of step 2 at weight 0 | 1.34 million |
 | assembly, ten constraints and the constraint of step 2 at weight 1 | 1.24 million |
 | assembly, the same with the table of step 4 | 1.26 million |
 | default path, eleven constraints (step 5) | 2.48 million |
-| default path, eleven constraints, `costliest_match_sample = 1` | 2.51 million |
+| default path, eleven constraints, `selection.costliest_match_sample = 1` | 2.51 million |
 | assembly, eleven constraints (step 5) | 1.26 million |
 
 Each figure is the median of three runs, the two around step 4 of eleven. The first four

@@ -174,43 +174,111 @@ def calculate_score(schedule: ProjectJobSchedule) -> Score:
     (predecessors_done_date/start_date/end_date) (also stored in schedule.score)."""
 
 class SolverConfig:
-    def __init__(self) -> None: ...
-    spent_limit_seconds: float
-    unimproved_spent_limit_seconds: float
-    step_count_limit: int
-    unimproved_step_count_limit: int
-    random_seed: int
-    parallel_solver_count: int
-    late_acceptance_size: int
-    """0 = automatic: clamp(16 * allocations, 400, 3200)."""
-    full_assert: bool
-    """Full score checks: compares the incremental score to a full recompute after every move
-    (for debugging; very slow)."""
-    ruin_recreate: bool
-    ruin_recreate_unimproved_step_trigger: int
-    ruin_recreate_min_ruin_fraction: float
-    ruin_recreate_max_ruin_fraction: float
-    ruin_recreate_max_ruin_count: int
-    ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: list[float]
-    ruin_recreate_polish_steps: int
-    change_move_weight: float
-    swap_move_weight: float
-    serial_schedule_moves: bool
-    """Enable SerialScheduleMove: change the order of the schedule (one allocation's place, a
-    group's, or an execution mode) and place every allocation again in that order, each as early
-    as its predecessors and the renewable resources allow. Without it the search changes one
-    delay or mode at a time and stalls above what the order of the allocations allows."""
-    custom_move_probability: float
-    """Cap on how often a step may draw the serial schedule move, which makes a few passes over
-    the schedule where a built-in move changes one value. 1 means no cap."""
-    best_score_limit: tuple[int, int, int]
-    """Stop early once (hard, medium, soft) is reached. -(2**63) on medium or
-    soft means no floor on the soft side (only hard is compared), so
-    (0, -(2**63), -(2**63)) stops at the first feasible solution."""
-    on_new_best: Callable[[int, Score], None] | None
-    """Called with (step, score) on every new best solution, in the same levels as
-    the final schedule.score of the solve method in use."""
+    """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``custom_moves``, ``moves``, ``acceptance``, ``alns``, ``run``.
+
+    Read and write a setting as ``config.<group>.<name>``, or give whole groups when making it:
+    ``SolverConfig(stop={"time_limit_seconds": 10})``. See `optimaru._config`."""
+
+    def __init__(
+        self,
+        *,
+        stop: dict[str, object] | None = None,
+        alns_trigger: dict[str, object] | None = None,
+        custom_moves: dict[str, object] | None = None,
+        moves: dict[str, object] | None = None,
+        acceptance: dict[str, object] | None = None,
+        alns: dict[str, object] | None = None,
+        run: dict[str, object] | None = None,
+    ) -> None: ...
+    GROUPS: tuple[str, ...]
+    def to_dict(self) -> dict[str, dict[str, object]]:
+        """Every setting by group and name: the shape of a request's ``solver_parameters``."""
+        ...
+
+    class Stop:
+        """``config.stop``: When the search stops: the first limit reached."""
+
+        time_limit_seconds: float
+        unimproved_time_limit_seconds: float
+        step_limit: int
+        unimproved_step_limit: int
+        target_score: tuple[int, int, int]
+        """Stop early once (hard, medium, soft) is reached. -(2**63) on medium or
+        soft means no floor on the soft side (only hard is compared), so
+        (0, -(2**63), -(2**63)) stops at the first feasible solution."""
+
+    stop: Stop
+    """When the search stops: the first limit reached."""
+
+    class AlnsTrigger:
+        """``config.alns_trigger``: When a stalled search is kicked by ruin & recreate."""
+
+        enabled: bool
+        unimproved_steps: int
+
+    alns_trigger: AlnsTrigger
+    """When a stalled search is kicked by ruin & recreate."""
+
+    class CustomMoves:
+        """``config.custom_moves``: A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+        serial_schedule: bool
+        """Enable SerialScheduleMove: change the order of the schedule (one allocation's place, a
+        group's, or an execution mode) and place every allocation again in that order, each as early
+        as its predecessors and the renewable resources allow. Without it the search changes one
+        delay or mode at a time and stalls above what the order of the allocations allows."""
+        share: float
+        """Cap on how often a step may draw the serial schedule move, which makes a few passes over
+        the schedule where a built-in move changes one value. 1 means no cap."""
+
+    custom_moves: CustomMoves
+    """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
+
+    class Moves:
+        """``config.moves``: A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+        change_weight: float
+        swap_weight: float
+
+    moves: Moves
+    """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Acceptance:
+        """``config.acceptance``: Whether the candidate becomes the current solution."""
+
+        late_acceptance_size: int
+        """0 = automatic: clamp(16 * allocations, 400, 3200)."""
+
+    acceptance: Acceptance
+    """Whether the candidate becomes the current solution."""
+
+    class Alns:
+        """``config.alns``: The ruin & recreate kick itself."""
+
+        min_ruin_fraction: float
+        max_ruin_fraction: float
+        max_ruin_count: int
+        operator_decay: float
+        rewards: list[float]
+        polish_steps: int
+
+    alns: Alns
+    """The ruin & recreate kick itself."""
+
+    class Run:
+        """``config.run``: Seeds, parallel starts and debugging aids."""
+
+        random_seed: int
+        parallel_solver_count: int
+        full_assert: bool
+        """Full score checks: compares the incremental score to a full recompute after every move
+        (for debugging; very slow)."""
+        on_new_best: Callable[[int, Score], None] | None
+        """Called with (step, score) on every new best solution, in the same levels as
+        the final schedule.score of the solve method in use."""
+
+    run: Run
+    """Seeds, parallel starts and debugging aids."""
 
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
