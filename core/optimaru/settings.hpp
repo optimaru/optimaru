@@ -346,9 +346,9 @@ struct SearchSettings {
     // CROSS-exchange moves. This is intentionally opt-in because a full
     // route-pair neighbourhood is much more expensive than the assignment
     // entity/value descent used by rostering and timetabling.
-    bool descent_list_advanced = false;
-    int descent_list_max_segment = 2;
-    int descent_list_candidate_routes = 4;
+    bool granular_descent = false;
+    int granular_descent_max_segment = 2;
+    int granular_descent_candidate_routes = 4;
 
     // route_elimination: empty the smallest list into the others in one atomic
     // move, so the acceptor sees the net effect of losing its depot legs
