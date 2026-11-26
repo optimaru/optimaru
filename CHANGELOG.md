@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
+
+**From 0.7.0. Breaking:** the settings of a `SolverConfig` are grouped by the stage of the solve
+they act in (`config.stop.time_limit_seconds`, `config.alns.min_ruin_fraction`,
+`config.moves.change_weight`, ...), and so are a request's `solver_parameters` and the API's
+`config` (`{"alns": {"min_ruin_fraction": 0.05}}`); a flat name is refused with its new place.
+The C++ `optimaru::Settings` has the same groups. The search itself is unchanged: every use
+case's seeded results are the same as 0.7.0's.
 
 - **Breaking (C++): the engine's `Settings` has the same groups.** `optimaru::Settings` is laid
   out like the Python `SolverConfig`: `construction`, `stop` (was `limits`), `alns_trigger`
