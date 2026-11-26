@@ -29,6 +29,15 @@ Score levelScoreOf(const optimaru::DecomposedObjective<ProjectJobSchedule>& calc
             optimaru::round_score_level(levels.soft, "soft")};
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+void registerMoves(optimaru::Solver<ProjectJobSchedule>& engine, const Solver::Config& config) {
+    if (config.serial_schedule_moves) {
+        engine.add_move_operator(std::make_unique<SerialScheduleMove>());
+    }
+}
+
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the move mix, the ALNS knobs and the delay-guided value
 // recommender (which reads only the working solution, so it applies to the
@@ -96,9 +105,7 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     auto engine = optimaru::Solver<ProjectJobSchedule>(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    if (config.serial_schedule_moves) {
-        engine.add_move_operator(std::make_unique<SerialScheduleMove>());
-    }
+    registerMoves(engine, config);
     engine.solve(schedule, calculator);
 }
 

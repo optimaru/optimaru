@@ -875,12 +875,14 @@ std::shared_ptr<const RequestGroups> requestGroupsOf(const PdpRoutePlan& plan) {
     return groups;
 }
 
-// The request-level operators both solve() overloads register. They read the
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+// Here: the request-level operators both solve() overloads register. They read the
 // plan (which request a stop belongs to, the windows, the vehicle limits),
 // never the calculator, so a caller's constraint assembly keeps them.
-void addRequestOperators(optimaru::Solver<PdpRoutePlan>& engine, const Solver::Config& config,
-                         const PdpRoutePlan& plan,
-                         const std::shared_ptr<const RequestGroups>& groups) {
+void registerMoves(optimaru::Solver<PdpRoutePlan>& engine, const Solver::Config& config,
+                   const PdpRoutePlan& plan, const std::shared_ptr<const RequestGroups>& groups) {
     if (config.pair_moves) {
         engine.add_move_operator(std::make_unique<PairRelocateMove>(
                 config.pair_repair_probability, config.pair_assignment_probability, groups));
@@ -962,7 +964,7 @@ void Solver::solve(PdpRoutePlan& plan) {
     PdpIncrementalScoreCalculator calculator;
     optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    addRequestOperators(engine, config_, plan, groups);
+    registerMoves(engine, config_, plan, groups);
     engine.solve(plan, calculator);
 
     plan.score = ScoreCalculator::score(plan);
@@ -995,7 +997,7 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
         // PDP search work.
         optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-        addRequestOperators(engine, config_, plan, groups);
+        registerMoves(engine, config_, plan, groups);
         engine.solve(plan, calculator);
     }
 

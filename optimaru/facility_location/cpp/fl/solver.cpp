@@ -393,6 +393,27 @@ std::shared_ptr<std::vector<int>> buildFacilityPreference(const FacilityLocation
     return preference;
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+void registerMoves(optimaru::Solver<FacilityLocationProblem>& engine, const Solver::Config& config,
+                   const FacilityLocationProblem& problem,
+                   const std::shared_ptr<std::vector<int>>& preference, int preferenceKeep) {
+    if (preference && config.close_facility_moves) {
+        engine.add_move_operator(std::make_unique<CloseFacilityMove>(
+                preference, preferenceKeep, config.close_facility_migrate_probability));
+    }
+    if (preference && config.swap_facility_moves) {
+        // Enough consumers for a facility to fill itself from: eight times
+        // its even share, at least 64.
+        const int reach =
+                std::min(problem.consumerCount(),
+                         std::max(64, 8 * problem.consumerCount() / problem.facilityCount()));
+        engine.add_move_operator(std::make_unique<SwapFacilityMove>(
+                preference, preferenceKeep, buildNearestConsumers(problem, reach), reach));
+    }
+}
+
 // Shared engine wiring for both solve() overloads: construction heuristic +
 // late-acceptance local search (+ ALNS kicks), plus the domain's own macro
 // move, driven by whichever calculator the caller brought (the monolithic
@@ -471,19 +492,7 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
 
     optimaru::Solver<FacilityLocationProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    if (preference && config.close_facility_moves) {
-        engine.add_move_operator(std::make_unique<CloseFacilityMove>(
-                preference, preferenceKeep, config.close_facility_migrate_probability));
-    }
-    if (preference && config.swap_facility_moves) {
-        // Enough consumers for a facility to fill itself from: eight times
-        // its even share, at least 64.
-        const int reach =
-                std::min(problem.consumerCount(),
-                         std::max(64, 8 * problem.consumerCount() / problem.facilityCount()));
-        engine.add_move_operator(std::make_unique<SwapFacilityMove>(
-                preference, preferenceKeep, buildNearestConsumers(problem, reach), reach));
-    }
+    registerMoves(engine, config, problem, preference, preferenceKeep);
     engine.solve(problem, calculator);
 }
 

@@ -71,6 +71,16 @@ bool construct(KnapsackProblem& problem) {
     return seeded;
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+void registerMoves(optimaru::Solver<KnapsackProblem>& engine, const Solver::Config& config,
+                   const KnapsackProblem& problem) {
+    if (config.core_repack_moves && problem.itemCount() >= 2) {
+        engine.add_move_operator(std::make_unique<CoreRepackMove>(problem));
+    }
+}
+
 // One single-start search of a constructed problem, with the domain's macro
 // move (ks/search/moves/moves.hpp) registered, driven by whichever calculator the caller
 // brought. Returns the engine's best score.
@@ -78,9 +88,7 @@ Score runEngine(const Solver::Config& config, KnapsackProblem& problem,
                 optimaru::Objective<KnapsackProblem>& calculator, bool seeded) {
     optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config, problem, seeded));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    if (config.core_repack_moves && problem.itemCount() >= 2) {
-        engine.add_move_operator(std::make_unique<CoreRepackMove>(problem));
-    }
+    registerMoves(engine, config, problem);
     return engine.solve(problem, calculator);
 }
 

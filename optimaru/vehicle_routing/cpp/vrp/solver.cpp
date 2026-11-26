@@ -135,11 +135,14 @@ std::shared_ptr<const VisitGroups> visitGroupsOf(const VehicleRoutePlan& plan) {
     return groups;
 }
 
-// The group operators of a solve on a constraint assembly (none for a plan
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+// Here: the group operators of a solve on a constraint assembly (none for a plan
 // without groups). They read the plan, never the calculator, so a caller's
 // assembly keeps them.
-void addGroupOperators(optimaru::Solver<VehicleRoutePlan>& engine, const Solver::Config& config,
-                       const std::shared_ptr<const VisitGroups>& groups) {
+void registerMoves(optimaru::Solver<VehicleRoutePlan>& engine, const Solver::Config& config,
+                   const std::shared_ptr<const VisitGroups>& groups) {
     GroupMoveSettings moves;
     moves.ruinRecreate = config.group_ruin_recreate;
     moves.ruinMaxVisits = config.group_ruin_max_visits;
@@ -369,7 +372,7 @@ void Solver::solve(VehicleRoutePlan& plan,
         }
         optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-        addGroupOperators(engine, config_, groups);
+        registerMoves(engine, config_, groups);
         engine.solve(plan, calculator);
     }
 

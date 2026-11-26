@@ -44,6 +44,21 @@ void prepareSolve(BinPackingProblem& problem) {
     ScoreCalculator::prepare(problem);
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+void registerMoves(optimaru::Solver<BinPackingProblem>& engine, const Solver::Config& config,
+                   const BinPackingProblem& problem) {
+    if (config.empty_bin_moves && problem.itemCount() >= 2)
+        engine.add_move_operator(std::make_unique<EmptyBinMove>(config.empty_bin_candidates));
+    if (config.repack_moves && problem.itemCount() >= 2) {
+        engine.add_move_operator(std::make_unique<RepackMove>(config.empty_bin_candidates,
+                                                              config.repack_partner_bins));
+    }
+    if (config.trade_moves && problem.itemCount() >= 2)
+        engine.add_move_operator(std::make_unique<TradeMove>(config.empty_bin_candidates));
+}
+
 // Shared engine wiring for both solve() overloads: late-acceptance local
 // search (+ ALNS kicks), plus the domain's macro moves (bp/search/moves/moves.hpp), its
 // rule for steps that keep the score (bp/search/accept/fill_late_acceptance.hpp) and
@@ -98,14 +113,7 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
             return std::make_unique<FillLateAcceptance>(historyLength, initial, live);
         });
     }
-    if (config.empty_bin_moves && problem.itemCount() >= 2)
-        engine.add_move_operator(std::make_unique<EmptyBinMove>(config.empty_bin_candidates));
-    if (config.repack_moves && problem.itemCount() >= 2) {
-        engine.add_move_operator(std::make_unique<RepackMove>(config.empty_bin_candidates,
-                                                              config.repack_partner_bins));
-    }
-    if (config.trade_moves && problem.itemCount() >= 2)
-        engine.add_move_operator(std::make_unique<TradeMove>(config.empty_bin_candidates));
+    registerMoves(engine, config, problem);
     engine.solve(problem, calculator);
 }
 
