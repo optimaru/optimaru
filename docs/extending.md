@@ -44,7 +44,8 @@ A cost that should be **on by default** adds one more step, the fast path
 4. Tests: `full_assert`, undo, and the same seeds with the move on and off.
 
 The engine asks a use case's moves after the built-in strategies, and picks among them and
-the move mix adaptively (`LocalSearch::choose_move`), so there is no weight to tune.
+the move mix adaptively (`Solver::choose_move` in
+[`solver.hpp`](../core/optimaru/solver.hpp)), so there is no weight to tune.
 Python then switches it: `config.custom_moves.my = False`.
 
 ## Where things are

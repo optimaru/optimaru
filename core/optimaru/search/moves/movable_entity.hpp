@@ -11,7 +11,7 @@
 namespace optimaru {
 
 // Return a non-pinned entity: keep `e` if movable, otherwise resample (then
-// scan) for one. Local search has checked that one exists, so the fallback
+// scan) for one. The solver has checked that one exists (Solver::run), so the fallback
 // to `e` is only a guard.
 template <typename Solution>
 int movable_entity(const Solution& sol, int e, std::uniform_int_distribution<int>& pick,

@@ -8,6 +8,8 @@
 #include <random>
 #include <vector>
 
+#include "optimaru/score/score.hpp"
+
 namespace optimaru {
 
 // ---------------------------------------------------------------------------
@@ -23,6 +25,16 @@ namespace optimaru {
 // The outcome enum is shared with the engine's move/ruin bookkeeping.
 
 enum class MoveOutcome { NewBest = 0, Better = 1, Accepted = 2, Rejected = 3 };
+
+// How a candidate fared against the current and the best score, given the
+// acceptor's ruling.
+inline MoveOutcome classify_outcome(const Score& candidate, const Score& current, const Score& best,
+                                    bool accepted) {
+    return candidate > best      ? MoveOutcome::NewBest
+           : candidate > current ? MoveOutcome::Better
+           : accepted            ? MoveOutcome::Accepted
+                                 : MoveOutcome::Rejected;
+}
 
 // Which adaptation strategy the ruin/move selection uses; one class per value
 // in this directory.

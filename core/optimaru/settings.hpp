@@ -278,7 +278,7 @@ struct CustomMoveSettings {
 };
 
 // A step's move, first: the built-in strategies, each drawn by its own weight in
-// a fixed order (LocalSearch::choose_move); the first that hits is the move.
+// a fixed order (Solver::choose_move); the first that hits is the move.
 struct StrategySettings {
     // Destroy-and-repair as an ORDINARY move, in addition to the stagnation
     // kick (AlnsSettings): a small ruin is applied, repaired, scored, and UNDONE if the

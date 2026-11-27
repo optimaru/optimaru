@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking (C++): the step loop is the solver's.** `optimaru::LocalSearch` and
+  `search/local_search.hpp` are gone. What the class ran was never one local search: it is the
+  whole iteration of a solve (choose a move, score it, ask the acceptor, tell the selectors, and
+  kick or start the next late-acceptance stage on a stall), so it is now `Solver::run`, in
+  `solver.hpp`, and it holds no move. What the header carried beside the loop moved to the folder
+  it belongs to: the ordinary moves to `search/moves/move_mix.hpp` (`MoveMixSampler`), the
+  stagnation kick to `search/ruin_recreate/kick.hpp` (`StagnationKick`), the ruin operators of a
+  solve and their adaptive selection to `search/ruin_recreate/ruin_pool.hpp` (`RuinPool`), the
+  built-in strategies and the draw among them to `search/strategies.hpp` (`BuiltinStrategies`),
+  the acceptor factory to `search/accept/acceptors.hpp` (`make_acceptor`) and the outcome of a
+  candidate to `search/select/scheme.hpp` (`classify_outcome`). `Solver`'s public interface is
+  unchanged, and so is every solve: the same seed and step limit give the same result. Nothing
+  changes in the Python package.
+
 ## 0.8.0
 
 **From 0.7.0. Breaking:** the settings of a `SolverConfig` are grouped by the stage of the solve

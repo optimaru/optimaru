@@ -2752,6 +2752,43 @@ void testHardMediumSoftScore() {
           "... and decodes a score with no medium part");
 }
 
+// The operators a solve draws among, per shape: an operator that can do
+// nothing on a shape is not registered there, since it would take the draws
+// of the ones that can (RuinPool, BuiltinStrategies).
+template <typename Solution>
+std::pair<std::size_t, std::size_t> operatorCounts(const optimaru::Settings& config) {
+    const std::vector<std::unique_ptr<optimaru::RuinOperator<Solution>>> custom;
+    optimaru::Neighborhoods nearby;
+    // Never filled: the constructors below only keep a reference to it.
+    optimaru::ElementIndex<Solution> index;
+    optimaru::GreedyRepair<Solution> repair(index, nearby, config.alns, config.unassigned_list);
+    optimaru::RuinPool<Solution> ruins(config.alns, custom);
+    optimaru::BuiltinStrategies<Solution> strategies(config, nearby, index, repair, ruins);
+    return {ruins.operators().size(), strategies.size()};
+}
+
+void testOperatorPools() {
+    std::printf("== the operators of a solve, per shape ==\n");
+    optimaru::Settings config;
+    config.alns.sisr_ruin = true;
+    config.alns.route_ruin = true;
+    config.strategies.route_elimination_weight = 0.1;
+    config.strategies.ejection_chain_weight = 0.05;
+    config.strategies.iterated_local_search_weight = 0.05;
+    config.strategies.descent_weight = 0.03;
+    config.strategies.ruin_recreate_weight = 0.05;
+    const auto assignment = operatorCounts<TaskAssignment>(config);
+    check(assignment.first == 3, "assignment: random, related and worst ruin only");
+    check(assignment.second == 2, "assignment: descent and the destroy-repair move only");
+    const auto sequence = operatorCounts<TspSolution>(config);
+    check(sequence.first == 5, "sequence: the SISR and route ruins join");
+    check(sequence.second == 5, "sequence: all five strategies");
+    config.alns.sisr_ruin = false;
+    config.strategies.descent_weight = 0.0;
+    const auto fewer = operatorCounts<TspSolution>(config);
+    check(fewer.first == 4 && fewer.second == 4, "a ruin or a strategy switched off is left out");
+}
+
 }  // namespace
 
 int main() {
@@ -2767,6 +2804,7 @@ int main() {
     testCustomMoveProbability();
     testLnsEscapesLocalOptimum(optimum);
     testHistoryStages();
+    testOperatorPools();
     testHistoryGrowth(separableOptimum);
     testHistoryGrowthOnAWarmStart(optimum);
     testNothingPlaced();

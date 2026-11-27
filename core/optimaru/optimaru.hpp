@@ -10,8 +10,9 @@
 //   score/      the score, its levels and the incremental objectives
 //   construct/  the initial solution
 //   stop/       when a solve ends
-//   search/     local search: the step loop and the plugin points for custom
-//               operators, and its parts:
+//   search/     what the solver's step loop (Solver::run, solver.hpp) draws
+//               on: the plugin points for custom operators, the built-in
+//               strategies, and
 //     moves/          every move the step loop can draw
 //     ruin_recreate/  ruin operators + recreate: one destroy-and-repair unit
 //     accept/         acceptance rules

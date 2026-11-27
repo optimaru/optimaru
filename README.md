@@ -294,7 +294,8 @@ library" are built from `optimaru/<use case>/cpp/` against these headers.
 ```
 core/optimaru/
 ├── optimaru.hpp                  umbrella include for consumers
-├── solver.hpp                    Solver: construction, then search; multi-start
+├── solver.hpp                    Solver: construction, then the step loop
+│                                 (Solver::run); multi-start
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
 │                                 NeighborSettings, AlnsSettings, ...
 ├── solver_config.hpp             what every use case's Solver::Config shares:
@@ -323,24 +324,28 @@ core/optimaru/
 │                                 cheapest insertion
 ├── stop/                         when a solve ends (StopCondition) and the
 │                                 throttle long-running moves consult it through
-├── search/                       local search: the step loop and its parts
-│   ├── local_search.hpp          the step loop
+├── search/                       what the solver's step loop (Solver::run)
+│   │                             draws on; it holds no loop of its own
 │   ├── operators.hpp             the plugin points for custom operators
 │   │                             (MoveOperator / RuinOperator)
-│   ├── moves/                    every move the step loop draws: the sequence
-│   │                             moves (list_move) and their previews, descent,
-│   │                             ejection chain, iterated local search, route
-│   │                             elimination
+│   ├── strategies.hpp            the built-in strategies of a solve and the
+│   │                             draw among them
+│   ├── moves/                    every move the step loop draws: move_mix (the
+│   │                             ordinary moves: change, swap, and the sequence
+│   │                             moves of list_move, with their previews),
+│   │                             descent, ejection chain, iterated local
+│   │                             search, route elimination
 │   ├── ruin_recreate/            one destroy-and-repair unit: the ruin operators
-│   │                             (random, related, worst, SISR, route), the
-│   │                             greedy / regret-k recreate, and
-│   │                             ruin_recreate_move, which applies them as an
-│   │                             ordinary move (the stagnation kick uses the
-│   │                             same parts)
+│   │                             (random, related, worst, SISR, route) and
+│   │                             ruin_pool, the adaptive selection over them;
+│   │                             the greedy / regret-k recreate; kick, the
+│   │                             stagnation kick; ruin_recreate_move, the same
+│   │                             parts as an ordinary move
 │   ├── accept/                   Acceptor and one file per rule: hill climbing,
 │   │                             late acceptance, entity tabu, simulated
 │   │                             annealing, great deluge, step counting,
-│   │                             record-to-record travel; history_stages, late
+│   │                             record-to-record travel; the factory
+│   │                             (make_acceptor); history_stages, late
 │   │                             acceptance in stages of growing history
 │   └── select/                   adaptive operator selection: MoveOutcome,
 │                                 roulette wheel, segmented roulette, alpha-UCB,
