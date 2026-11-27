@@ -44,8 +44,10 @@ public:
         const int n = ruin_candidate_count(ctx);
         std::uniform_real_distribution<double> fraction(lns_.min_ruin_fraction,
                                                         lns_.max_ruin_fraction);
-        int ruin_count = std::clamp(static_cast<int>(fraction(rng) * n), 1,
-                                    std::min(n - 1, lns_.max_ruin_count));
+        // At least one, also where n - 1 or the configured maximum is below
+        // one (a single entity or element): the bounds stay in order.
+        const int most = std::max(1, std::min(n - 1, lns_.max_ruin_count));
+        const int ruin_count = std::clamp(static_cast<int>(fraction(rng) * n), 1, most);
 
         int op = ruins_.selector().select(rng);
         std::vector<int> ruined = ruins_.operators()[op]->select_ruin_set(ctx, ruin_count, rng);

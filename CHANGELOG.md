@@ -15,6 +15,10 @@
   candidate to `search/select/scheme.hpp` (`classify_outcome`). `Solver`'s public interface is
   unchanged, and so is every solve: the same seed and step limit give the same result. Nothing
   changes in the Python package.
+- **Fix: a kick on a single entity or element.** With one entity (or one element) and kicks on,
+  the number to ruin was clamped between 1 and `n - 1 = 0`, bounds `std::clamp` does not allow
+  (the same with `alns.max_ruin_count` below 1). The upper bound is now at least 1. The standard
+  libraries the wheels are built with already returned 1 there, so no seeded result changes.
 
 ## 0.8.0
 

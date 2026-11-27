@@ -1066,6 +1066,17 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
         threw = true;
     }
     check(!threw, "assignment-shape ruin & recreate passes ScoreChecks::Full");
+
+    // One entity: the kick ruins it and puts it back (a ruin of n - 1 = 0
+    // would be none at all).
+    TaskAssignment single;
+    single.workerCount = 2;
+    single.cost = {{5, 3}};
+    single.assignment = {-1};
+    TaskAssignmentCalculator calculator3;
+    const Score one = optimaru::Solver<TaskAssignment>(config).solve(single, calculator3);
+    check(single.assignment[0] == 1 && one == Score{0, -3.0},
+          "a kick on a single entity leaves it on its best value");
 }
 
 // 100 uniform-random cities (fixed instance seed): the standard benchmark
