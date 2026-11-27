@@ -1067,8 +1067,18 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     }
     check(!threw, "assignment-shape ruin & recreate passes ScoreChecks::Full");
 
-    // One entity: the kick ruins it and puts it back (a ruin of n - 1 = 0
-    // would be none at all).
+    // How many a kick ruins: the drawn share, at most n - 1 and the maximum,
+    // and never none.
+    check(optimaru::kick_ruin_count(7, 10, 60) == 7, "a kick ruins the share it drew");
+    check(optimaru::kick_ruin_count(20, 10, 60) == 9, "at most all but one");
+    check(optimaru::kick_ruin_count(50, 100, 30) == 30, "at most the configured maximum");
+    check(optimaru::kick_ruin_count(0, 10, 60) == 1, "at least one");
+    check(optimaru::kick_ruin_count(0, 1, 60) == 1 && optimaru::kick_ruin_count(5, 1, 60) == 1,
+          "one of a single entity or element");
+    check(optimaru::kick_ruin_count(3, 10, 0) == 1 && optimaru::kick_ruin_count(3, 10, -4) == 1,
+          "one with a maximum below one");
+
+    // One entity, end to end: the kick ruins it and puts it back.
     TaskAssignment single;
     single.workerCount = 2;
     single.cost = {{5, 3}};

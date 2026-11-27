@@ -16,9 +16,12 @@
   unchanged, and so is every solve: the same seed and step limit give the same result. Nothing
   changes in the Python package.
 - **Fix: a kick on a single entity or element.** With one entity (or one element) and kicks on,
-  the number to ruin was clamped between 1 and `n - 1 = 0`, bounds `std::clamp` does not allow
-  (the same with `alns.max_ruin_count` below 1). The upper bound is now at least 1. The standard
-  libraries the wheels are built with already returned 1 there, so no seeded result changes.
+  the number to ruin was clamped between 1 and `n - 1 = 0`, bounds `std::clamp` does not allow.
+  What came out depended on the standard library: 0 on the Linux wheels (libstdc++), a kick that
+  ruined nothing, and 1 on the macOS ones (libc++). Both now ruin one, so a seeded solve of a
+  single entity or element with kicks on can end differently on Linux. The same went for C++
+  callers that set `alns.max_ruin_count` below 1 (Python refuses that): libstdc++ handed the
+  value itself to the ruin operators, a negative count; it is now 1.
 
 ## 0.8.0
 
