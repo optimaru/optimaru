@@ -2752,8 +2752,6 @@ void testHardMediumSoftScore() {
           "... and decodes a score with no medium part");
 }
 
-}  // namespace
-
 // The operators a solve draws among, per shape: an operator that can do
 // nothing on a shape is not registered there, since it would take the draws
 // of the ones that can (RuinPool, BuiltinStrategies).
@@ -2761,6 +2759,7 @@ template <typename Solution>
 std::pair<std::size_t, std::size_t> operatorCounts(const optimaru::Settings& config) {
     const std::vector<std::unique_ptr<optimaru::RuinOperator<Solution>>> custom;
     optimaru::Neighborhoods nearby;
+    // Never filled: the constructors below only keep a reference to it.
     optimaru::ElementIndex<Solution> index;
     optimaru::GreedyRepair<Solution> repair(index, nearby, config.alns, config.unassigned_list);
     optimaru::RuinPool<Solution> ruins(config.alns, custom);
@@ -2789,6 +2788,8 @@ void testOperatorPools() {
     const auto fewer = operatorCounts<TspSolution>(config);
     check(fewer.first == 4 && fewer.second == 4, "a ruin or a strategy switched off is left out");
 }
+
+}  // namespace
 
 int main() {
     const Score optimum = bruteForceOptimum(buildTaskInstance());
