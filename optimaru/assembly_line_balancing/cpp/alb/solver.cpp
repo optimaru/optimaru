@@ -185,7 +185,7 @@ std::shared_ptr<const std::vector<int>> construct(AssemblyLineBalancingProblem& 
 }
 
 // The use case's own moves (in Python: config.custom_moves), which a step asks for
-// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// after the built-in strategies (optimaru::Solver::choose_move). To add a move:
 // write it in search/moves/ and register it here, behind a switch of the Config.
 void registerMoves(optimaru::Solver<AssemblyLineBalancingProblem>& engine,
                    const Solver::Config& config, const AssemblyLineBalancingProblem& problem,

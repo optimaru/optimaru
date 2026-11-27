@@ -43,6 +43,14 @@ inline std::unique_ptr<OperatorSelectionScheme> make_operator_selection_scheme(
     }
 }
 
+// The scheme the ALNS settings configure, over `operator_count` operators.
+inline std::unique_ptr<OperatorSelectionScheme> make_operator_selection_scheme(
+        const AlnsSettings& lns, std::size_t operator_count) {
+    return make_operator_selection_scheme(lns.selection_type, static_cast<int>(operator_count),
+                                          lns.rewards, lns.operator_decay,
+                                          lns.selection_segment_length, lns.selection_alpha);
+}
+
 }  // namespace optimaru
 
 #endif  // OPTIMARU_SEARCH_SELECT_SCHEMES_HPP
