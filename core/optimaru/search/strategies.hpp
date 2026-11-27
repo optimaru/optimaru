@@ -4,6 +4,7 @@
 #ifndef OPTIMARU_SEARCH_STRATEGIES_HPP
 #define OPTIMARU_SEARCH_STRATEGIES_HPP
 
+#include <cstddef>
 #include <memory>
 #include <random>
 #include <vector>
@@ -90,6 +91,9 @@ public:
     BuiltinStrategies(const BuiltinStrategies&) = delete;
     BuiltinStrategies& operator=(const BuiltinStrategies&) = delete;
 
+    // How many strategies this solve draws among.
+    std::size_t size() const { return weighted_.size(); }
+
     // Offer each strategy its own draw, in priority order, and take the first
     // that hits; null means this step falls through to the ordinary move mix.
     //
@@ -127,6 +131,10 @@ private:
     std::unique_ptr<OperatorSelectionScheme> ils_ruin_selector_;
     IteratedLocalSearchMove<Solution> iterated_local_search_;
     std::vector<Weighted> weighted_;
+    // The solver and the move mix have one each. A uniform distribution keeps
+    // no state between draws, so three draw exactly as one shared would; a
+    // distribution that keeps state (std::normal_distribution) would have to
+    // be shared for seeded results to stay as they are.
     std::uniform_real_distribution<double> unit_{0.0, 1.0};
 };
 
