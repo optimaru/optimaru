@@ -21,7 +21,7 @@
 
 namespace optimaru {
 
-// How many of its `n` candidates a kick ruins: `drawn`, its share of them,
+// How many of its `n` candidates (n >= 1) a kick ruins: `drawn`, its share of them,
 // kept to at most n - 1 and the configured maximum, and to at least one. One
 // also where n - 1 or the maximum is below one (a single entity or element):
 // a kick that ruins nothing is no kick.

@@ -1078,15 +1078,23 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     check(optimaru::kick_ruin_count(3, 10, 0) == 1 && optimaru::kick_ruin_count(3, 10, -4) == 1,
           "one with a maximum below one");
 
-    // One entity, end to end: the kick ruins it and puts it back.
+    // One entity, end to end, with the settings above (hill climbing, a kick
+    // every 50 unimproved steps, ScoreChecks::Full): the kicks neither crash
+    // nor corrupt the score. That they ruin one is what the checks above say.
     TaskAssignment single;
     single.workerCount = 2;
     single.cost = {{5, 3}};
     single.assignment = {-1};
     TaskAssignmentCalculator calculator3;
-    const Score one = optimaru::Solver<TaskAssignment>(config).solve(single, calculator3);
-    check(single.assignment[0] == 1 && one == Score{0, -3.0},
-          "a kick on a single entity leaves it on its best value");
+    Score one;
+    threw = false;
+    try {
+        one = optimaru::Solver<TaskAssignment>(config).solve(single, calculator3);
+    } catch (const optimaru::ScoreMismatchError&) {
+        threw = true;
+    }
+    check(!threw && single.assignment[0] == 1 && one == Score{0, -3.0},
+          "kicks on a single entity leave it on its best value");
 }
 
 // 100 uniform-random cities (fixed instance seed): the standard benchmark
