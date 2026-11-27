@@ -135,7 +135,11 @@ key nothing is sent.
 
 ## Contributing: add a constraint or a move
 
-Both plug into a use case without touching the engine.
+[`docs/how-it-solves.md`](docs/how-it-solves.md) follows a solve through the code
+step by step, in the order of the flowchart on
+[optimaru.com](https://optimaru.com/en/solutions/engine/): where each step is, which
+settings change it and how to add to it. Constraints and moves both plug into a use
+case without touching the engine.
 
 | To add | You write | Guide |
 | --- | --- | --- |

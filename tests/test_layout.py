@@ -98,6 +98,14 @@ def test_cmake_builds_every_use_case():
     assert set(block.group(1).split()) == USE_CASES
 
 
+def test_the_idea_issue_template_offers_every_use_case():
+    text = (ROOT / ".github" / "ISSUE_TEMPLATE" / "move-or-constraint.yml").read_text()
+    block = re.search(r"id: use-case\n.*?options:\n(.*?)\n    validations:", text, re.S)
+    assert block, "move-or-constraint.yml: no use-case dropdown"
+    options = {line.strip()[2:] for line in block.group(1).splitlines()}
+    assert options - {"several", "the engine"} == USE_CASES
+
+
 def test_ci_reads_the_use_cases_off_the_repository():
     """ci.yml lists no use case by hand: its `use-cases` job globs the same stubs as USE_CASES
     above, and the three matrices take their lists from that job."""

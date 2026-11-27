@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How a solve runs, in the code
+    url: https://github.com/optimaru/optimaru/blob/main/docs/how-it-solves.md
+    about: Where each step of the search is, and how to add to it.
+  - name: Contributing guide
+    url: https://github.com/optimaru/optimaru/blob/main/CONTRIBUTING.md
+    about: Setup, the recipes for a move and a constraint, and the rules for a pull request.

@@ -1,0 +1,74 @@
+name: Move or constraint idea
+description: Propose a move, a ruin or a constraint for one use case before writing it.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Moves, ruins and constraints plug into one use case without touching the engine.
+        [docs/how-it-solves.md](https://github.com/optimaru/optimaru/blob/main/docs/how-it-solves.md)
+        shows where each fits in a solve, and
+        [docs/extending.md](https://github.com/optimaru/optimaru/blob/main/docs/extending.md)
+        how to write one.
+  - type: dropdown
+    id: use-case
+    attributes:
+      label: Use case
+      description: The subpackage under optimaru/, or "several" / "the engine".
+      options:
+        - assembly_line_balancing
+        - bed_allocation
+        - bin_packing
+        - conference_scheduling
+        - employee_scheduling
+        - facility_location
+        - flight_crew_scheduling
+        - food_packaging
+        - knapsack
+        - maintenance_scheduling
+        - max_cut
+        - meeting_scheduling
+        - order_picking
+        - pickup_delivery
+        - project_job_scheduling
+        - quadratic_assignment
+        - school_timetabling
+        - semiconductor_scheduling
+        - sports_league_scheduling
+        - task_assigning
+        - tournament_scheduling
+        - vehicle_routing
+        - several
+        - the engine
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What it is
+      options:
+        - A move (MoveOperator)
+        - A ruin (RuinOperator)
+        - A constraint (a cost component)
+        - A construction heuristic
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What it does to a solution, or what it costs, in a few sentences. A paper or a known name helps.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why the built-ins do not cover it
+      description: For a move, whether reweighting the move mix (config.moves) or a built-in strategy (config.strategies) gets there. For a constraint, which existing one comes closest.
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: Pull request
+      options:
+        - label: I would like to write it myself.

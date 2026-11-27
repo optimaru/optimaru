@@ -55,6 +55,9 @@ namespace optimaru {
 // plus the nearby-neighbour precomputation, custom operator registration and
 // multi-start solving.
 //
+// docs/how-it-solves.md follows run() step by step, with where each part is
+// and how to add one; the steps are marked below as "How it solves, <n>".
+//
 // The loop is the solver's own and holds no move: every part it draws on is
 // a plugin under search/ (moves/, ruin_recreate/, accept/, select/), the
 // built-in ones through the same MoveOperator / RuinOperator / Acceptor
@@ -111,6 +114,7 @@ public:
         Editor<Solution> editor(solution, objective, config_.run.score_checks);
         StopCondition stop(config_.stop, stop_requested_.get(), run_stop_.get());
         build_nearby(solution);
+        // How it solves, 1: construction (docs/how-it-solves.md).
         Construction<Solution>::run(editor, config_.construction);
         return run(editor, stop);
     }
@@ -253,6 +257,7 @@ private:
                                                    index.positions()};
 
         const AlnsTriggerSettings& trigger = config_.alns_trigger;  // when a kick runs
+        // How it solves, 2: the current and the best solution.
         Score current_score = editor.score();
         Score best_score = current_score;
         Snapshot best = Snapshot::take(solution);
@@ -300,19 +305,22 @@ private:
         // (AcceptanceSettings::history_growth).
         HistoryStages stages(config_, acceptor_factory_ != nullptr, current_score, stop.progress());
 
+        // How it solves, 3: the stop condition, at the head of every step.
         while (!stop.should_stop(step, best_score, force_time_check)) {
             force_time_check = false;
             std::int64_t patience = std::max(lns_trigger, 8 * ema_best_gap);
             // A stage has converged only when a whole history has gone by
             // without an improving move.
             if (stages.enabled()) patience = std::max(patience, stages.min_patience());
-            // Stalled: the next stage if one is due, else a kick, else wait.
+            // How it solves, 4: stalled? The next stage if one is due, else a
+            // kick (5), else wait.
             const bool stalled = steps_since_best_or_lns >= patience;
             if (stalled && stages.enabled() &&
                 stages.on_converged(stop.progress(), !trigger.enabled)) {
                 acceptor = stages.start_next(stop.progress());
                 steps_since_best_or_lns = 0;
             } else if (stalled && trigger.enabled) {
+                // How it solves, 5: the ruin and recreate kick.
                 current_score = kick.apply(operator_context, current_score, best_score, rng);
                 force_time_check = true;
                 // A perturbation kick becomes the new incumbent uncondition-
@@ -331,6 +339,8 @@ private:
                 // search goes on with the history it has.)
                 steps_since_best_or_lns = 0;
             } else {
+                // How it solves, 6-8: a built-in strategy, a use-case move or
+                // the move mix (choose_move).
                 const MoveChoice choice =
                         choose_move(strategies, *move_selector, rng, stages.in_later_stage());
                 MoveOperator<Solution>* op = choice.op;
@@ -361,6 +371,8 @@ private:
                     entities = custom_entities.data();
                     entity_count = static_cast<int>(custom_entities.size());
                 }
+                // How it solves, 9: the candidate's score, incremental or a
+                // preview (above); 10: the acceptor.
                 if (applied) {
                     const bool accepted = acceptor->accepts(
                             candidate_score, current_score, best_score, entities, entity_count,
@@ -408,6 +420,7 @@ private:
             }
             acceptor->on_step_end(current_score);
 
+            // How it solves, 11: a new best.
             if (current_score > best_score) {
                 best_score = current_score;
                 Snapshot::capture(best, solution);  // reuses the snapshot's storage
