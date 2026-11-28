@@ -11,8 +11,8 @@ namespace cl {
 // Hard, weight 1: balanceLimitCost -- a load's centre of gravity beyond the
 // container's limits. Raw cost per container = how far its placed items'
 // centre of gravity lies from the container's centre beyond maxOffsetLength
-// (along x, in thousandths of half the length) plus beyond maxOffsetWidth
-// (along y, in thousandths of half the width), each rounded up; 0 for a
+// (along x, in percent of half the length) plus beyond maxOffsetWidth
+// (along y, in percent of half the width), each rounded up; 0 for a
 // container without the limits, within them, or whose placed items weigh
 // nothing. Scoped (scoped_units()) to the containers that set a limit.
 struct BalanceLimitCost final : detail::PackedConstraint {

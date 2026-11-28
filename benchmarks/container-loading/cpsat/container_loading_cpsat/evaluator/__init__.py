@@ -145,7 +145,9 @@ def _balance(container, boxes) -> int:
 def _refuse_unscored_inputs(model: ContainerLoadingProblemModel) -> None:
     """The inputs this evaluator does not score: a model that sets one is refused."""
     unscored = [
-        f"item {item.id}" for item in model.items if item.bottom_only or item.max_stack_layers or item.stack_group
+        f"item {item.id}"
+        for item in model.items
+        if item.bottom_only or item.max_stack_layers is not None or item.stack_group is not None
     ] + [
         f"container {container.id}"
         for container in model.containers

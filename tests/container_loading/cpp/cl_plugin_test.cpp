@@ -343,15 +343,15 @@ void verifyRawCostsByHand() {
     }
     {
         // balanceLimitCost: a 4 x 4 item in the corner of an 8 x 8 floor is
-        // half of the half length off; a limit of 0.1 along x: 400.
+        // half of the half length off; a limit of 0.1 along x: 40.
         ContainerLoadingProblem p;
         addContainer(p, 8, 8, 8);
         addContainer(p, 8, 8, 8);
         p.containers[0].maxOffsetLength = 0.1;
         p.containers[0].items = {addItem(p, 4, 4, 4, 5)};
         p.containers[1].items = {addItem(p, 4, 4, 4, 5)};
-        check(rawCosts(p, "balanceLimitCost") == std::vector<double>({400.0, 0.0}),
-              "balanceLimitCost: 400 thousandths over; a container without a limit costs 0");
+        check(rawCosts(p, "balanceLimitCost") == std::vector<double>({40.0, 0.0}),
+              "balanceLimitCost: 40 percent over; a container without a limit costs 0");
         p.containers[0].maxOffsetLength = 0.5;
         check(rawCosts(p, "balanceLimitCost") == std::vector<double>({0.0, 0.0}),
               "balanceLimitCost: 0 at the limit");

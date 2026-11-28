@@ -65,8 +65,11 @@ void validate(const ContainerLoadingProblem& problem) {
         }
         if (item.maxLoadOnTop && *item.maxLoadOnTop < 0)
             throw std::invalid_argument(what + ": max_load_on_top must be >= 0");
-        if (item.maxStackLayers && *item.maxStackLayers < 1)
-            throw std::invalid_argument(what + ": max_stack_layers must be >= 1");
+        if (item.maxStackLayers &&
+            (*item.maxStackLayers < 1 || *item.maxStackLayers > kMaxLayers)) {
+            throw std::invalid_argument(what + ": max_stack_layers must be between 1 and " +
+                                        std::to_string(kMaxLayers));
+        }
     }
     for (const StackingRule& rule : problem.stackingRules) {
         if (rule.top.empty() || rule.bottom.empty())

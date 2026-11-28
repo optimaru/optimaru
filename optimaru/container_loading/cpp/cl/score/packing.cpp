@@ -378,7 +378,11 @@ void reachDown(const Packing& packing, int from, std::vector<int>& reach) {
 // Whether item `item` at `point` in orientation `o` would stand on an item
 // against a stacking rule, have one stand on it against a rule (an item
 // placed earlier over an overhang), or make a column taller than an item's
-// maxStackLayers: its own, or that of an item under it.
+// maxStackLayers: its own, or that of an item under it. The columns are the
+// ones the supports recorded at placement make: a box that ends under an
+// earlier box's overhang is not counted as carrying it here (as for the load
+// limits), while stackingViolations, from the geometry, counts it. This only
+// steers the decoder; the cost counts what is left.
 bool breaksStacking(const ContainerLoadingProblem& problem, const Packing& packing, int item,
                     const Point& point, const Orientation& o, std::vector<int>& reach) {
     const auto touches = [&](const Box& box) {
@@ -882,11 +886,11 @@ std::int64_t balanceExcess(const ContainerLoadingProblem& problem, int container
     }
     if (weight <= 0.0) return 0;
     std::int64_t excess = 0;
-    // Per axis, the offset beyond the limit in thousandths of the half size,
+    // Per axis, the offset beyond the limit in percent of the half size,
     // rounded up; the tolerance keeps a rounding of the moments from counting.
     const auto beyond = [&excess](double centre, double half, const std::optional<double>& limit) {
         if (!limit) return;
-        const double over = 1000.0 * (std::fabs(centre - half) / half - *limit);
+        const double over = 100.0 * (std::fabs(centre - half) / half - *limit);
         if (over > 1e-6) excess += static_cast<std::int64_t>(std::ceil(over - 1e-6));
     };
     beyond(momentX / weight, 0.5 * static_cast<double>(space.length), space.maxOffsetLength);

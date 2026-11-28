@@ -34,6 +34,8 @@ using Score = optimaru::Score;
 // are taken in double where the moves and the construction compare them.
 constexpr int kMaxLength = 1'000'000;
 constexpr std::int64_t kMaxWeight = 1'000'000'000;
+// The largest Item::maxStackLayers (the JSON model's bound).
+constexpr int kMaxLayers = 1'000'000'000;
 
 // Which of an item's orientations the decoder may use.
 //   All      the six axis-parallel orientations

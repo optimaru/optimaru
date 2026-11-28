@@ -196,8 +196,8 @@ int balancePerMille(const ContainerLoadingProblem& problem, int container, const
 
 // balanceLimitCost: how far the placed items' centre of gravity lies beyond
 // the container's maxOffsetLength along x and its maxOffsetWidth along y, in
-// thousandths of half the length (width), each axis rounded up to a whole
-// thousandth and the two added. 0 for a container without the limits or
+// percent of half the length (width), each axis rounded up to a whole
+// percent and the two added. 0 for a container without the limits or
 // whose placed items weigh nothing.
 std::int64_t balanceExcess(const ContainerLoadingProblem& problem, int container,
                            const Packing& packing);

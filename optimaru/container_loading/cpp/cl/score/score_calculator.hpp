@@ -19,7 +19,7 @@ struct ConstraintTotals {
     std::int64_t stackingLoadCost = 0;     // hard: weight resting on an item above its limit
     std::int64_t stackingRuleCost = 0;     // hard: pairs against a rule + layers above a limit
     std::int64_t unloadingOrderCost = 0;   // hard: pairs where a later item blocks an earlier one
-    std::int64_t balanceLimitCost = 0;     // hard: centre of gravity beyond its limits, per mille
+    std::int64_t balanceLimitCost = 0;     // hard: centre of gravity beyond its limits, percent
     double usedContainerCost = 0.0;        // soft: cost of the containers holding a placed item
     std::int64_t groupSplitCost = 0;       // soft: containers a group is in, beyond its first
     std::int64_t usedLengthCost = 0;       // soft, opt-in: used length, summed

@@ -16,7 +16,7 @@
     away from places that break them, as it does for load limits;
   - container `max_offset_length` / `max_offset_width` (how far the load's centre of gravity
     may lie from the centre, as a share of half the length or width), scored by the new hard
-    constraint `balance_limit_cost` (thousandths beyond the limit).
+    constraint `balance_limit_cost` (whole percent of the half size beyond the limit).
   Both constraints are scoped (`constraint_costs()` names their `units`), so a problem that
   does not use them pays nothing for them per move. The construction loads `bottom_only`
   items first, and it, `EmptyContainerMove` and `RepackPairMove` keep the stacking rules as

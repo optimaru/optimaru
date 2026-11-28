@@ -29,7 +29,8 @@ namespace cl {
 // and whose decode, with the item added where its unloading order asks,
 // places the item, leaves no more items unplaced than before, and has no more
 // weight above what an item carries, no more items in the way of an earlier
-// stop and no more stacking rules or layer limits broken than before. (The unplaced count is
+// stop and no more stacking rules or layer limits broken than before (not the
+// balance limit, which a load half moved cannot be judged by). (The unplaced count is
 // compared, not the set: an item of the target may trade its place with one that had none. The hard
 // score is the same either way.)
 //

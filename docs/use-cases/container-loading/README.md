@@ -203,7 +203,9 @@ is the whole problem: ten parcels for three stops in one van):
   the item's weight, passed down through what it stands on, would put more on a placed
   item than its `max_load_on_top`, when it would stand on an item (or have one stand on
   it) against a stacking rule, or when it would make a column taller than its own
-  `max_stack_layers` or that of an item under it. The item goes to the first point where
+  `max_stack_layers` or that of an item under it (columns as the decode builds them: a
+  box that ends under another's overhang is not seen carrying it, as for the load
+  limits, while the cost counts it). The item goes to the first point where
   an orientation does neither; if there is none, to the first that only blocks; if there
   is none either, to the first feasible point, as without them. So an item is never left
   out for an order or a limit, and a list in stop blocks (what leaves last first) comes
@@ -238,7 +240,7 @@ The score is the engine's `Score` type as it is, with no mapping.
 | `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: over its placed items with `max_load_on_top`, the weight resting on the item above that limit, rounded up per item |
 | `stacking_rule_cost` | `StackingRuleCost` | hard | 1 | per container: the pairs (a, b) of placed items where a stands on b and a stacking rule forbids a's `stack_group` on b's, plus, over the placed items with `max_stack_layers`, the layers the tallest column through the item has beyond that limit |
 | `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs (a, b) of placed items with `unload_order(a) < unload_order(b)` where b blocks a |
-| `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: how far the placed items' centre of gravity lies from the container's centre beyond `max_offset_length` (in thousandths of half the length) plus beyond `max_offset_width` (in thousandths of half the width), each rounded up |
+| `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: how far the placed items' centre of gravity lies from the container's centre beyond `max_offset_length` (in percent of half the length) plus beyond `max_offset_width` (in percent of half the width), each rounded up to a whole percent |
 | `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |
 | `used_length_cost` | `UsedLengthCost` | soft | 0 (opt-in) | per container: `used_length`, the largest `x + placed_length` |
 | `load_balance_cost` | `LoadBalanceCost` | soft | 0 (opt-in) | per container: the distance of the load's centre of gravity from the container's centre in the x-y plane, in thousandths of the half-diagonal |
@@ -277,15 +279,17 @@ What the raw costs mean exactly:
 - **Balance limit.** The centre of gravity is the placed items' weights times their centres
   in the floor plane, as for `load_balance_cost`. Along x its distance from the
   container's centre is taken as a share of half the length, across as a share of half the
-  width; what lies beyond `max_offset_length` (`max_offset_width`) counts in thousandths,
-  rounded up (a millionth of a thousandth over is not counted, so a limit such as 0.3,
+  width; what lies beyond `max_offset_length` (`max_offset_width`) counts in percent,
+  rounded up (a millionth of a percent over is not counted, so a limit such as 0.3,
   which is not exact in binary, holds where it is met exactly). One item of 400 x 400 in
   the corner of an 800 x 800 floor is 0.5 off along both axes: with `max_offset_length=0.2`
-  it costs 300. The decoder loads from the closed end, so a load that reaches only part of
+  it costs 30. The decoder loads from the closed end, so a load that reaches only part of
   the length sits towards it whatever the order: an even load over the first half of the
   length is 0.5 off along it. The search can move heavy items further in, not the load
   as a whole; for a part load, give the limit across only, or let `load_balance_cost`
-  prefer the centre.
+  prefer the centre. One percent costs as much as an unplaced item at the default weights;
+  give `BalanceLimitCost` a lower weight where the limit should give way to a box left
+  out.
 - **Container weight** counts the whole list, an unplaced item included: what the solve
   gave to a container belongs to it. `loaded_weight` is the weight of the placed items
   only, so a container whose `loaded_weight` is within `max_weight` can still cost here
@@ -294,7 +298,7 @@ What the raw costs mean exactly:
 - **Used container.** A container whose list holds only unplaced items is not in use.
 - **The hard costs are in different units.** `unplaced_item_cost` counts items,
   `unloading_order_cost` counts pairs, `stacking_rule_cost` pairs and layers,
-  `balance_limit_cost` thousandths, and `container_weight_cost` and `stacking_load_cost`
+  `balance_limit_cost` percent, and `container_weight_cost` and `stacking_load_cost`
   count weight units (grams in the guide's examples). With the
   default weights one gram over a limit weighs as much as one unplaced item, and a 10 kg
   box on an item with `max_load_on_top=0` as much as 10,000 unplaced items. A solve that
@@ -307,7 +311,8 @@ What the raw costs mean exactly:
 
 `max_weight`, `max_load_on_top`, `unload_order`, `group`, `max_stack_layers`,
 `stack_group`, `stacking_rules`, `max_offset_length` and `max_offset_width` act only
-through their cost.
+through their cost (a `stack_group` no rule names too: it is refused without
+`stacking_rule_cost` all the same).
 A model that sets one of them while its constraint selection leaves that cost out is
 refused with `ValueError` naming the field and the cost to add; a pick at weight 0
 counts. `models.parameter_uses(model)` lists the fields an input sets, and
@@ -352,7 +357,7 @@ every selection; `cost` is `used_container_cost`'s own scale.
 - **Core checks.** Building, scoring or solving a core problem refuses a
   `min_support_ratio` outside (0, 1], a repeated id, a size outside 1..1,000,000, a weight
   outside 0..1,000,000,000, a negative `max_weight`, `max_load_on_top` or `cost`, a
-  `max_stack_layers` below 1, a `max_stack_height` outside 1..1,000,000, a `max_offset_*`
+  `max_stack_layers` outside 1..1,000,000,000, a `max_stack_height` outside 1..1,000,000, a `max_offset_*`
   outside 0..1, a stacking rule with an empty group, an item listed twice and items
   without a container (`ValueError`; the pydantic model refuses
   the same). The bounds keep a volume inside 64 bits.

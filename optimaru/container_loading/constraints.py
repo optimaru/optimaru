@@ -214,7 +214,7 @@ class BalanceLimitCost(Constraint):
     `max_offset_width`. Default: hard, weight 1.
 
     Measured from the container's centre, along x as a share of half the length and along y
-    as a share of half the width; what lies beyond a limit counts in thousandths, rounded up.
+    as a share of half the width; what lies beyond a limit counts in whole percent, rounded up.
     A container without the limits costs nothing."""
 
     name = "balance_limit_cost"
@@ -223,14 +223,14 @@ class BalanceLimitCost(Constraint):
     description_en = (
         "For each container with max_offset_length or max_offset_width, how far its load's "
         "centre of gravity lies from the container's centre beyond those limits: along the "
-        "length in thousandths of half the length, across in thousandths of half the width, each "
-        "rounded up. One unit of cost is one thousandth beyond a limit; 0 means every load's "
+        "length in percent of half the length, across in percent of half the width, each "
+        "rounded up. One unit of cost is one percent beyond a limit; 0 means every load's "
         "centre of gravity is within its limits (or the containers have none)."
     )
     description_ko = (
         "max_offset_length나 max_offset_width가 있는 컨테이너마다 적재물의 무게중심이 "
-        "컨테이너 중심에서 한도를 넘어 떨어진 만큼을 더합니다. 길이 방향은 길이 절반의 천분율, "
-        "폭 방향은 폭 절반의 천분율로 재고 각각 올림합니다. 한도를 넘은 천분율 1이 비용 1이며, "
+        "컨테이너 중심에서 한도를 넘어 떨어진 만큼을 더합니다. 길이 방향은 길이 절반의 백분율, "
+        "폭 방향은 폭 절반의 백분율로 재고 각각 올림합니다. 한도를 넘은 1%가 비용 1이며, "
         "0이면 모든 적재물의 무게중심이 한도 안에 있습니다(또는 한도가 없습니다)."
     )
 

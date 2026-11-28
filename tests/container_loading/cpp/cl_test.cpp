@@ -713,7 +713,7 @@ void verifyCostsByHand() {
     {
         // The balance limit. One item of 4 x 4 in the corner of an 8 x 8
         // floor: its centre (2, 2) is half of the half size off along both
-        // axes. Limits 0.2 along and 0.5 across: 300 thousandths over.
+        // axes. Limits 0.2 along and 0.5 across: 30 percent over.
         ContainerLoadingProblem p;
         addContainer(p, 8, 8, 8);
         addItem(p, 4, 4, 4, Rotation::Fixed, 7);
@@ -722,15 +722,15 @@ void verifyCostsByHand() {
               "balance limit: none set, none counted");
         p.containers[0].maxOffsetLength = 0.2;
         p.containers[0].maxOffsetWidth = 0.5;
-        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 300,
-              "balance limit: 0.5 off along x against 0.2 is 300; 0.5 across at 0.5 holds");
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 30,
+              "balance limit: 0.5 off along x against 0.2 is 30; 0.5 across at 0.5 holds");
         p.containers[0].maxOffsetWidth = 0.25;
-        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 550,
-              "balance limit: both axes add up (300 + 250)");
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 55,
+              "balance limit: both axes add up (30 + 25)");
         p.containers[0].maxOffsetLength = 0.4999;
         p.containers[0].maxOffsetWidth.reset();
         check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 1,
-              "balance limit: a tenth of a thousandth over counts 1");
+              "balance limit: a hundredth of a percent over counts 1");
         p.items[0].weight = 0;
         check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 0,
               "balance limit: a load that weighs nothing costs 0");

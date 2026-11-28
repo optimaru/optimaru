@@ -13,7 +13,7 @@ caller's unit.
 Score (hard/soft, lexicographic), at the default weights: hard = -(items that found no
 place + weight above a container's max_weight + weight on an item above its
 max_load_on_top + stacking rules and layer limits broken + pairs where a later item
-blocks an earlier one + centre of gravity beyond its limits, per mille), soft = -(cost of the
+blocks an earlier one + centre of gravity beyond its limits, in percent), soft = -(cost of the
 containers in use + containers a group is in beyond its first). The weights are the C++
 components' defaults (constraint_info()); the problem carries none.
 """
@@ -159,7 +159,7 @@ class ContainerLoadingProblem:
 
     ValueError for what the engine refuses: a min_support_ratio outside (0, 1], a repeated
     id, a size outside 1..1,000,000, a weight outside 0..1,000,000,000, a negative limit
-    or cost, a max_stack_layers below 1, a max_stack_height outside 1..1,000,000, an offset
+    or cost, a max_stack_layers outside 1..1,000,000,000, a max_stack_height outside 1..1,000,000, an offset
     limit outside 0..1, a stacking rule with an empty group, an item listed twice, or items
     without a container."""
 

@@ -32,7 +32,9 @@ bool loadsBefore(const ContainerLoadingProblem& problem, int a, int b);
 // by volume, then by base area. Each goes into the first container that takes it: one whose weight
 // limit holds and whose decode, with the new item added, leaves no more items unplaced than before,
 // no more weight on an item than it carries, no more items in the way of an
-// earlier stop and no more stacking rules or layer limits broken. Containers
+// earlier stop and no more stacking rules or layer limits broken (the balance
+// limit is not checked on the way: only a finished load has a centre of
+// gravity to judge, so the search sees to it). Containers
 // are tried in this order: those that already hold an item of the item's group, the other
 // containers in use, then the empty ones, cheapest per volume first.
 //

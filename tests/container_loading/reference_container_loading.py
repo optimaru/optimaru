@@ -170,8 +170,8 @@ def _stacking_violations(model, boxes) -> int:
 
 
 def _balance_excess(container, boxes) -> int:
-    """Thousandths of the half size the centre of gravity lies beyond each limit, rounded up; a
-    millionth of a thousandth over is not counted (a limit such as 0.3 is not exact in binary)."""
+    """Percent of the half size the centre of gravity lies beyond each limit, rounded up; a
+    millionth of a percent over is not counted (a limit such as 0.3 is not exact in binary)."""
     weight = sum(box.weight for box in boxes)
     if weight == 0:
         return 0
@@ -184,7 +184,7 @@ def _balance_excess(container, boxes) -> int:
             continue
         # The centre of gravity times 2, as an exact fraction; the offset as a share of half the size.
         doubled = Fraction(sum(box.weight * centre(box) for box in boxes), weight)
-        over = 1000 * (abs(doubled - size) / size - Fraction(limit))
+        over = 100 * (abs(doubled - size) / size - Fraction(limit))
         tolerance = Fraction(1, 10**6)
         if over > tolerance:
             excess += math.ceil(over - tolerance)
@@ -197,8 +197,12 @@ def _balance(container, boxes) -> int:
         return 0
     centre_x = sum(box.weight * (box.x + box.placed_length / 2) for box in boxes) / weight
     centre_y = sum(box.weight * (box.y + box.placed_width / 2) for box in boxes) / weight
-    offset = math.hypot(centre_x - container.length / 2, centre_y - container.width / 2)
-    return math.floor(1000 * offset / math.hypot(container.length / 2, container.width / 2) + 0.5)
+    # sqrt as the engine takes it (not hypot, which may differ in the last bit and round a
+    # value of exactly n + 0.5 thousandths the other way).
+    dx, dy = centre_x - container.length / 2, centre_y - container.width / 2
+    half_x, half_y = container.length / 2, container.width / 2
+    share = math.sqrt(dx * dx + dy * dy) / math.sqrt(half_x * half_x + half_y * half_y)
+    return math.floor(1000 * share + 0.5)
 
 
 def raw_costs(model) -> dict[str, list[float]]:
