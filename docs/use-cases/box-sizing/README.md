@@ -225,7 +225,7 @@ Measured on the 20 instances of [`benchmarks/box-sizing`](../../../benchmarks/bo
 8,000 against 300), one thread of an Apple M4 Max, 2026-11-28.
 
 **Against the exact optimum.** On the eight smallest (up to 300 parcel sizes, 40 candidates,
-six box types) OR-Tools CP-SAT proves the optimum, in 0.01 s to 11 s on 4 workers. The
+six box types) OR-Tools CP-SAT proves the optimum, in under 0.01 s to 11 s on 4 workers. The
 search returns that optimum on all eight, from each of three seeds, and has found it within
 2 ms of the start. The greedy construction alone is optimal on four of them and ships
 0.3%, 1.6%, 2.4% and 5.0% more air than the optimum on the others.
@@ -242,7 +242,8 @@ Air shipped above the search's result at 30 s, the mean over the four instances 
 | 8,000 parcel sizes, 300 candidates, 12 box types | +3.6% (+2.6% to +5.3%) | +29.6% (+15.4% to +49.4%) |
 
 The search never returns more air than its construction. A budget of 2 s gives the result
-of 30 s on every instance up to 3,000 parcel sizes, and 0.14% more air on the largest four.
+of 30 s on 19 of the 20 instances, and 0.19% more air on one of the largest (the mean of
+three seeds).
 
 **What each part is worth.** The same instances at 2 s, three seeds: the air shipped above
 the default search's, the mean over the instances of a size.
@@ -252,22 +253,21 @@ the default search's, the mean over the instances of a size.
 | 40 (three instances) | +0.79% | +0.79% | 0 |
 | 120 (the demo) | +1.63% | +1.63% | 0 |
 | 300 | +1.32% | +1.32% | 0 |
-| 1,000 | +1.06% | +1.06% | +0.11% |
-| 3,000 | +2.08% | +1.41% | +0.12% |
-| 8,000 | +3.40% | +3.30% | +0.02% |
+| 1,000 | +1.06% | +1.06% | +0.05% |
+| 3,000 | +2.08% | +1.32% | 0 |
+| 8,000 | +3.50% | +3.42% | +0.07% |
 
 Without the three moves the search returns the construction: the change and swap moves of
 single parcels improve nothing, as the section above says. Nearly all of the gain is the
 swap; closing and opening alone recover a third of it on the instances of 3,000 parcel sizes
-and next to nothing elsewhere.
-The reheating is what finds the last tenth of a percent, on two instances of 1,000 and
-3,000 parcel sizes (+0.43% and +0.50% without it). With the ruin-and-recreate kicks
-switched on the mean moves by at most 0.05%, which is less than the three seeds differ
-by on those instances.
+and next to nothing elsewhere. The reheating finds what is left on four instances of 1,000
+and 8,000 parcel sizes, which end 0.03% to 0.21% higher without it. With the
+ruin-and-recreate kicks switched on, 19 instances end on the same result and one of the
+largest moves by 0.05%, a third of what its three seeds differ by.
 
-**Speed.** The construction takes 0.2 ms on the demo instance and 53 ms on 8,000 parcel
-sizes against 300 candidates. The search makes 830 thousand steps per second on the demo
-instance, 72 thousand on 1,000 parcel sizes and 14 thousand on 8,000: a step on the set of
+**Speed.** The construction takes 0.1 ms on the demo instance and 35 ms on 8,000 parcel
+sizes against 300 candidates. The search makes 1.9 million steps per second on the demo
+instance, 250 thousand on 1,000 parcel sizes and 25 thousand on 8,000: a step on the set of
 sizes reads every parcel once (parcels that the same boxes take are placed together), so a
 step costs what the instance holds.
 
