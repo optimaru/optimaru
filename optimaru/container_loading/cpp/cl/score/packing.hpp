@@ -60,7 +60,10 @@ namespace cl {
 //     placed: an item placed later under an overhang does not take load from
 //     the item above it, which the stacking cost on the result does count.
 //   - An optional item whose weight would put the items placed so far above
-//     the container's maxWeight is unplaced, wherever there is room.
+//     the container's maxWeight is unplaced, wherever there is room, and so
+//     is an item whose allowedContainers leave this container out.
+//   - An item whose segregation class must keep a distance from a placed
+//     item's treats a place closer than that as one that breaks a limit.
 //
 // The decode is a pure function of (problem facts, container, list in order):
 // it reads the container's weight limit only for optional items, and nothing
@@ -150,6 +153,7 @@ struct Packing {
     mutable std::int64_t stackingViolations = -1;
     mutable std::int64_t balanceExcess = -1;
     // Only with optional items or priorities (unplacedCost < 0 = not yet).
+    mutable std::int64_t segregationPairs = -1;
     mutable std::int64_t unplacedCost = -1;
     mutable std::int64_t optionalCost = 0;
     mutable std::int64_t optionalWeight = 0;
@@ -183,6 +187,12 @@ std::int64_t optionalCost(const ContainerLoadingProblem& problem, const Packing&
 // The weight of the unplaced optional items of the list, which
 // containerWeightCost does not count.
 std::int64_t unplacedOptionalWeight(const ContainerLoadingProblem& problem, const Packing& packing);
+
+// segregationCost: the pairs of placed items whose segregation classes may
+// not share a container, plus the pairs whose classes must keep a distance and
+// stand closer than it in the floor plane (the larger of the gaps between
+// their footprints along x and along y).
+std::int64_t segregationPairs(const ContainerLoadingProblem& problem, const Packing& packing);
 
 // stackingLoadCost: over the placed items that set maxLoadOnTop, the weight
 // resting on the item above that limit, rounded up to a whole unit. An item

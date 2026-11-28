@@ -19,6 +19,7 @@
 #include "cl/constraints/incomplete_group_cost.hpp"
 #include "cl/constraints/load_balance_cost.hpp"
 #include "cl/constraints/optional_item_cost.hpp"
+#include "cl/constraints/segregation_cost.hpp"
 #include "cl/constraints/single_container_cost.hpp"
 #include "cl/constraints/stacking_load_cost.hpp"
 #include "cl/constraints/stacking_rule_cost.hpp"
@@ -40,6 +41,7 @@ namespace cl {
 //   stackingRuleCost      hard, weight 1
 //   unloadingOrderCost    hard, weight 1
 //   balanceLimitCost      hard, weight 1
+//   segregationCost       hard, weight 1
 //   usedContainerCost     soft, weight 1
 //   optionalItemCost      soft, weight 1
 //   usedLengthCost        soft, weight 0 (opt-in)
@@ -74,6 +76,7 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<StackingRuleCost>();
     assembly.emplace<UnloadingOrderCost>();
     assembly.emplace<BalanceLimitCost>();
+    assembly.emplace<SegregationCost>();
     assembly.emplace<UsedContainerCost>();
     assembly.emplace<OptionalItemCost>();
     assembly.emplace<UsedLengthCost>();

@@ -41,6 +41,7 @@ def test_the_field_names_are_the_contract():
         "min_support_ratio",
         "stacking_rules",
         "group_rules",
+        "segregation_rules",
         "score_hard",
         "score_soft",
         "containers_used",
@@ -56,6 +57,7 @@ def test_the_field_names_are_the_contract():
         "max_stack_height",
         "max_offset_length",
         "max_offset_width",
+        "tags",
         "initial_items",
         "items",
         "unplaced_items",
@@ -79,6 +81,8 @@ def test_the_field_names_are_the_contract():
         "stack_group",
         "priority",
         "optional",
+        "allowed_containers",
+        "segregation_class",
         "container",
         "sequence",
         "x",
@@ -100,8 +104,9 @@ def test_the_defaults():
     bare = ItemModel(id="a", length=1, width=1, height=1)
     assert (bare.bottom_only, bare.max_stack_layers, bare.stack_group) == (False, None, None)
     assert (bare.priority, bare.optional) == (1, False)
+    assert (bare.allowed_containers, bare.segregation_class, container.tags) == ([], None, [])
     assert (container.max_stack_height, container.max_offset_length, container.max_offset_width) == (None, None, None)
-    assert model.stacking_rules == [] and model.group_rules == []
+    assert model.stacking_rules == [] and model.group_rules == [] and model.segregation_rules == []
     assert (item.container, item.sequence, item.x, item.placed_length) == (None, None, None, None)
 
 
@@ -249,6 +254,10 @@ def test_solve_request_is_solve_with_the_request_settings():
         (lambda data: data.update(stacking_rules=[{"top": "", "bottom": "food"}]), "at least 1 character"),
         (lambda data: data.update(stacking_rules=[{"top": "a", "bottom": "b", "allowed": True}]), "Extra inputs"),
         (lambda data: data["items"][0].update(priority=0), "greater than or equal to 1"),
+        (lambda data: data["items"][0].update(allowed_containers=["reefer"]), "no container's id or tag"),
+        (lambda data: data.update(segregation_rules=[{"a": "x", "b": "y", "distance": 0}]), "greater than 0"),
+        (lambda data: data.update(segregation_rules=[{"a": "", "b": "y"}]), "at least 1 character"),
+        (lambda data: data["items"][0].update(segregation_class=""), "at least 1 character"),
         (lambda data: data["items"][0].update(priority=1_000_001), "less than or equal to 1000000"),
         (lambda data: data.update(group_rules=[{"id": "nobody", "all_or_none": True}]), "no item has this group"),
         (
@@ -316,3 +325,29 @@ def test_priorities_optional_items_and_group_rules_go_through_to_the_engine_and_
     back = ContainerLoadingProblemModel.from_core(core)
     assert back.group_rules == model.group_rules
     assert (back.items[0].priority, back.items[1].optional) == (3, True)
+
+
+def test_allowed_containers_and_segregation_go_through_to_the_engine_and_back():
+    model = ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [
+                {"id": "dry", "length": 8, "width": 4, "height": 4},
+                {"id": "cold", "length": 8, "width": 4, "height": 4, "tags": ["reefer"]},
+            ],
+            "items": [
+                {"id": "milk", "length": 4, "width": 4, "height": 4, "allowed_containers": ["reefer"]},
+                {"id": "bleach", "length": 4, "width": 4, "height": 4, "segregation_class": "chem"},
+                {"id": "bread", "length": 4, "width": 4, "height": 4, "segregation_class": "food"},
+            ],
+            "segregation_rules": [{"a": "chem", "b": "food"}],
+        }
+    )
+    core = model.to_core()
+    assert core.segregation_rules == [("chem", "food", None)]
+    assert (core.containers[1].tags, core.items[0].allowed_containers) == (["reefer"], ["reefer"])
+    solved = cl.solve(model, time_limit_seconds=1.0, random_seed=0)
+    by_id = {item.id: item for item in solved.items}
+    assert solved.score_hard == 0 and by_id["milk"].container == "cold"
+    assert by_id["bleach"].container != by_id["bread"].container
+    back = ContainerLoadingProblemModel.from_core(solved.to_core())
+    assert back.segregation_rules == model.segregation_rules and back.containers[1].tags == ["reefer"]

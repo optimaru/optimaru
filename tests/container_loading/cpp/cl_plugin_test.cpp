@@ -132,6 +132,13 @@ ContainerLoadingProblem busyProblem(std::uint64_t seed, int containers = 4, int 
     }
     for (std::size_t g = 0; g < named.size(); ++g)
         p.groupRules.push_back({named[g], g % 2 == 0, g % 3 != 2});
+    p.containers[1].tags = {"reefer"};
+    p.containers[3].tags = {"reefer"};
+    for (Item& item : p.items) {
+        if (more() % 8 == 0) item.allowedContainers = {"reefer"};
+        if (more() % 3 == 0) item.segregationClass = "k" + std::to_string(more() % 3);
+    }
+    p.segregationRules = {{"k0", "k1", std::nullopt}, {"k2", "k1", 3}};
     p.containers[0].maxStackHeight = 7;
     p.containers[1].maxOffsetLength = 0.2;
     p.containers[2].maxOffsetWidth = 0.3;
@@ -409,6 +416,26 @@ void verifyRawCostsByHand() {
               "none of it placed costs 0");
     }
     {
+        // segregationCost: two classes that may not share a container, then
+        // a distance of 2 between cubes that touch.
+        ContainerLoadingProblem p;
+        addContainer(p, 12, 4, 4);
+        addContainer(p, 12, 4, 4);
+        p.containers[0].items = {addItem(p, 4, 4, 4), addItem(p, 4, 4, 4)};
+        p.containers[1].items = {addItem(p, 4, 4, 4)};
+        itemOf(p, 0).segregationClass = "a";
+        itemOf(p, 1).segregationClass = itemOf(p, 2).segregationClass = "b";
+        p.segregationRules = {{"a", "b", std::nullopt}};
+        check(rawCosts(p, "segregationCost") == std::vector<double>({1.0, 0.0}),
+              "segregationCost: one pair in one container; apart they cost 0");
+        p.segregationRules = {{"a", "b", 2}};
+        check(rawCosts(p, "segregationCost") == std::vector<double>({1.0, 0.0}),
+              "segregationCost: touching where 2 apart is asked");
+        p.segregationRules = {{"a", "a", std::nullopt}};
+        check(rawCosts(p, "segregationCost") == std::vector<double>({0.0, 0.0}),
+              "segregationCost: 0 with no pair the rules name");
+    }
+    {
         // usedContainerCost: the container's cost when something stands in it.
         ContainerLoadingProblem p;
         addContainer(p, 4, 4, 4);
@@ -487,23 +514,24 @@ void verifyCatalog() {
     const auto rows = defaultConstraints().info();
     const optimaru::Level hard = optimaru::Level::Hard;
     const optimaru::Level soft = optimaru::Level::Soft;
-    check(rows.size() == 13 &&
+    check(rows.size() == 14 &&
                   rowIs<UnplacedItemCost>(rows[0], "unplacedItemCost", hard, 1.0, false) &&
                   rowIs<ContainerWeightCost>(rows[1], "containerWeightCost", hard, 1.0, false) &&
                   rowIs<StackingLoadCost>(rows[2], "stackingLoadCost", hard, 1.0, false) &&
                   rowIs<StackingRuleCost>(rows[3], "stackingRuleCost", hard, 1.0, false) &&
                   rowIs<UnloadingOrderCost>(rows[4], "unloadingOrderCost", hard, 1.0, false) &&
-                  rowIs<BalanceLimitCost>(rows[5], "balanceLimitCost", hard, 1.0, false),
-          "info(): six hard constraints at weight 1");
-    check(rows.size() == 13 &&
-                  rowIs<UsedContainerCost>(rows[6], "usedContainerCost", soft, 1.0, false) &&
-                  rowIs<OptionalItemCost>(rows[7], "optionalItemCost", soft, 1.0, false) &&
-                  rowIs<UsedLengthCost>(rows[8], "usedLengthCost", soft, 0.0, false) &&
-                  rowIs<LoadBalanceCost>(rows[9], "loadBalanceCost", soft, 0.0, false),
+                  rowIs<BalanceLimitCost>(rows[5], "balanceLimitCost", hard, 1.0, false) &&
+                  rowIs<SegregationCost>(rows[6], "segregationCost", hard, 1.0, false),
+          "info(): seven hard unit constraints at weight 1");
+    check(rows.size() == 14 &&
+                  rowIs<UsedContainerCost>(rows[7], "usedContainerCost", soft, 1.0, false) &&
+                  rowIs<OptionalItemCost>(rows[8], "optionalItemCost", soft, 1.0, false) &&
+                  rowIs<UsedLengthCost>(rows[9], "usedLengthCost", soft, 0.0, false) &&
+                  rowIs<LoadBalanceCost>(rows[10], "loadBalanceCost", soft, 0.0, false),
           "info(): four soft unit constraints, two of them opt-in at weight 0");
-    check(rows.size() == 13 && rowIs<GroupSplitCost>(rows[10], "groupSplitCost", soft, 1.0, true) &&
-                  rowIs<IncompleteGroupCost>(rows[11], "incompleteGroupCost", hard, 1.0, true) &&
-                  rowIs<SingleContainerCost>(rows[12], "singleContainerCost", hard, 1.0, true),
+    check(rows.size() == 14 && rowIs<GroupSplitCost>(rows[11], "groupSplitCost", soft, 1.0, true) &&
+                  rowIs<IncompleteGroupCost>(rows[12], "incompleteGroupCost", hard, 1.0, true) &&
+                  rowIs<SingleContainerCost>(rows[13], "singleContainerCost", hard, 1.0, true),
           "info(): the three globals last");
     check(!throwsInvalid([] { defaultConstraints().soft("unplacedItemCost"); }) &&
                   !throwsInvalid([] { defaultConstraints().hard("groupSplitCost"); }),
@@ -602,7 +630,7 @@ void verifyConstraintTotals() {
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
                   std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraint_totals().size() == 13, "one total per assembled component");
+    check(calculator.constraint_totals().size() == 14, "one total per assembled component");
     std::printf("\n");
 }
 
@@ -630,6 +658,10 @@ ConstraintAssembly weightedAssembly() {
     assembly.add_instances(std::move(copyOf("groupSplitCost")
                                              .weight("groupSplitCost", 2.0)
                                              .exponent("groupSplitCost", 2.0)));
+    assembly.add_instances(std::move(copyOf("segregationCost")
+                                             .soft("segregationCost")
+                                             .weight("segregationCost", 1.5)
+                                             .offset("segregationCost", 1.0)));
     assembly.add_instances(std::move(copyOf("incompleteGroupCost")
                                              .soft("incompleteGroupCost")
                                              .weight("incompleteGroupCost", 2.0)

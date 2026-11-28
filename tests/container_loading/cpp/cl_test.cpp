@@ -2,7 +2,8 @@
 //   (a) the decoder by hand: the (x, z, y) order of the points, the support
 //       rule, the rotations, which orientation is taken, an item that finds
 //       no place, bottomOnly, maxStackHeight, stacking rules and layer
-//       limits, an optional item above the weight limit
+//       limits, an optional item above the weight limit, allowed containers,
+//       a segregation distance
 //   (b) the decoder on random lists, short and long, a third of them with
 //       stacking rules, layer limits, bottomOnly items and a stack height:
 //       every decode is a valid loading (inside the container and below its
@@ -14,7 +15,7 @@
 //       order (in front, on top),
 //       used length, load balance, stacking rules and layer limits, the
 //       balance limit, priorities and optional items, all-or-none and
-//       single-container groups
+//       single-container groups, segregation
 //   (d) PackingCache: what it returns is decode()'s result, a repeated list
 //       is a hit, changed facts drop the decodes
 //   (e) ScoreCalculator: prepare's refusals, the derived fields, the totals
@@ -492,6 +493,52 @@ void verifyDecoderByHand() {
         ScoreCalculator::score(p);
         check(p.items[1].isPlaced(), "within the limit it is loaded");
     }
+    {
+        // Allowed containers: an item for "reefer" containers only finds no
+        // place in a dry one, and one in a container tagged "reefer".
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 4, 4);
+        addContainer(p, 8, 4, 4);
+        p.containers[1].tags = {"reefer"};
+        addItem(p, 4, 4, 4);
+        p.items[0].allowedContainers = {"reefer"};
+        p.containers[0].items = {0};
+        ScoreCalculator::score(p);
+        check(!p.items[0].isPlaced(), "allowed containers: no place outside them");
+        p.containers[0].items = {};
+        p.containers[1].items = {0};
+        ScoreCalculator::score(p);
+        check(p.items[0].isPlaced(), "allowed containers: placed in one tagged so");
+        p.items[0].allowedContainers = {"c0"};
+        p.containers[0].items = {0};
+        p.containers[1].items = {};
+        ScoreCalculator::score(p);
+        check(p.items[0].isPlaced(), "allowed containers: an id names a container too");
+    }
+    {
+        // A segregation distance of 4: chemicals, a box without a class, then
+        // food. Without the rule the food box takes the corner beside the
+        // chemicals; with it, the corner past the other box, 4 away.
+        ContainerLoadingProblem p;
+        addContainer(p, 12, 8, 4);
+        addItem(p, 4, 4, 4);
+        addItem(p, 4, 8, 4);  // across the width, beside the chemicals
+        addItem(p, 4, 4, 4);
+        p.items[0].segregationClass = "chem";
+        p.items[2].segregationClass = "food";
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(at(p.items[2], 0, 4, 0), "without a rule the food box goes beside the chemicals");
+        p.segregationRules = {{"chem", "food", 4}};
+        ScoreCalculator::score(p);
+        check(at(p.items[2], 8, 0, 0) && ScoreCalculator::calculateTotals(p).segregationCost == 0,
+              "segregation: it keeps its distance where a corner allows it");
+        p.containers[0].length = 8;
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 4, 0, 0) && at(p.items[2], 0, 4, 0) &&
+                      ScoreCalculator::calculateTotals(p).segregationCost == 1,
+              "no corner far enough: beside it all the same, one pair counted");
+    }
     std::printf("\n");
 }
 
@@ -782,6 +829,32 @@ void verifyCostsByHand() {
               "groups: a rule that asks for nothing costs nothing");
     }
     {
+        // Segregation: two hazmat cubes and a food cube in one container that
+        // may not share it: two pairs. With a distance of 4 instead, the food
+        // cube next to one hazmat cube and 4 from the other: one pair.
+        ContainerLoadingProblem p;
+        addContainer(p, 12, 4, 4);
+        for (int i = 0; i < 3; ++i) addItem(p, 4, 4, 4);
+        p.items[0].segregationClass = p.items[2].segregationClass = "hazmat";
+        p.items[1].segregationClass = "food";
+        p.segregationRules = {{"hazmat", "food", std::nullopt}};
+        p.containers[0].items = {0, 1, 2};
+        check(ScoreCalculator::calculateTotals(p).segregationCost == 2,
+              "segregation: every pair across the two classes in one container");
+        p.segregationRules = {{"food", "hazmat", 4}};
+        check(ScoreCalculator::calculateTotals(p).segregationCost == 2,
+              "segregation: a distance of 4, the food cube touching both hazmat cubes");
+        p.containers[0].items = {0, 2, 1};
+        check(ScoreCalculator::calculateTotals(p).segregationCost == 1,
+              "segregation: 0 apart from one, 4 from the other: one pair");
+        p.segregationRules = {{"hazmat", "hazmat", std::nullopt}};
+        check(ScoreCalculator::calculateTotals(p).segregationCost == 1,
+              "segregation: a class kept from itself");
+        p.segregationRules.clear();
+        check(ScoreCalculator::calculateTotals(p).segregationCost == 0,
+              "segregation: no rule, no cost");
+    }
+    {
         // The balance limit. One item of 4 x 4 in the corner of an 8 x 8
         // floor: its centre (2, 2) is half of the half size off along both
         // axes. Limits 0.2 along and 0.5 across: 30 percent over.
@@ -972,6 +1045,13 @@ void verifyScoreCalculator() {
           }),
           "a priority outside 1..1'000'000, a group rule for no item's group and a group ruled "
           "twice are refused");
+    check(broken([](ContainerLoadingProblem& p) {
+              p.items[0].allowedContainers = {"nowhere"};
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.segregationRules = {{"a", "", std::nullopt}};
+          }) && broken([](ContainerLoadingProblem& p) { p.segregationRules = {{"a", "b", 0}}; }),
+          "allowed containers naming no container's id or tag, a segregation rule without a class "
+          "and a distance below 1 are refused");
 
     // Two pallets, hand-built: weight above the limit, a group over both, a
     // container cost.

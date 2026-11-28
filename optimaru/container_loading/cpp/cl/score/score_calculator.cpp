@@ -90,6 +90,29 @@ void validate(const ContainerLoadingProblem& problem) {
         if (rule.top.empty() || rule.bottom.empty())
             throw std::invalid_argument("a stacking rule names an empty stack group");
     }
+    for (const SegregationRule& rule : problem.segregationRules) {
+        if (rule.a.empty() || rule.b.empty())
+            throw std::invalid_argument("a segregation rule names an empty class");
+        if (rule.minDistance && (*rule.minDistance <= 0 || *rule.minDistance > kMaxLength)) {
+            throw std::invalid_argument("segregation rule '" + rule.a + "' / '" + rule.b +
+                                        "': distance must be between 1 and " +
+                                        std::to_string(kMaxLength));
+        }
+    }
+    for (const Item& item : problem.items) {
+        for (const std::string& name : item.allowedContainers) {
+            bool known = false;
+            for (const Container& container : problem.containers) {
+                known = known || container.id == name ||
+                        std::find(container.tags.begin(), container.tags.end(), name) !=
+                                container.tags.end();
+            }
+            if (!known) {
+                throw std::invalid_argument("item '" + item.id + "': allowed_containers names '" +
+                                            name + "', no container's id or tag");
+            }
+        }
+    }
     std::vector<char> listed(problem.items.size(), 0);
     for (const Container& container : problem.containers) {
         for (int item : container.items) {
@@ -174,6 +197,7 @@ Score ConstraintTotals::toScore() const {
             StackingRuleCost::kDefaultWeight * static_cast<double>(stackingRuleCost) +
             UnloadingOrderCost::kDefaultWeight * static_cast<double>(unloadingOrderCost) +
             BalanceLimitCost::kDefaultWeight * static_cast<double>(balanceLimitCost) +
+            SegregationCost::kDefaultWeight * static_cast<double>(segregationCost) +
             IncompleteGroupCost::kDefaultWeight * static_cast<double>(incompleteGroupCost) +
             SingleContainerCost::kDefaultWeight * static_cast<double>(singleContainerCost);
     const double soft = UsedContainerCost::kDefaultWeight * usedContainerCost +
@@ -244,6 +268,54 @@ void ScoreCalculator::prepare(ContainerLoadingProblem& problem) {
             }
         }
     }
+    // Where each item may go.
+    problem.allowedIn.clear();
+    const std::size_t containerCount = problem.containers.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        const Item& item = problem.items[i];
+        if (item.allowedContainers.empty()) continue;
+        if (problem.allowedIn.empty()) problem.allowedIn.assign(count * containerCount, 1);
+        for (std::size_t c = 0; c < containerCount; ++c) {
+            const Container& container = problem.containers[c];
+            bool allowed = false;
+            for (const std::string& name : item.allowedContainers) {
+                allowed = allowed || container.id == name ||
+                          std::find(container.tags.begin(), container.tags.end(), name) !=
+                                  container.tags.end();
+            }
+            problem.allowedIn[i * containerCount + c] = allowed ? 1 : 0;
+        }
+    }
+    // The segregation classes the rules name, and what each pair keeps.
+    std::unordered_map<std::string, int> classes;
+    for (const SegregationRule& rule : problem.segregationRules) {
+        for (const std::string* name : {&rule.a, &rule.b})
+            classes.try_emplace(*name, static_cast<int>(classes.size()));
+    }
+    problem.segregationClassCount = static_cast<int>(classes.size());
+    const auto classCount = static_cast<std::size_t>(problem.segregationClassCount);
+    problem.apart.assign(classCount * classCount, 0);
+    problem.anyApartDistance = false;
+    for (const SegregationRule& rule : problem.segregationRules) {
+        const auto a = static_cast<std::size_t>(classes.at(rule.a));
+        const auto b = static_cast<std::size_t>(classes.at(rule.b));
+        // Not in one container outweighs any distance; of two distances the larger holds.
+        int& keep = problem.apart[a * classCount + b];
+        const int wanted = rule.minDistance ? *rule.minDistance : -1;
+        keep = (keep == -1 || wanted == -1) ? -1 : std::max(keep, wanted);
+        problem.apart[b * classCount + a] = keep;
+    }
+    problem.segregationOf.assign(count, -1);
+    problem.anySegregation = false;
+    for (std::size_t i = 0; i < count && classCount > 0; ++i) {
+        const auto& name = problem.items[i].segregationClass;
+        if (!name) continue;
+        const auto found = classes.find(*name);
+        if (found == classes.end()) continue;
+        problem.segregationOf[i] = found->second;
+        problem.anySegregation = true;
+    }
+    for (int keep : problem.apart) problem.anyApartDistance = problem.anyApartDistance || keep > 0;
     problem.groupAllOrNone.assign(static_cast<std::size_t>(problem.groupCount), 0);
     problem.groupSingleContainer.assign(static_cast<std::size_t>(problem.groupCount), 0);
     problem.anyAllOrNone = false;
@@ -314,6 +386,7 @@ ConstraintTotals ScoreCalculator::calculateTotals(ContainerLoadingProblem& probl
         totals.stackingRuleCost += stackingViolations(problem, packing);
         totals.unloadingOrderCost += unloadingBlocks(problem, packing);
         totals.balanceLimitCost += balanceExcess(problem, unit, packing);
+        totals.segregationCost += segregationPairs(problem, packing);
         if (!packing.boxes.empty()) totals.usedContainerCost += container.cost;
         totals.usedLengthCost += packing.usedLength;
         totals.loadBalanceCost += balancePerMille(problem, unit, packing);

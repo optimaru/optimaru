@@ -1,6 +1,6 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`cl.solve(problem)`) scores all thirteen constraints at their default
+The default path (`cl.solve(problem)`) scores all fourteen constraints at their default
 weights, two of them opt-in at weight 0. This module is how a call changes that: pick
 constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
@@ -73,6 +73,7 @@ __all__ = [
     "LoadBalanceCost",
     "OptionalItemCost",
     "Score",
+    "SegregationCost",
     "SingleContainerCost",
     "StackingLoadCost",
     "StackingRuleCost",
@@ -88,6 +89,7 @@ __all__ = [
     "load_balance_cost",
     "optional_item_cost",
     "score",
+    "segregation_cost",
     "single_container_cost",
     "stacking_load_cost",
     "stacking_rule_cost",
@@ -238,6 +240,30 @@ class BalanceLimitCost(Constraint):
         "컨테이너 중심에서 한도를 넘어 떨어진 만큼을 더합니다. 길이 방향은 길이 절반의 백분율, "
         "폭 방향은 폭 절반의 백분율로 재고 각각 올림합니다. 한도를 넘은 1%가 비용 1이며, "
         "0이면 모든 적재물의 무게중심이 한도 안에 있습니다(또는 한도가 없습니다)."
+    )
+
+
+class SegregationCost(Constraint):
+    """Items a segregation rule keeps apart that are not. Default: hard, weight 1.
+
+    Each pair of placed items in one container whose `segregation_class`es a rule of the
+    problem's `segregation_rules` keeps out of one container counts 1, and so does each pair
+    whose classes must keep a `distance` and stand closer than it in the floor plane."""
+
+    name = "segregation_cost"
+    label_en = "Segregation"
+    label_ko = "혼적 금지"
+    description_en = (
+        "The pairs of items in one container whose segregation classes may not share a "
+        "container, plus the pairs whose classes must keep a distance and stand closer than it "
+        "(the larger of the gaps between their footprints along the length and across). One "
+        "unit of cost is one such pair; 0 means every segregation rule holds."
+    )
+    description_ko = (
+        "한 컨테이너에 함께 실으면 안 되는 혼적 금지 등급(segregation_class)의 물품 쌍과, "
+        "일정 거리를 두어야 하는데 그보다 가까이 놓인 물품 쌍(길이 방향과 폭 방향으로 바닥 면 "
+        "사이 간격 중 큰 값)을 셉니다. 한 쌍이 비용 1이며, 0이면 모든 혼적 금지 규칙이 "
+        "지켜졌습니다."
     )
 
 
@@ -399,6 +425,7 @@ stacking_load_cost = StackingLoadCost()
 stacking_rule_cost = StackingRuleCost()
 unloading_order_cost = UnloadingOrderCost()
 balance_limit_cost = BalanceLimitCost()
+segregation_cost = SegregationCost()
 used_container_cost = UsedContainerCost()
 optional_item_cost = OptionalItemCost()
 used_length_cost = UsedLengthCost()
@@ -415,6 +442,7 @@ _DEFAULTS = (
     stacking_rule_cost,
     unloading_order_cost,
     balance_limit_cost,
+    segregation_cost,
     used_container_cost,
     optional_item_cost,
     used_length_cost,
@@ -426,7 +454,7 @@ _DEFAULTS = (
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """Return the cost function. Without arguments, all thirteen default constraints.
+    """Return the cost function. Without arguments, all fourteen default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored::

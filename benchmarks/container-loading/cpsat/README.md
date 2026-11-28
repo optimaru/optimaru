@@ -25,7 +25,7 @@ catalog: it has one objective, the default constraint set.
 | `used_container_cost` | the `cost` of every container that holds an item (a whole number of thousandths) |
 | `group_split_cost` | per group, the containers that hold one of its items beyond the first |
 | `stacking_load_cost`, `unloading_order_cost` | **not modelled**: an instance that sets `max_load_on_top` or `unload_order` is refused with `ValueError` |
-| `stacking_rule_cost`, `balance_limit_cost`, `optional_item_cost`, `incomplete_group_cost`, `single_container_cost` | **not modelled**: an instance that sets `stacking_rules`, a `stack_group`, `max_stack_layers`, `bottom_only`, `max_stack_height`, a `max_offset_*`, a `priority` other than 1, `optional` or `group_rules` is refused with `ValueError` (by the evaluator too) |
+| `stacking_rule_cost`, `balance_limit_cost`, `segregation_cost`, `optional_item_cost`, `incomplete_group_cost`, `single_container_cost` | **not modelled**: an instance that sets `stacking_rules`, a `stack_group`, `max_stack_layers`, `bottom_only`, `max_stack_height`, a `max_offset_*`, a `priority` other than 1, `optional`, `group_rules`, `allowed_containers` or `segregation_rules` (or a `segregation_class`) is refused with `ValueError` (by the evaluator too) |
 | `used_length_cost`, `load_balance_cost` | weight 0 by default, so not in the objective |
 
 Containers that are alike are used in their order, and a container's items must fit its

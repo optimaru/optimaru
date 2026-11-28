@@ -36,6 +36,7 @@ __all__ = [
     "ContainerModel",
     "GroupRuleModel",
     "ItemModel",
+    "SegregationRuleModel",
     "StackingRuleModel",
     "parameter_uses",
     "solve_request",
@@ -109,6 +110,13 @@ class ItemModel(StrictModel):
             "unplaced_item_cost, and its weight does not count against max_weight."
         ),
     )
+    allowed_containers: list[str] = Field(
+        default_factory=list,
+        description="The containers it may go in, by id or by one of their tags; [] = any.",
+    )
+    segregation_class: str | None = Field(
+        default=None, min_length=1, description="The class the problem's segregation_rules name."
+    )
 
     container: str | None = Field(
         default=None, description="Output: id of the container it stands in; None = not placed."
@@ -161,6 +169,9 @@ class ContainerModel(StrictModel):
             "of half the width. None = no limit."
         ),
     )
+    tags: list[str] = Field(
+        default_factory=list, description="Names an item's allowed_containers may use besides the id."
+    )
     initial_items: list[str] = Field(
         default_factory=list,
         description=(
@@ -210,6 +221,20 @@ class StackingRuleModel(StrictModel):
     bottom: str = Field(min_length=1, description="The stack group of the item it may not stand on.")
 
 
+class SegregationRuleModel(StrictModel):
+    """Items of classes `a` and `b` (the same class when equal) kept apart: in different containers,
+    or, with a `distance`, at least that far apart in the floor plane."""
+
+    a: str = Field(min_length=1, description="A segregation class.")
+    b: str = Field(min_length=1, description="The class it is kept from (may be `a` itself).")
+    distance: int | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_LENGTH,
+        description="None = not in one container; else the least gap between their footprints.",
+    )
+
+
 class GroupRuleModel(StrictModel):
     """How the items whose `group` is `id` are loaded. A rule with both flags false does nothing."""
 
@@ -241,11 +266,14 @@ class ContainerLoadingProblemModel(StrictModel):
     group_rules: list[GroupRuleModel] = Field(
         default_factory=list, description="How the items of a group are loaded: all or none, in one container."
     )
+    segregation_rules: list[SegregationRuleModel] = Field(
+        default_factory=list, description="Pairs of segregation classes kept apart (segregation_cost)."
+    )
     score_hard: int | None = Field(
         default=None,
         description=(
             "Negative weighted hard score (unplaced items, weight and stacking limits, stacking rules, "
-            "unloading order, centre of gravity limits, group rules)."
+            "unloading order, centre of gravity limits, segregation, group rules)."
         ),
     )
     score_soft: float | None = Field(
@@ -271,6 +299,13 @@ class ContainerLoadingProblemModel(StrictModel):
         for group in ruled:
             if group not in groups:
                 raise ValueError(f"group rule {group!r}: no item has this group")
+        names = {container.id for container in self.containers} | {
+            tag for container in self.containers for tag in container.tags
+        }
+        for item in self.items:
+            for name in item.allowed_containers:
+                if name not in names:
+                    raise ValueError(f"item {item.id!r}: allowed_containers names {name!r}, no container's id or tag")
         listed: set[str] = set()
         for container in self.containers:
             for item_id in container.loading_order():
@@ -301,6 +336,7 @@ class ContainerLoadingProblemModel(StrictModel):
                     max_stack_height=container.max_stack_height,
                     max_offset_length=container.max_offset_length,
                     max_offset_width=container.max_offset_width,
+                    tags=list(container.tags),
                 )
                 for container in self.containers
             ],
@@ -320,12 +356,15 @@ class ContainerLoadingProblemModel(StrictModel):
                     stack_group=item.stack_group,
                     priority=item.priority,
                     optional=item.optional,
+                    allowed_containers=list(item.allowed_containers),
+                    segregation_class=item.segregation_class,
                 )
                 for item in self.items
             ],
             min_support_ratio=self.min_support_ratio,
             stacking_rules=[(rule.top, rule.bottom) for rule in self.stacking_rules],
             group_rules=[(rule.id, rule.all_or_none, rule.single_container) for rule in self.group_rules],
+            segregation_rules=[(rule.a, rule.b, rule.distance) for rule in self.segregation_rules],
         )
 
     @classmethod
@@ -352,6 +391,7 @@ class ContainerLoadingProblemModel(StrictModel):
                     max_stack_height=container.max_stack_height,
                     max_offset_length=container.max_offset_length,
                     max_offset_width=container.max_offset_width,
+                    tags=list(container.tags),
                     items=[items[i].id for i in container.placed_items],
                     unplaced_items=[items[i].id for i in container.unplaced_items],
                     loaded_weight=container.loaded_weight,
@@ -377,6 +417,8 @@ class ContainerLoadingProblemModel(StrictModel):
                     stack_group=item.stack_group,
                     priority=item.priority,
                     optional=item.optional,
+                    allowed_containers=list(item.allowed_containers),
+                    segregation_class=item.segregation_class,
                     **(
                         {
                             "container": containers[item.container].id,
@@ -400,6 +442,9 @@ class ContainerLoadingProblemModel(StrictModel):
                 GroupRuleModel(id=group, all_or_none=all_or_none, single_container=single)
                 for group, all_or_none, single in problem.group_rules
             ],
+            segregation_rules=[
+                SegregationRuleModel(a=a, b=b, distance=distance) for a, b, distance in problem.segregation_rules
+            ],
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
             containers_used=problem.containers_used(),
@@ -417,7 +462,7 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
     `used_container_cost`'s own scale. `optional` needs optional_item_cost although it also
     changes what unplaced_item_cost and container_weight_cost count and what the decoder leaves
     out: without the cost an optional item left out would count nowhere (pick it at weight 0
-    to mean that)."""
+    to mean that). `allowed_containers` and `tags` are the decoder's."""
     uses = []
     for container in problem.containers:
         where = f"container {container.id}"
@@ -441,8 +486,12 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
                 uses.append(ParameterUse(where, field, None, ("stacking_rule_cost",)))
         if item.optional:
             uses.append(ParameterUse(where, "optional", False, ("optional_item_cost",)))
+        if item.segregation_class is not None:
+            uses.append(ParameterUse(where, "segregation_class", None, ("segregation_cost",)))
         if item.priority != 1:
             uses.append(ParameterUse(where, "priority", 1, ("unplaced_item_cost", "optional_item_cost")))
+    if problem.segregation_rules:
+        uses.append(ParameterUse("the problem", "segregation_rules", [], ("segregation_cost",)))
     for rule in problem.group_rules:
         where = f"group rule {rule.id}"
         if rule.all_or_none:
@@ -504,6 +553,7 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 max_stack_height=container.max_stack_height,
                 max_offset_length=container.max_offset_length,
                 max_offset_width=container.max_offset_width,
+                tags=list(container.tags),
                 initial_items=orders.get(container.id, []),
             )
             for container in problem.containers
@@ -524,12 +574,15 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 stack_group=item.stack_group,
                 priority=item.priority,
                 optional=item.optional,
+                allowed_containers=list(item.allowed_containers),
+                segregation_class=item.segregation_class,
             )
             for item in problem.items
         ],
         min_support_ratio=problem.min_support_ratio,
         stacking_rules=[rule.model_copy() for rule in problem.stacking_rules],
         group_rules=[rule.model_copy() for rule in problem.group_rules],
+        segregation_rules=[rule.model_copy() for rule in problem.segregation_rules],
     )
 
 

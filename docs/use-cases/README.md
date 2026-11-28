@@ -448,6 +448,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | container `max_offset_length`, `max_offset_width` (None) | `balance_limit_cost` |
 | | item `priority` (1) | `unplaced_item_cost` or `optional_item_cost` |
 | | item `optional` (False) | `optional_item_cost` |
+| | item `segregation_class` (None), `segregation_rules` ([]) | `segregation_cost` |
 | | group rule `all_or_none`, `single_container` (False) | `incomplete_group_cost`, `single_container_cost` |
 | conference scheduling | talk `speakers`, tags, `audience_*`, `content_tags`, `language` ("en"), `favorite_count`, `crowd_control_risk`, `prerequisite_talks`, `mutually_exclusive_talks_tags`; speaker and room `unavailable_timeslots` and tag lists; room `capacity`, `talk_types`; timeslot tags; `minimum_consecutive_talks_pause_in_minutes` (30; 0 needs nothing) | the costs that read each field, listed in `_TALK_COSTS`, `_SPEAKER_COSTS`, `_ROOM_COSTS` and `_TIMESLOT_COSTS` of `conference_scheduling/models.py` |
 | employee scheduling | shift `required_skill` ("") | `required_skill_cost` |

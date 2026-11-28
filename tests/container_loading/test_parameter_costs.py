@@ -9,6 +9,7 @@ from optimaru.container_loading.constraints import (
     GroupSplitCost,
     IncompleteGroupCost,
     OptionalItemCost,
+    SegregationCost,
     SingleContainerCost,
     StackingLoadCost,
     StackingRuleCost,
@@ -32,9 +33,11 @@ def problem(**fields) -> ContainerLoadingProblemModel:
             {"id": "c", "length": 5, "width": 5, "height": 5, "group": "order"},
             {"id": "d", "length": 5, "width": 5, "height": 5, "max_stack_layers": 2, "stack_group": "food"},
             {"id": "e", "length": 5, "width": 5, "height": 5, "priority": 4, "group": "set", "optional": True},
+            {"id": "f", "length": 5, "width": 5, "height": 5, "segregation_class": "chem"},
         ],
         "stacking_rules": [{"top": "food", "bottom": "food"}],
         "group_rules": [{"id": "set", "all_or_none": True, "single_container": True}],
+        "segregation_rules": [{"a": "chem", "b": "chem"}],
     } | fields
     return ContainerLoadingProblemModel.model_validate(data)
 
@@ -52,6 +55,8 @@ CHECKED = [
     ("all_or_none", "incomplete_group_cost", IncompleteGroupCost),
     ("single_container", "single_container_cost", SingleContainerCost),
     ("optional", "optional_item_cost", OptionalItemCost),
+    ("segregation_class", "segregation_cost", SegregationCost),
+    ("segregation_rules", "segregation_cost", SegregationCost),
 ]
 
 
@@ -69,6 +74,7 @@ def test_the_default_selection_accepts_every_parameter():
         "item c",
         "item d",
         "item e",
+        "item f",
         "the problem",
         "group rule set",
     }
@@ -94,6 +100,7 @@ def test_without_the_parameters_no_cost_is_needed():
         ],
         stacking_rules=[],
         group_rules=[],
+        segregation_rules=[],
     )
     assert parameter_uses(bare) == []
     picks = get_constraints()
@@ -116,6 +123,7 @@ def test_a_priority_needs_one_of_the_costs_that_count_left_out_items():
         items=items,
         stacking_rules=[],
         group_rules=[],
+        segregation_rules=[],
     )
     picks = without(get_constraints(), "unplaced_item_cost")
     cl.solve(model, time_limit_seconds=0, constraints=picks)  # optional_item_cost is still in
