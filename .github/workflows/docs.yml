@@ -1,7 +1,10 @@
 # The documentation site: mkdocs.yml, built from docs/ plus an API reference
 # generated from the sources and the _core.pyi stubs (no compiled extension is
-# needed). PRs build it strictly; a push to main also publishes it on GitHub
-# Pages (Settings > Pages > Source: GitHub Actions).
+# needed), once for main (dev, strictly) and once per release minor, with a
+# version selector (scripts/build_versioned_docs.py). A push to main also
+# publishes it on GitHub Pages (Settings > Pages > Source: GitHub Actions), and
+# so does a finished release: wheels.yml tags it after the release commit's
+# push, so that push builds the site before the new tag exists.
 name: docs
 
 on:
@@ -15,6 +18,8 @@ on:
       - "CHANGELOG.md"
       - "scripts/gen_docs_pages.py"
       - "scripts/mkdocs_hooks.py"
+      - "scripts/build_versioned_docs.py"
+      - "overrides/**"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -25,7 +30,12 @@ on:
       - "CHANGELOG.md"
       - "scripts/gen_docs_pages.py"
       - "scripts/mkdocs_hooks.py"
+      - "scripts/build_versioned_docs.py"
+      - "overrides/**"
       - ".github/workflows/docs.yml"
+  workflow_run:
+    workflows: [wheels]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -44,9 +54,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release tags
       - uses: astral-sh/setup-uv@v5
-      - name: Build (strict)
-        run: uv run --no-project --python 3.14 --with-requirements docs/requirements.txt mkdocs build --strict --site-dir site
+      - name: Build (dev strict, every release minor)
+        run: >-
+          uv run --no-project --python 3.14 --with-requirements docs/requirements.txt
+          python scripts/build_versioned_docs.py --strict --out site --site-url https://optimaru.github.io/optimaru/
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:

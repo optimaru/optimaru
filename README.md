@@ -9,7 +9,9 @@ to the API, add a single setting for the API key
 ([Solving on the optimaru API](#solving-on-the-optimaru-api)).
 
 Documentation: <https://optimaru.github.io/optimaru/> (built from [`docs/`](docs)
-with MkDocs; the API reference is generated from the sources).
+with MkDocs; the API reference is generated from the sources). Every release minor
+has its own copy, picked from the version menu at the top: `latest/` is the newest
+release, `dev/` is `main`, `0.9/`, `0.8/`, ... the releases.
 
 ## Quick start
 

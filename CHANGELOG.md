@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Documentation by version.** The documentation site has a version menu: `latest/` (the newest
+  release), `dev/` (`main`) and one copy per release minor since 0.4, each linking to repository files
+  at its own tag. The old addresses redirect to `latest/`.
 - **Container loading: vehicle loads in stop order.** A cargo space with items for many stops
   often came back with hundreds of unloading-order pairs left. Four changes:
   - The decoder judges a place by what it would break when items set `unload_order` or
