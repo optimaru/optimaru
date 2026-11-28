@@ -1144,6 +1144,76 @@ TspSolution buildRandomTsp(int routeCount, int cityCount) {
     return s;
 }
 
+// Solver::add_stop_criterion: a stop rule of the use case's own, asked once a
+// step after the built-in limits, made fresh for every solve and every start.
+void testCustomStopCriterion() {
+    std::printf("== stop: a use case's own criterion ==\n");
+    struct StopAtStep final : optimaru::StopCriterion {
+        explicit StopAtStep(std::int64_t at, std::int64_t* last) : at_(at), last_(last) {}
+        bool reached(const optimaru::StopState& state) override {
+            *last_ = state.step;
+            return state.step >= at_;
+        }
+        double progress(const optimaru::StopState& state) const override {
+            return static_cast<double>(state.step) / static_cast<double>(at_);
+        }
+        std::int64_t at_;
+        std::int64_t* last_;
+    };
+    std::int64_t last = -1;
+    int made = 0;
+    optimaru::Settings config;
+    config.stop.time_limit = std::chrono::minutes(10);  // only the criterion binds
+    TaskAssignment s = buildTaskInstance();
+    optimaru::Solver<TaskAssignment> solver(config);
+    solver.add_stop_criterion([&]() -> std::unique_ptr<optimaru::StopCriterion> {
+        ++made;
+        return std::make_unique<StopAtStep>(37, &last);
+    });
+    TaskAssignmentCalculator calculator;
+    solver.solve(s, calculator);
+    check(made == 1 && last == 37, "it stops the solve at the step it names");
+
+    {  // The built-in limits are asked first: a step limit below it ends the solve.
+        last = -1;
+        optimaru::Settings limited = config;
+        limited.stop.step_limit = 10;
+        TaskAssignment t = buildTaskInstance();
+        optimaru::Solver<TaskAssignment> first(limited);
+        first.add_stop_criterion([&]() -> std::unique_ptr<optimaru::StopCriterion> {
+            return std::make_unique<StopAtStep>(37, &last);
+        });
+        TaskAssignmentCalculator c;
+        first.solve(t, c);
+        check(last == 9, "after the built-in limits");
+    }
+    {  // progress() is the furthest criterion.
+        std::int64_t unused = 0;
+        optimaru::Limits limits;
+        limits.time_limit = std::chrono::minutes(10);
+        std::vector<std::unique_ptr<optimaru::StopCriterion>> custom;
+        custom.push_back(std::make_unique<StopAtStep>(100, &unused));
+        optimaru::StopCondition stop(limits, nullptr, nullptr, std::move(custom));
+        stop.should_stop(25, Score{0, 0.0}, /*force_time_check=*/true);
+        check(std::fabs(stop.progress() - 0.25) < 0.01, "its progress counts");
+    }
+    {  // Every start of a multi-start run gets its own.
+        made = 0;
+        optimaru::Settings multi = config;
+        multi.run.parallel_starts = 3;
+        TaskAssignment t = buildTaskInstance();
+        optimaru::Solver<TaskAssignment> starts(multi);
+        std::int64_t sink[3] = {0, 0, 0};
+        std::atomic<int> next{0};
+        starts.add_stop_criterion([&]() -> std::unique_ptr<optimaru::StopCriterion> {
+            ++made;
+            return std::make_unique<StopAtStep>(50, &sink[next++ % 3]);
+        });
+        starts.solve_multistart(t, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        check(made == 3, "every start of a multi-start run makes its own");
+    }
+}
+
 // nothing_placed: what a use case asks before it sets what only suits a
 // start from the construction.
 // The portable draws give these numbers for seed 42 on every platform: CI runs
@@ -2955,6 +3025,7 @@ int main() {
     testHistoryGrowth(separableOptimum);
     testHistoryGrowthOnAWarmStart(optimum);
     testPortableDraws();
+    testCustomStopCriterion();
     testNothingPlaced();
     testCustomConstruction();
     testNearbyAndLnsOnRandomTsp();
