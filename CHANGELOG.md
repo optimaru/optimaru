@@ -134,7 +134,7 @@ draws on every platform.
   Five calls that drew twice in their arguments, whose order is the compiler's, draw in two
   statements: the meeting-scheduling room pick, and demo data (vehicle routing, pickup and
   delivery, employee scheduling, flight crew). The search is the same; its random numbers are
-  not, so a seeded solve gives another (equally good) result than 0.8.0 did, and the vehicle
+  not, so a seeded solve gives a different (equally good) result from 0.8.0's, and the vehicle
   routing and pickup-delivery demo instances are other instances. The engine tests that
   checked one seed for something about half the seeds reach (LNS from a local optimum, kicks
   from a warm start) now count over ten seeds, and the vehicle-routing ALNS check over ten.
