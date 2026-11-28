@@ -33,6 +33,7 @@ from . import _core
 __all__ = [
     "AxleGroupModel",
     "AxleLoadModel",
+    "ContainerInstanceModel",
     "ContainerLoadingProblemModel",
     "ContainerLoadingRequest",
     "ContainerModel",
@@ -52,6 +53,8 @@ MAX_WEIGHT = 1_000_000_000
 MAX_AXLE_LOAD = 10**15
 #: How far an axle group may be from the closed end, either way.
 MAX_AXLE_POSITION = 10 * MAX_LENGTH
+#: The most copies a container type with a `quantity` may have.
+MAX_QUANTITY = 10_000
 #: The largest item priority.
 MAX_PRIORITY = 1_000_000
 #: The largest weight limit (`max_weight`, `max_load_on_top`): what a 64-bit integer holds.
@@ -163,6 +166,19 @@ class AxleLoadModel(StrictModel):
     loads: dict[str, float] = Field(description="The load on each axle group, by its id.")
 
 
+class ContainerInstanceModel(StrictModel):
+    """Output: one used container of a type listed with a `quantity` other than 1."""
+
+    id: str = Field(description='The type\'s id and its number: "truck-5t#2".')
+    items: list[str] = Field(description="The placed items, in loading order.")
+    unplaced_items: list[str] = Field(description="Items given to it that found no place in it.")
+    loaded_weight: int = Field(ge=0, description="Weight of the placed items.")
+    loaded_volume: int = Field(ge=0, description="Volume of the placed items.")
+    fill_ratio: float = Field(ge=0, description="loaded_volume / the container's volume.")
+    used_length: int = Field(ge=0, description="Largest x + placed_length of a placed item.")
+    axle_loads: list[AxleLoadModel] | None = Field(default=None, description="With axle groups: the loads by stage.")
+
+
 class ContainerModel(StrictModel):
     """One physical space: a pallet, a rack bay, a cargo space, one carton.
 
@@ -214,6 +230,19 @@ class ContainerModel(StrictModel):
         default_factory=list,
         description="Two axle groups (front first, then rear) or none; their loads are axle_load_cost's.",
     )
+    quantity: int | None = Field(
+        default=1,
+        ge=1,
+        le=MAX_QUANTITY,
+        description=(
+            "How many containers of this type there are: 1 = this one; n = up to n alike; None = as "
+            "many as needed. Other than 1, the solve reports the used ones in `instances`."
+        ),
+    )
+    initial_instances: list[list[str]] = Field(
+        default_factory=list,
+        description="Warm start for a type with a quantity other than 1: one loading order per container.",
+    )
     initial_items: list[str] = Field(
         default_factory=list,
         description=(
@@ -245,6 +274,35 @@ class ContainerModel(StrictModel):
         default=None,
         description="Output, with axle groups: the load on each at departure and after each stop.",
     )
+    instances: list[ContainerInstanceModel] | None = Field(
+        default=None,
+        description=(
+            "Output, for a quantity other than 1: the containers of this type that were given items, "
+            "in their order (the fields above are then left empty)."
+        ),
+    )
+
+    @property
+    def single(self) -> bool:
+        """Whether this is one container (quantity 1), as before quantities."""
+        return self.quantity == 1
+
+    def instance_orders(self) -> list[list[str]]:
+        """For a quantity other than 1: the loading order of each container a solve goes in with,
+        from `instances` when a solve has filled them in, else from `initial_instances`."""
+        if self.instances is not None:
+            return [[*instance.items, *instance.unplaced_items] for instance in self.instances]
+        return [list(order) for order in self.initial_instances]
+
+    @model_validator(mode="after")
+    def validate_quantity(self) -> ContainerModel:
+        if self.single and self.initial_instances:
+            raise ValueError(f"container {self.id!r}: initial_instances is for a quantity other than 1")
+        if not self.single and (self.initial_items or self.items is not None):
+            raise ValueError(f"container {self.id!r}: a quantity other than 1 takes initial_instances, not items")
+        if self.quantity is not None and len(self.instance_orders()) > self.quantity:
+            raise ValueError(f"container {self.id!r}: more loading orders than its quantity")
+        return self
 
     @model_validator(mode="after")
     def validate_axles(self) -> ContainerModel:
@@ -271,6 +329,8 @@ class ContainerModel(StrictModel):
         placed is exactly the solution it was; one with unplaced items can only come back
         with fewer of them, though not necessarily with a lower hard score: an item placed
         now may stand on a fragile item or in front of an earlier stop."""
+        if not self.single:
+            return [item_id for order in self.instance_orders() for item_id in order]
         if self.items is None:
             return list(self.initial_items)
         return [*self.items, *(self.unplaced_items or [])]
@@ -354,6 +414,12 @@ class ContainerLoadingProblemModel(StrictModel):
         container_ids = [container.id for container in self.containers]
         if len(container_ids) != len(set(container_ids)):
             raise ValueError("container ids must be unique")
+        names = container_ids + [tag for container in self.containers for tag in container.tags]
+        for container in self.containers:
+            if not container.single and any(name.startswith(container.id + "#") for name in names):
+                raise ValueError(
+                    f"container ids and tags must not look like the copies of {container.id!r} ({container.id}#1, ...)"
+                )
         item_ids = [item.id for item in self.items]
         known = set(item_ids)
         if len(item_ids) != len(known):
@@ -388,31 +454,65 @@ class ContainerLoadingProblemModel(StrictModel):
                 listed.add(item_id)
         return self
 
+    def copies(self) -> list[tuple[ContainerModel, str, list[str]]]:
+        """The containers the engine gets: (type, id, loading order) for each. A type of quantity 1 is
+        itself; one of quantity n is n containers "id#1" .. "id#n"; one of quantity None as many as
+        `needed_copies` says."""
+        out = []
+        for container in self.containers:
+            if container.single:
+                out.append((container, container.id, container.loading_order()))
+                continue
+            orders = container.instance_orders()
+            count = container.quantity if container.quantity is not None else self.needed_copies(container)
+            count = max(count, len(orders))
+            for k in range(count):
+                out.append((container, f"{container.id}#{k + 1}", orders[k] if k < len(orders) else []))
+        return out
+
+    def needed_copies(self, container: ContainerModel) -> int:
+        """How many containers a type of quantity None gets: twice the containers the volume of the
+        items that fit it needs, or twice those their weight needs against its max_weight, whichever is
+        more, plus one; at most one per such item, and at least one."""
+        inner = sorted((container.length, container.width, container.height))
+        # The items that fit in some orientation (their sides, sorted, within the container's).
+        fitting = [
+            item
+            for item in self.items
+            if all(a <= b for a, b in zip(sorted((item.length, item.width, item.height)), inner))
+        ]
+        volume = container.length * container.width * container.height
+        need = -(-sum(item.length * item.width * item.height for item in fitting) // volume)
+        if container.max_weight:
+            need = max(need, -(-sum(item.weight for item in fitting) // container.max_weight))
+        return max(1, min(len(fitting), 2 * need + 1))
+
     def to_core(self) -> _core.ContainerLoadingProblem:
         """pydantic -> engine object. Each container's list is its `loading_order()`: what a
-        solve filled in when there is one, else `initial_items`. The other outputs are
-        ignored; the engine derives them again."""
+        solve filled in when there is one, else `initial_items`. A type with a quantity other
+        than 1 becomes its `copies()`, each tagged with the type's id too. The other outputs
+        are ignored; the engine derives them again."""
         index = {item.id: i for i, item in enumerate(self.items)}
         return _core.ContainerLoadingProblem(
             containers=[
                 _core.Container(
-                    container.id,
+                    copy_id,
                     container.length,
                     container.width,
                     container.height,
                     max_weight=container.max_weight,
                     cost=container.cost,
-                    items=[index[item_id] for item_id in container.loading_order()],
+                    items=[index[item_id] for item_id in order],
                     max_stack_height=container.max_stack_height,
                     max_offset_length=container.max_offset_length,
                     max_offset_width=container.max_offset_width,
-                    tags=list(container.tags),
+                    tags=list(container.tags) if container.single else [*container.tags, container.id],
                     tare_weight=container.tare_weight,
                     axle_groups=[
                         (axle.id, axle.position, axle.max_load, axle.empty_load) for axle in container.axle_groups
                     ],
                 )
-                for container in self.containers
+                for container, copy_id, order in self.copies()
             ],
             items=[
                 _core.Item(
@@ -540,6 +640,56 @@ class ContainerLoadingProblemModel(StrictModel):
         )
 
 
+def solved_model(problem: ContainerLoadingProblemModel, core: _core.ContainerLoadingProblem):
+    """The solved model of `problem`, from `core`, the engine object `problem.to_core()` gave and a
+    solve has filled in: a type of quantity 1 as `from_core` reports it, one with another quantity
+    with its used containers in `instances`; the inputs (`initial_items`, `initial_instances`,
+    `quantity`) as `problem` has them."""
+    flat = ContainerLoadingProblemModel.from_core(core)
+    by_id = {container.id: container for container in flat.containers}
+    containers = []
+    for container in problem.containers:
+        if container.single:
+            solved = by_id[container.id]
+            solved.initial_items = list(container.initial_items)
+            containers.append(solved)
+            continue
+        instances = []
+        k = 1
+        while f"{container.id}#{k}" in by_id:
+            copy = by_id[f"{container.id}#{k}"]
+            if copy.items or copy.unplaced_items:
+                instances.append(
+                    ContainerInstanceModel(
+                        id=copy.id,
+                        items=copy.items,
+                        unplaced_items=copy.unplaced_items,
+                        loaded_weight=copy.loaded_weight,
+                        loaded_volume=copy.loaded_volume,
+                        fill_ratio=copy.fill_ratio,
+                        used_length=copy.used_length,
+                        axle_loads=copy.axle_loads,
+                    )
+                )
+            k += 1
+        containers.append(
+            container.model_copy(
+                update={
+                    "instances": instances,
+                    "items": None,
+                    "unplaced_items": None,
+                    "loaded_weight": None,
+                    "loaded_volume": None,
+                    "fill_ratio": None,
+                    "used_length": None,
+                    "axle_loads": None,
+                },
+                deep=True,
+            )
+        )
+    return flat.model_copy(update={"containers": containers})
+
+
 def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
     """The parameters `problem` sets away from their defaults that act only through a cost.
 
@@ -598,8 +748,12 @@ def with_initial_solution(problem, solution):
 
     `solution` is a solved problem model or a dict of the same shape. Containers and items
     are matched by id: each container's `initial_items` becomes the `items` it has in the
-    solution (its placed items, in loading order), replacing what `problem` had; a container
-    the solution leaves out starts empty. Items the solution placed nowhere are constructed
+    solution (its placed items, in loading order), replacing what `problem` had; a type with a
+    quantity other than 1 takes its `instances`' items as `initial_instances` (those beyond its
+    quantity are left out, and their items constructed again). A container whose quantity
+    changed between the two is carried over in the problem's shape: a single container takes
+    the instances' orders one after the other, a type a single container's order as its first
+    instance. A container the solution leaves out starts empty. Items the solution placed nowhere are constructed
     around the seeded loading orders before the search starts. The copy carries no outputs.
 
     Raises ValueError on an unknown container or item, or an item listed twice.
@@ -608,17 +762,14 @@ def with_initial_solution(problem, solution):
         solution = solution.model_dump(mode="json")
     if not isinstance(solution, dict) or not isinstance(solution.get("containers"), list):
         raise ValueError("solution must be a problem model or a dict with a 'containers' list")
-    known_containers = {container.id for container in problem.containers}
+    by_id = {container.id: container for container in problem.containers}
+    known_containers = set(by_id)
     known_items = {item.id for item in problem.items}
     orders: dict[str, list[str]] = {}
+    instance_orders: dict[str, list[list[str]]] = {}
     seen: set[str] = set()
-    for entry in solution["containers"]:
-        container_id = entry.get("id") if isinstance(entry, dict) else None
-        if not isinstance(container_id, str) or container_id not in known_containers:
-            raise ValueError(f"solution references unknown container: {container_id!r}")
-        if container_id in orders:
-            raise ValueError(f"solution lists container {container_id!r} more than once")
-        order = entry.get("items") or []
+
+    def checked(container_id, order):
         if not isinstance(order, list):
             raise ValueError(f"container {container_id!r}: 'items' must be a list of item ids")
         for item_id in order:
@@ -627,12 +778,34 @@ def with_initial_solution(problem, solution):
             if item_id in seen:
                 raise ValueError(f"solution lists item {item_id!r} more than once")
             seen.add(item_id)
-        orders[container_id] = list(order)
-    return _without_outputs(problem, orders)
+        return list(order)
+
+    for entry in solution["containers"]:
+        container_id = entry.get("id") if isinstance(entry, dict) else None
+        if not isinstance(container_id, str) or container_id not in known_containers:
+            raise ValueError(f"solution references unknown container: {container_id!r}")
+        if container_id in orders or container_id in instance_orders:
+            raise ValueError(f"solution lists container {container_id!r} more than once")
+        instances = entry.get("instances")
+        if instances is not None:
+            if not isinstance(instances, list) or not all(isinstance(instance, dict) for instance in instances):
+                raise ValueError(f"container {container_id!r}: 'instances' must be a list of objects")
+            given = [checked(container_id, instance.get("items") or []) for instance in instances]
+        else:
+            given = [checked(container_id, entry.get("items") or [])]
+        # The shape the problem has now: one container takes the instances' orders one after the
+        # other, a type with a quantity takes a single container's order as its first instance.
+        if by_id[container_id].single:
+            orders[container_id] = [item_id for order in given for item_id in order]
+        else:
+            instance_orders[container_id] = [order for order in given if order]
+    return _without_outputs(problem, orders, instance_orders)
 
 
-def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, list[str]]):
-    """`problem` with `orders` as its initial loading orders (by container id) and no outputs."""
+def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, list[str]], instance_orders=None):
+    """`problem` with `orders` as its initial loading orders (by container id; `instance_orders`
+    for the types with a quantity other than 1) and no outputs."""
+    instance_orders = instance_orders or {}
     return ContainerLoadingProblemModel(
         containers=[
             ContainerModel(
@@ -648,7 +821,11 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 tags=list(container.tags),
                 tare_weight=container.tare_weight,
                 axle_groups=[axle.model_copy() for axle in container.axle_groups],
-                initial_items=orders.get(container.id, []),
+                quantity=container.quantity,
+                initial_items=orders.get(container.id, []) if container.single else [],
+                initial_instances=[]
+                if container.single
+                else instance_orders.get(container.id, [])[: container.quantity],
             )
             for container in problem.containers
         ],

@@ -93,12 +93,15 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `axle_groups` | list of `AxleGroupModel`, [] | two axle groups, front first, or none: `{"id": "front", "position": -1200, "max_load": 8000000, "empty_load": null}`, `position` along x from the closed end (negative = ahead of it: a cab's axle, a trailer's kingpin), `max_load` what it may carry, `empty_load` what it carries empty (both groups or neither, and then no `tare_weight`) |
 | `tags` | list of non-empty str, [] | names an item's `allowed_containers` may use besides the id (`reefer`, a vehicle type); a tag may not be a container's id |
 | `max_offset_length`, `max_offset_width` | float in [0, 1] or None, None | how far the placed load's centre of gravity may lie from the container's centre, as a share of half the length (width); None = no limit |
-| `initial_items` | list of item ids, [] | warm start: the loading order to start from |
+| `quantity` | int 1 to 10,000 or None, 1 | how many containers of this type: 1 = this one, as before; n = up to n alike; None = as many as needed (see below) |
+| `initial_instances` | list of lists of item ids, [] | warm start for a quantity other than 1: one loading order per container of the type |
+| `initial_items` | list of item ids, [] | warm start: the loading order to start from (quantity 1) |
 | `items` | output, list of ids | the placed items, in loading order |
 | `unplaced_items` | output, list of ids | items the solve gave to this container that found no place in it |
 | `loaded_weight`, `loaded_volume` | output, int | weight and volume of the placed items (`container_weight_cost` counts the unplaced ones too) |
 | `fill_ratio` | output, float | `loaded_volume` / the container's volume |
 | `used_length` | output, int | largest `x + placed_length` of a placed item (0 when empty) |
+| `instances` | output, list of `ContainerInstanceModel` or None | for a quantity other than 1: the containers of the type that were given items, each with its `id` (`"truck-5t#2"`), `items`, `unplaced_items`, `loaded_weight`, `loaded_volume`, `fill_ratio`, `used_length` and `axle_loads`; the type's own output fields above stay empty |
 | `axle_loads` | output, list of `AxleLoadModel` or None | with axle groups: `{"after_stop": null, "loads": {"front": ..., "rear": ...}}` at departure, then one per stop after its items are off |
 
 **`ItemModel`**
@@ -161,7 +164,24 @@ is the whole problem: ten parcels for three stops in one van):
 }
 ```
 
-### Three ways to use it
+### Container types with a quantity
+
+A container with a `quantity` other than 1 is a type: the engine gets that many
+containers alike, `"<id>#1"`, `"<id>#2"`, ..., each tagged with the type's `id` (so an
+item's `allowed_containers` may name the type), and the solved model reports the ones it
+gave items to in the type's `instances`, in their order, with an item's `container` the
+instance's id. `quantity: null` gives as many as are needed: twice the containers the
+volume of the items that fit the type needs, or twice those their weight needs against its
+`max_weight`, whichever is more, plus one, and never more than one per such item. Unused
+copies cost nothing (`used_container_cost` counts containers holding a placed item), but
+each is a list the search may move items into, so give a quantity where you know the
+number: each `quantity: null` type adds up to one list per item it can hold. A solved
+model goes on from its `instances` (`solve(solved)`), and `with_initial_solution` turns them
+into `initial_instances`. The bound for `null` is a rule of thumb (it counts the full
+height, not a `max_stack_height`). The quantity is the JSON
+model's: a compiled problem (`cl.Container`) is the copies themselves.
+
+### Ways to use it
 
 - **Pallets and rack bays.** One container per pallet or bay, `max_weight` its load
   limit, `max_load_on_top` on what must not be crushed. The solve fills as few as it can.
@@ -186,9 +206,10 @@ is the whole problem: ten parcels for three stops in one van):
   `optional` marks what may be left out at a soft cost (fillers, next-day goods). A
   `group_rules` entry keeps an order whole or out (`all_or_none`) and in one container
   (`single_container`).
-- **Cartons from a catalog.** List one container per carton you are willing to use: for a
-  catalog of three sizes and an order that may need up to two cartons, six containers,
-  each with its carton's `cost`. `used_container_cost` is then the price of the cartons
+- **Cartons from a catalog, a fleet of vehicle types.** List each carton size or vehicle
+  type once with its `cost` and a `quantity`: None for as many as needed (a carton catalog),
+  n for the vehicles of a type you have. Listing one container per carton, as before,
+  still works. `used_container_cost` is then the price of the cartons
   chosen, and the solve returns the cheapest ones that hold the order. Several orders in
   one request: give each order's items a `group`, and `group_split_cost` keeps an order
   in one carton where it fits.
@@ -675,7 +696,9 @@ three:
 `ContainerLoadingProblemModel` whose search starts from `solution`, a solved model or the
 same thing as a JSON dict. Containers and items are matched by id: each container's
 `initial_items` becomes the `items` it has in the solution, replacing what the problem
-had, and a container the solution leaves out starts empty. Items the solution placed
+had (a type with a quantity takes its `instances` as `initial_instances`; a container whose
+quantity changed takes them in the problem's shape), and a container the solution leaves
+out starts empty. Items the solution placed
 nowhere are constructed around the seeded loading orders; with
 `time_limit_seconds=0` a complete solution comes back as it went in. An unknown container
 or item, or an item listed twice, raises `ValueError`.

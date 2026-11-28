@@ -158,7 +158,9 @@ print(solved.model_dump_json(exclude_none=True))
 ```
 
 `solve` given a model converts it, solves, and returns a new model; the one passed in is
-left as it was. `model.to_core()` and `ContainerLoadingProblemModel.from_core(problem)`
+left as it was. A container with a `quantity` other than 1 is a type that becomes that many
+containers in the engine (`model.copies()`); the solved model lists the used ones in its
+`instances` ([Container types with a quantity](README.md#container-types-with-a-quantity)). `model.to_core()` and `ContainerLoadingProblemModel.from_core(problem)`
 are the conversions: `to_core()` loads each container's `items` (and `unplaced_items`)
 when a solve has filled them in, else its `initial_items`; `from_core()` decodes the
 problem first (`cl.update_placements`), so the positions describe the loading orders the

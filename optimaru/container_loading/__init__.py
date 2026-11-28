@@ -66,7 +66,7 @@ from ._core import (
     update_placements,
 )
 from .constraints import get_constraints as _get_constraints
-from .models import ContainerLoadingProblemModel, solve_request, with_initial_solution
+from .models import ContainerLoadingProblemModel, solve_request, solved_model, with_initial_solution
 from .models import parameter_uses as _parameter_uses
 
 # The settings by stage of the solve (optimaru._config): config.stop, config.alns, ...
@@ -163,10 +163,7 @@ def solve(
             _parameter_uses(problem), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
         )
         solve_in_place(Solver(cfg), core, constraints)
-        solved = ContainerLoadingProblemModel.from_core(core)
-        for container, given in zip(solved.containers, problem.containers):
-            container.initial_items = list(given.initial_items)  # an input: it stays on the result
-        return solved
+        return solved_model(problem, core)  # the inputs (initial_items, quantity) stay on the result
     raise TypeError(
         f"problem must be a ContainerLoadingProblem or a models.ContainerLoadingProblemModel: {type(problem)!r}"
     )
