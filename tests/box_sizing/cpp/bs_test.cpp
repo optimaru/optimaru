@@ -619,6 +619,16 @@ void verifyAcceptor() {
     check(acceptor.reheats() == 2 && accepts({0, -1010.0}, {0, -1002.0}) &&
                   !accepts({0, -1010.5}, {0, -1002.0}),
           "the second time the gap is 1% of the best score seen");
+    // An improving step is one that ends above the step before it, also
+    // below the best: seven steps down, one up, seven down are fifteen steps
+    // without a refill, and the eighth after the step up brings the third.
+    for (int step = 0; step < 7; ++step) acceptor.on_step_end({0, -1008.0});
+    acceptor.on_step_end({0, -1007.0});
+    for (int step = 0; step < 7; ++step) acceptor.on_step_end({0, -1007.0});
+    const bool waited = acceptor.reheats() == 2;
+    acceptor.on_step_end({0, -1007.0});
+    check(waited && acceptor.reheats() == 3,
+          "a step up from the step before, below the best too, starts the count again");
     std::printf("\n");
 }
 

@@ -33,6 +33,13 @@ namespace bs {
 // walks alternate. The hard level of the bar is the best one seen: a walk
 // never trades feasibility for volume.
 //
+// An improving step is one that ends on a better score than the step before
+// it, not one that beats the best: a walk below the best that still climbs is
+// a descent that is not over, and refilling the history then would cut it
+// short. So the two histories are counted from the last step up, and a walk
+// that goes up and down inside its band puts the next refill off for as long
+// as it does (the figures of the guide were measured with this rule).
+//
 // Everything is counted in steps, so a seeded solve with a step limit is
 // reproducible. The engine keeps the best solution, whatever the walks do.
 class ReheatingLateAcceptance final : public optimaru::Acceptor {

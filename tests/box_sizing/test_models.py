@@ -109,6 +109,7 @@ def test_extra_fields_are_rejected():
         ("parcels", "width", 0),
         ("parcels", "weight", -1),
         ("parcels", "quantity", 0),
+        ("parcels", "quantity", 2**53 + 1),
     ],
 )
 def test_a_fact_out_of_range_is_refused(where, field, value):

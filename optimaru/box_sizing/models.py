@@ -36,6 +36,8 @@ __all__ = [
 #: The largest side and weight the engine takes (ScoreCalculator::kMaxSide, kMaxWeight).
 MAX_SIDE = 2_000_000
 MAX_WEIGHT = 1_000_000_000_000
+#: No quantity can be larger: the engine refuses a shipped volume above 2^53 (kMaxVolume).
+MAX_QUANTITY = 2**53
 
 
 class BoxModel(StrictModel):
@@ -69,7 +71,7 @@ class ParcelModel(StrictModel):
     width: int = Field(gt=0, le=MAX_SIDE)
     height: int = Field(gt=0, le=MAX_SIDE)
     weight: int = Field(default=0, ge=0, le=MAX_WEIGHT, description="Weight of one shipment.")
-    quantity: int = Field(default=1, ge=1, description="How many shipments had this size.")
+    quantity: int = Field(default=1, ge=1, le=MAX_QUANTITY, description="How many shipments had this size.")
     box: str | None = Field(default=None, description="Id of the box it ships in; None = not decided.")
 
 
@@ -83,9 +85,10 @@ def _parcels_no_box_takes(boxes: list[BoxModel], parcels: list[ParcelModel]) -> 
     """The parcels that fit none of `boxes`, by size in some rotation and by weight (the
     engine's BoxSizingProblem::fits).
 
-    The boxes are tried largest first, so a parcel that fits is found at the first or second
-    box and the scan is one pass over the parcels in practice; only a parcel that fits none
-    is tried against every box."""
+    The boxes are tried largest volume first, so a parcel that fits is usually found at the
+    first or second box and the scan is close to one pass over the parcels (a long parcel can
+    miss a larger box that is shorter); only a parcel that fits none is tried against every
+    box."""
     candidates = sorted(
         ((*_sides(box), box.max_weight) for box in boxes),
         key=lambda sides: sides[0] * sides[1] * sides[2],

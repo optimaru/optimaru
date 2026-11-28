@@ -123,7 +123,7 @@ ParcelModel
     id: str
     length, width, height: int            > 0
     weight: int = 0
-    quantity: int = 1                     >= 1: how many shipments had this size
+    quantity: int = 1                     >= 1 (at most 2^53): how many shipments had this size
     box: str | None = None                in and out: the id of the box it ships in
 ```
 

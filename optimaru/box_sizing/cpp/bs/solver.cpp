@@ -69,8 +69,10 @@ void registerMoves(optimaru::Solver<BoxSizingProblem>& engine, const Solver::Con
 // search and the domain's moves (and the ALNS kicks when the Config turns
 // them on), driven by whichever calculator the caller brought (the monolithic
 // incremental one, or a plugin assembly).
-// The engine's construction heuristic finds nothing left to place:
-// constructGreedy assigned every parcel.
+//
+// There is no construction phase in the engine: constructGreedy has assigned
+// every parcel before this is called, so the engine's own construction finds
+// nothing left to place and the search starts at once.
 void runEngine(const Solver::Config& config, BoxSizingProblem& problem,
                optimaru::Objective<BoxSizingProblem>& calculator,
                const std::shared_ptr<const BoxRanking>& ranking) {
