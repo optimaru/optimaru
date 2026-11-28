@@ -88,11 +88,11 @@ request = OrderPickingRequest(
   walking through a third location, and the distances given are used as they are.
 - An id in `distances` that is not in `locations` is refused.
 - The table is one number for every pair, so it grows with the square of `locations`: 1,000
-  locations are a million distances, which the request model reads and lays out in Python
-  (a second or so, where the solve's own preparation takes milliseconds) and which have to
-  fit the body an API accepts. `locations` needs only the places the request's trolleys and items are
-  at, not the whole building. A caller that holds a large table as a matrix already can skip
-  the dict: `op.Warehouse.from_distances` takes it as it is.
+  locations are a million distances at most (half of that when each pair is given once), which
+  the request model reads and lays out in about 0.2 s and which have to fit the body an API
+  accepts. `locations` needs only the places the request's trolleys and items are at, not the
+  whole building, and holds at most 4096. A caller that already has the table as a matrix can
+  skip the dict: `op.Warehouse.from_distances` takes it as it is.
 
 The distances are in the unit the score counts in. The default weight of
 `order_split_by_trolley_cost`, 1000, prices one more trolley on an order at 1000 of them.
