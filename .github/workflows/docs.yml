@@ -36,6 +36,7 @@ on:
   workflow_run:
     workflows: [wheels]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -51,6 +52,8 @@ env:
 
 jobs:
   build:
+    # After wheels.yml only when it published (it also runs, and fails, on other pushes).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

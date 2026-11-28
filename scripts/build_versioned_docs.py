@@ -44,7 +44,9 @@ from io import BytesIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FIRST_MINOR = (0, 4)  # the first release with mkdocs.yml
+# The first release with mkdocs.yml. Each minor adds about 20 MB to the site (GitHub Pages
+# allows 1 GB): raise this when the old ones are no longer worth keeping.
+FIRST_MINOR = (0, 4)
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 WRAPPER = ".mkdocs-versioned.yml"
 LATEST = "latest"
@@ -74,11 +76,13 @@ def export_tag(tag: str, dest: Path) -> None:
         tar.extractall(dest, filter="data")
 
 
-def pin_links(tree: Path, ref: str) -> None:
-    """Point a release's links to repository files at its tag instead of main."""
+def prepare_release_tree(tree: Path, ref: str) -> None:
+    """Point a release's links to repository files at its tag, and give it the version banner."""
     hooks = tree / "scripts" / "mkdocs_hooks.py"
     if hooks.is_file():
         text = hooks.read_text()
+        if "/{kind}/main/" not in text:
+            print(f"warning: {ref}: repository links not pinned to the tag", file=sys.stderr)
         hooks.write_text(text.replace("/{kind}/main/", f"/{{kind}}/{ref}/"))
     banner = ROOT / "overrides" / "main.html"
     target = tree / "overrides" / "main.html"
@@ -96,6 +100,8 @@ def build(tree: Path, out: Path, site_url: str, ref: str, strict: bool) -> None:
             {
                 "INHERIT": "mkdocs.yml",
                 "site_url": site_url,
+                # 0.4 and 0.5 had no custom_dir: without it they would not read the banner template.
+                "theme": {"custom_dir": "overrides"},
                 "edit_uri": f"edit/{ref}/docs/" if ref == "main" else f"blob/{ref}/docs/",
                 "extra": {"version": {"provider": "mike", "default": LATEST, "alias": True}},
             }
@@ -132,10 +138,13 @@ def write_redirects(out: Path, site_url: str, newest: str) -> int:
     Its canonical link names the newest release's own folder, as the pages of latest/ do.
     """
     latest = out / LATEST
+    folders = {path.name for path in out.iterdir() if path.is_dir()}
     count = 0
     for page in latest.rglob("index.html"):
         rel = page.parent.relative_to(latest).as_posix()
         rel = "" if rel == "." else f"{rel}/"
+        if rel and rel.split("/")[0] in folders - {path.name for path in latest.iterdir()}:
+            sys.exit(f"the page {rel} would shadow the version folder {rel.split('/')[0]}/")
         depth = rel.count("/")
         href = "../" * depth + f"{LATEST}/{rel}"
         target = out / rel / "index.html"
@@ -164,35 +173,44 @@ def main() -> None:
         shutil.rmtree(out)
     out.mkdir(parents=True)
 
-    versions = [{"version": DEV, "title": "dev (main)", "aliases": []}]
-    versions += [
-        {"version": folder, "title": tag.removeprefix("v"), "aliases": [LATEST] if i == 0 else []}
-        for i, (folder, tag) in enumerate(releases)
-    ]
-
     def build_release(folder: str, tag: str, tmp: str) -> None:
         tree = Path(tmp) / folder
         export_tag(tag, tree)
-        pin_links(tree, tag)
+        prepare_release_tree(tree, tag)
         build(tree, out / folder, f"{site_url}{folder}/", tag, strict=False)
 
     # Each build is one MkDocs process; they share nothing but the output directory.
     with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=args.jobs) as pool:
         jobs = {pool.submit(build, ROOT, out / DEV, f"{site_url}{DEV}/", "main", args.strict): f"{DEV} (main)"}
         jobs.update({pool.submit(build_release, folder, tag, tmp): f"{folder} ({tag})" for folder, tag in releases})
-        failed = []
+        failed = set()
         for job in as_completed(jobs):
             try:
                 job.result()
                 print(f"built {jobs[job]}", flush=True)
             except subprocess.CalledProcessError:
-                failed.append(jobs[job])
-        if failed:
-            sys.exit(f"build failed: {', '.join(failed)}")
+                failed.add(jobs[job])
+    if f"{DEV} (main)" in failed:
+        sys.exit("build failed: dev (main)")
+    if releases and f"{releases[0][0]} ({releases[0][1]})" in failed:
+        sys.exit(f"build failed: the newest release, {releases[0][1]}")
+    # An older release that no longer builds (say, after a change to docs/requirements.txt) is left
+    # out of the menu rather than holding back the rest; the warning shows in the log.
+    for folder, tag in [r for r in releases if f"{r[0]} ({r[1]})" in failed]:
+        print(f"warning: {tag} did not build and is left out of the version menu", file=sys.stderr)
+        shutil.rmtree(out / folder, ignore_errors=True)
+    releases = [r for r in releases if f"{r[0]} ({r[1]})" not in failed]
+    versions = [{"version": DEV, "title": "dev (main)", "aliases": []}]
+    versions += [
+        {"version": folder, "title": tag.removeprefix("v"), "aliases": [LATEST] if i == 0 else []}
+        for i, (folder, tag) in enumerate(releases)
+    ]
     if releases:
         # The newest release again under latest/ (its canonical links keep naming its own folder).
         shutil.copytree(out / releases[0][0], out / LATEST)
         print(f"{write_redirects(out, site_url, releases[0][0])} redirect pages to {LATEST}/", flush=True)
+        # GitHub Pages answers every unknown address with the root 404.html (its links are absolute).
+        shutil.copyfile(out / LATEST / "404.html", out / "404.html")
     else:
         (out / "index.html").write_text(
             REDIRECT.format(url=f"{site_url}{DEV}/", href=f"{DEV}/", href_js=json.dumps(f"{DEV}/"))
