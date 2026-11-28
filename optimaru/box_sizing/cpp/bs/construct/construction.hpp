@@ -26,10 +26,13 @@ namespace bs {
 // it comes to the top of the queue (lazy greedy): the same picks as
 // evaluating every size every round.
 //
-// A parcel that already has a box (a seed) stays put. When maxBoxTypes is
-// reached with parcels no open size takes, step 4 puts each in the cheapest
-// size that takes it and leaves the limit broken for the search to repair (a
-// parcel no candidate takes goes where it exceeds the least). Requires
+// A parcel that already has a box (a seed) stays put, and every size a seed
+// ships in is open, also when the seed uses more sizes than maxBoxTypes. When
+// maxBoxTypes is reached with parcels no open size takes (at once, with such
+// a seed), step 4 puts each in the cheapest size that takes it and leaves the
+// limit broken for the search to repair: CloseBoxMove is the move that does.
+// A parcel no candidate takes at all, which a solve refuses before it gets
+// here, goes where it adds the least to the hard score. Requires
 // ScoreCalculator::prepare. Deterministic: no random draw.
 void constructGreedy(BoxSizingProblem& problem, const BoxRanking& ranking);
 

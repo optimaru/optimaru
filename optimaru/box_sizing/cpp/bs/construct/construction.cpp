@@ -129,7 +129,11 @@ void constructGreedy(BoxSizingProblem& problem, const BoxRanking& ranking) {
         int box = greedy.target[p];
         if (box == kNone) box = ranking.cheapestFor(problem, p);
         if (box == kNone) {
-            // No candidate takes it: the one it exceeds the least.
+            // No candidate takes it: the one where it adds the least to the
+            // hard score (the two hard costs at their default weights). A
+            // solve never gets here, since it refuses such a parcel
+            // (requireSolvable); this is for a caller of constructGreedy
+            // alone, which gets a complete assignment either way.
             std::int64_t least = 0;
             for (int candidate : ranking.order) {
                 const std::int64_t excess =

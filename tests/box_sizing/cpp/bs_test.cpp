@@ -478,6 +478,57 @@ void verifyMoves() {
         check(found, "SwapBoxMove trades S for M at the limit and the score improves");
     }
     {
+        // S and L in use at a limit of 2, with XL as a fourth candidate. A
+        // swap that opens M and closes L leaves the large parcel without a
+        // size, and the only other one that takes it is XL: the plan would be
+        // S, M and XL, three sizes at a limit of two. It is not made, and
+        // nothing is written. (Opening XL and closing L, or M for S, is.)
+        BoxSizingProblem p = nested();
+        addBox(p, 40, 40, 40);  // XL
+        p.maxBoxTypes = 2;
+        const auto ranking = std::make_shared<const BoxRanking>(defaultRanking(p));
+        p.parcels[0].box = 0;
+        p.parcels[1].box = 2;
+        p.parcels[2].box = 2;
+        MoveHarness harness(p);
+        SwapBoxMove swap(ranking);
+        const Score before = harness.editor.score();
+        int overLimit = 0, applied = 0;
+        for (int trial = 0; trial < 200; ++trial) {
+            if (!harness.apply(swap)) continue;
+            ++applied;
+            if (p.boxTypesUsed() > 2) ++overLimit;
+            swap.undo_last(harness.ctx);
+        }
+        check(applied > 0 && overLimit == 0 && p.assignment() == std::vector<int>{0, 2, 2} &&
+                      harness.editor.score() == before,
+              "SwapBoxMove at the limit never proposes a plan with a size too many");
+        p.maxBoxTypes.reset();
+        bool three = false;
+        for (int trial = 0; trial < 200 && !three; ++trial) {
+            if (!harness.apply(swap)) continue;
+            three = p.boxTypesUsed() == 3;
+            swap.undo_last(harness.ctx);
+        }
+        check(three, "without a limit the same swap may bring a second size in");
+    }
+    {
+        // Two sizes of one price (the same volume, no cost) rank by index, so
+        // every start and every platform breaks the tie the same way.
+        BoxSizingProblem p;
+        addBox(p, 20, 10, 10);
+        addBox(p, 10, 20, 10);
+        addBox(p, 10, 10, 10);
+        addParcel(p, 10, 10, 10, -1, 3);
+        addParcel(p, 20, 10, 10, -1, 2);
+        const BoxRanking ranking = defaultRanking(p);
+        constructGreedy(p, ranking);
+        check(ranking.order == std::vector<int>{2, 0, 1} &&
+                      ranking.rank == std::vector<int>{1, 2, 0} &&
+                      p.assignment() == std::vector<int>{2, 0},
+              "sizes of one price keep their order: the lower index first");
+    }
+    {
         // A required size is never the one that closes.
         BoxSizingProblem p = nested();
         p.boxes[0].required = true;

@@ -1,6 +1,7 @@
 #ifndef BS_SEARCH_MOVES_OPEN_SET_MOVE_HPP
 #define BS_SEARCH_MOVES_OPEN_SET_MOVE_HPP
 
+#include <algorithm>
 #include <memory>
 #include <random>
 #include <utility>
@@ -80,14 +81,18 @@ protected:
 
     // Puts every parcel in its cheapest box of the planned set. `closing` is
     // the size the plan takes out (-1 = none): a parcel of it that no planned
-    // size takes brings the cheapest other size that does into the plan, and
-    // when no other candidate takes it the move is not made (false, nothing
-    // written). A parcel elsewhere that no planned size takes stays where it
-    // is. False also when the plan moves nothing.
+    // size takes brings the cheapest other size that does into the plan. The
+    // move is not made (false, nothing written) when no other candidate takes
+    // such a parcel, and when the sizes brought in would put more sizes in
+    // the plan than maxBoxTypes allows and than are in use now: at the limit
+    // a swap that needs a second new size could only break it. A parcel
+    // elsewhere that no planned size takes stays where it is. False also when
+    // the plan moves nothing.
     bool commit(optimaru::OperatorContext<BoxSizingProblem>& ctx, std::vector<int>& entities,
                 int closing) {
         const BoxSizingProblem& problem = ctx.editor.solution();
         if (closing >= 0) {
+            bool broughtIn = false;
             for (const std::vector<int>& group : ranking_->groups) {
                 bool inClosing = false;
                 for (int p : group) inClosing = inClosing || problem.parcels[p].box == closing;
@@ -95,6 +100,12 @@ protected:
                 const int other = ranking_->cheapestFor(problem, group.front(), closing);
                 if (other < 0) return false;
                 planned_[other] = 1;
+                broughtIn = true;
+            }
+            if (broughtIn && problem.maxBoxTypes) {
+                int plannedTypes = 0;
+                for (char planned : planned_) plannedTypes += planned;
+                if (plannedTypes > std::max(*problem.maxBoxTypes, types_)) return false;
             }
         }
         plannedOrder_.clear();
