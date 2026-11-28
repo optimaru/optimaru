@@ -36,7 +36,14 @@ You need a C++17 compiler, CMake and uv.
 | Guides | `docs/use-cases/<slug>/`, `docs/extending.md` |
 
 The README has the full [repository layout](README.md#repository-layout) and
-[engine layout](README.md#engine-layout).
+[engine layout](README.md#engine-layout). To find a part of the search by what it
+does, [`docs/how-it-solves.md`](docs/how-it-solves.md) follows one solve through the
+code step by step, with the file, the settings and the way to extend each step.
+
+Looking for something to work on? Issues labelled
+[good first issue](https://github.com/optimaru/optimaru/labels/good%20first%20issue),
+when there are some, are small and self-contained. To propose a move or a constraint before writing it,
+open an issue with the "Move or constraint idea" template.
 
 ## Add a constraint
 

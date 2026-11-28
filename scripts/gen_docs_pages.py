@@ -51,6 +51,7 @@ def reference_page(use_case: str) -> str:
 
 nav = mkdocs_gen_files.Nav()
 nav["Home"] = "index.md"
+nav["How a solve runs, in the code"] = "how-it-solves.md"
 nav["Extending a use case"] = "extending.md"
 nav["Use cases", "Overview and constraint contract"] = "use-cases/README.md"
 for use_case in use_cases():

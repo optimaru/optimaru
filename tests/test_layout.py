@@ -98,6 +98,29 @@ def test_cmake_builds_every_use_case():
     assert set(block.group(1).split()) == USE_CASES
 
 
+def test_the_idea_issue_template_offers_every_use_case():
+    text = (ROOT / ".github" / "ISSUE_TEMPLATE" / "move-or-constraint.yml").read_text()
+    block = re.search(r"id: use-case\n.*?options:\n(.*?)\n    validations:", text, re.S)
+    assert block, "move-or-constraint.yml: no use-case dropdown"
+    options = {m.group(1) for m in re.finditer(r"^\s*- (\S+)$", block.group(1), re.M)}
+    options -= {"several", "the engine"}
+    assert options == USE_CASES, f"move-or-constraint.yml: differs in {sorted(options ^ USE_CASES)}"
+
+
+def test_the_solver_marks_every_step_of_how_it_solves():
+    """docs/how-it-solves.md numbers the steps of Solver::run; the loop marks each with a
+    "How it solves, <n>" comment (a range like 6-8 counts for each), in the doc's order, so
+    neither can drop or move one without the other."""
+    steps = [int(n) for n in re.findall(r"^### (\d+)\. ", (ROOT / "docs" / "how-it-solves.md").read_text(), re.M)]
+    assert steps == list(range(1, len(steps) + 1)), f"how-it-solves.md numbers its steps {steps}"
+    marked = []
+    for first, last in re.findall(
+        r"How it solves, (\d+)(?:-(\d+))?", (ROOT / "core" / "optimaru" / "solver.hpp").read_text()
+    ):
+        marked += range(int(first), int(last or first) + 1)
+    assert marked == steps, f"solver.hpp marks the steps {marked} in this order, the doc has {steps}"
+
+
 def test_ci_reads_the_use_cases_off_the_repository():
     """ci.yml lists no use case by hand: its `use-cases` job globs the same stubs as USE_CASES
     above, and the three matrices take their lists from that job."""

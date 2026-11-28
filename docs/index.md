@@ -57,6 +57,9 @@ their defaults. More in the [use-case guides](use-cases/README.md) and the
   `clip` knobs), and one guide per use case.
 - **[API reference](reference/vehicle-routing.md)**: generated from the package
   sources and the stubs of the compiled extensions, one page per use case.
+- **[How a solve runs, in the code](how-it-solves.md)**: the search loop step by
+  step, with the file each step is in, the settings that change it and how to add
+  to it.
 - **[Extending a use case](extending.md)**: adding a constraint (a hard, medium
   or soft cost) or a move, step by step. Every use case has a worked example
   of its own, "Adding a constraint" under its name. Contributors start with
