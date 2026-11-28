@@ -4,6 +4,7 @@ import pytest
 
 import optimaru.container_loading as cl
 from optimaru.container_loading.constraints import (
+    AxleLoadCost,
     BalanceLimitCost,
     ContainerWeightCost,
     GroupSplitCost,
@@ -25,7 +26,19 @@ def problem(**fields) -> ContainerLoadingProblemModel:
     data = {
         "containers": [
             {"id": "c", "length": 10, "width": 10, "height": 10, "max_weight": 50},
-            {"id": "d", "length": 10, "width": 10, "height": 10, "max_offset_length": 0.5, "max_offset_width": 0.5},
+            {
+                "id": "d",
+                "length": 10,
+                "width": 10,
+                "height": 10,
+                "max_offset_length": 0.5,
+                "max_offset_width": 0.5,
+                "tare_weight": 100,
+                "axle_groups": [
+                    {"id": "f", "position": -2, "max_load": 500},
+                    {"id": "r", "position": 8, "max_load": 500},
+                ],
+            },
         ],
         "items": [
             {"id": "a", "length": 5, "width": 5, "height": 5, "max_load_on_top": 3},
@@ -57,6 +70,8 @@ CHECKED = [
     ("optional", "optional_item_cost", OptionalItemCost),
     ("segregation_class", "segregation_cost", SegregationCost),
     ("segregation_rules", "segregation_cost", SegregationCost),
+    ("axle_groups", "axle_load_cost", AxleLoadCost),
+    ("tare_weight", "axle_load_cost", AxleLoadCost),
 ]
 
 

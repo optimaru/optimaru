@@ -12,6 +12,7 @@
 // Adding a component is a file plus an include here and an `emplace` in
 // defaultConstraints() below.
 
+#include "cl/constraints/axle_load_cost.hpp"
 #include "cl/constraints/balance_limit_cost.hpp"
 #include "cl/constraints/common.hpp"
 #include "cl/constraints/container_weight_cost.hpp"
@@ -42,6 +43,7 @@ namespace cl {
 //   unloadingOrderCost    hard, weight 1
 //   balanceLimitCost      hard, weight 1
 //   segregationCost       hard, weight 1
+//   axleLoadCost          hard, weight 1
 //   usedContainerCost     soft, weight 1
 //   optionalItemCost      soft, weight 1
 //   usedLengthCost        soft, weight 0 (opt-in)
@@ -77,6 +79,7 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<UnloadingOrderCost>();
     assembly.emplace<BalanceLimitCost>();
     assembly.emplace<SegregationCost>();
+    assembly.emplace<AxleLoadCost>();
     assembly.emplace<UsedContainerCost>();
     assembly.emplace<OptionalItemCost>();
     assembly.emplace<UsedLengthCost>();

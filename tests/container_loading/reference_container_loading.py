@@ -94,6 +94,17 @@ def loading_faults(model) -> list[str]:
             faults.append(f"{container.id}: loaded_weight, loaded_volume or used_length differ from its items")
         if not math.isclose(container.fill_ratio, volume / capacity):
             faults.append(f"{container.id}: fill_ratio is not loaded_volume / volume")
+        expected = axle_stages(container, boxes)
+        reported = [
+            (stage.after_stop, [stage.loads[axle.id] for axle in container.axle_groups])
+            for stage in container.axle_loads or []
+        ]
+        if [stop for stop, _ in expected] != [stop for stop, _ in reported] or any(
+            not math.isclose(float(a), b, rel_tol=1e-9, abs_tol=1e-6)
+            for (_, exact), (_, got) in zip(expected, reported)
+            for a, b in zip(exact, got)
+        ):
+            faults.append(f"{container.id}: axle_loads differ from the lever rule")
     unplaced = [item.id for item in model.items if item.container is None]
     if unplaced != model.unplaced_items:
         faults.append("unplaced_items is not the items without a container")
@@ -212,6 +223,60 @@ def _segregation_pairs(model, boxes) -> int:
     return pairs
 
 
+def axle_stages(container, boxes) -> list[tuple[int | None, list[Fraction]]]:
+    """The axle loads by the lever rule, exactly: (after_stop, [front, rear]) at departure and after
+    each stop."""
+    if len(container.axle_groups) != 2:
+        return []
+    front, rear = container.axle_groups
+    span = rear.position - front.position
+    if front.empty_load is not None or rear.empty_load is not None:
+        empty = [Fraction(front.empty_load or 0), Fraction(rear.empty_load or 0)]
+    elif container.tare_weight is not None:
+        on_front = Fraction(container.tare_weight) * (rear.position - Fraction(container.length, 2)) / span
+        empty = [on_front, container.tare_weight - on_front]
+    else:
+        empty = [Fraction(0), Fraction(0)]
+
+    def loads(staying):
+        on_front = sum(
+            (box.weight * (rear.position - Fraction(2 * box.x + box.placed_length, 2)) / span for box in staying),
+            Fraction(0),
+        )
+        on_rear = sum(box.weight for box in staying) - on_front
+        return [empty[0] + on_front, empty[1] + on_rear]
+
+    stages = [(None, loads(boxes))]
+    for stop in sorted({box.unload_order for box in boxes if box.unload_order is not None}):
+        stages.append((stop, loads([box for box in boxes if box.unload_order is None or box.unload_order > stop])))
+    return stages
+
+
+def _axle_excess(container, boxes) -> int:
+    """The worst stage's sum over the two groups of the excess over max_load, each rounded up after
+    the engine's rounding tolerance (about 1e-11 of the numbers the loads come from); 0 for a
+    container that holds no placed item."""
+    if not boxes or len(container.axle_groups) != 2:
+        return 0
+    front, rear = container.axle_groups
+    span = abs(rear.position - front.position)
+    worst = 0
+    for stop, loads in axle_stages(container, boxes):
+        staying = [box for box in boxes if stop is None or box.unload_order is None or box.unload_order > stop]
+        weight = sum(box.weight for box in staying)
+        size = sum(abs(box.weight * (box.x + box.placed_length / 2)) for box in staying)
+        empty = sum(abs(float(load)) for load in loads) - abs(weight)  # an upper bound of the empty shares
+        scale = weight + ((abs(front.position) + abs(rear.position)) * weight + size) / span + max(0.0, empty)
+        over = 0
+        for load, axle in zip(loads, (front, rear)):
+            tolerance = max(1e-6, 1e-11 * (scale + axle.max_load))
+            excess = load - axle.max_load
+            if excess > tolerance:
+                over += math.ceil(excess - Fraction(tolerance))
+        worst = max(worst, over)
+    return worst
+
+
 def _balance(container, boxes) -> int:
     weight = sum(box.weight for box in boxes)
     if weight == 0:
@@ -240,6 +305,7 @@ def raw_costs(model) -> dict[str, list[float]]:
             "unloading_order_cost",
             "balance_limit_cost",
             "segregation_cost",
+            "axle_load_cost",
             "used_container_cost",
             "optional_item_cost",
             "used_length_cost",
@@ -262,6 +328,7 @@ def raw_costs(model) -> dict[str, list[float]]:
         costs["unloading_order_cost"].append(_unloading_blocks(boxes))
         costs["balance_limit_cost"].append(_balance_excess(container, boxes))
         costs["segregation_cost"].append(_segregation_pairs(model, boxes))
+        costs["axle_load_cost"].append(_axle_excess(container, boxes))
         costs["used_container_cost"].append(container.cost if boxes else 0.0)
         costs["used_length_cost"].append(max((box.x + box.placed_length for box in boxes), default=0))
         costs["load_balance_cost"].append(_balance(container, boxes))

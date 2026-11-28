@@ -21,6 +21,7 @@ struct ConstraintTotals {
     std::int64_t unloadingOrderCost = 0;   // hard: pairs where a later item blocks an earlier one
     std::int64_t balanceLimitCost = 0;     // hard: centre of gravity beyond its limits, percent
     std::int64_t segregationCost = 0;      // hard: pairs kept apart by a rule that are not
+    std::int64_t axleLoadCost = 0;         // hard: axle loads above their limits, worst stage
     std::int64_t incompleteGroupCost = 0;  // hard: all-or-none groups loaded in part
     std::int64_t singleContainerCost = 0;  // hard: one-container groups in several, beyond one
     double usedContainerCost = 0.0;        // soft: cost of the containers holding a placed item

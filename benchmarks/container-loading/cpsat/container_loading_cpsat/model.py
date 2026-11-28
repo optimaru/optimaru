@@ -21,7 +21,7 @@ equals a proven optimum is optimal.
 What it leaves out, and refuses: `max_load_on_top` (the load an item passes down is
 shared by contact area, a division), `unload_order`, and the stacking rules, layer
 limits, `bottom_only`, stack heights, balance limits, priorities, optional items and
-group rules, allowed containers and segregation. It is quadratic in the number of
+group rules, allowed containers, segregation and axle loads. It is quadratic in the number of
 items (a product per pair for the contact areas), so it is for instances of up to
 `MAX_ITEMS` items.
 """
@@ -94,12 +94,14 @@ def solve(problem: ContainerLoadingProblemModel, *, seconds: float, seed: int = 
             container.max_stack_height is not None
             or container.max_offset_length is not None
             or container.max_offset_width is not None
+            or container.axle_groups
+            or container.tare_weight is not None
             for container in containers
         )
     ):
         raise ValueError(
             "the CP-SAT model covers no stacking rules, layer limits, stack heights, balance limits, "
-            "priorities, optional items, group rules, allowed containers or segregation"
+            "priorities, optional items, group rules, allowed containers, segregation or axle loads"
         )
     if len(items) > MAX_ITEMS:
         raise RuntimeError(f"the model is for up to {MAX_ITEMS} items, not {len(items)} (status=TOO_LARGE)")

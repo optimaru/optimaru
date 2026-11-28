@@ -14,7 +14,8 @@ Score (hard/soft, lexicographic), at the default weights: hard = -(items that fo
 place + weight above a container's max_weight + weight on an item above its
 max_load_on_top + stacking rules and layer limits broken + pairs where a later item
 blocks an earlier one + centre of gravity beyond its limits, in percent + pairs kept apart
-by a segregation rule that are not + all-or-none groups
+by a segregation rule that are not + axle loads above their limits at the worst stage +
+all-or-none groups
 loaded in part + one-container groups in several), soft = -(cost of the containers in use +
 optional items left out + containers a group is in beyond its first). An unplaced item counts
 its priority. The weights are the C++
@@ -134,6 +135,8 @@ class Container:
         max_offset_length: float | None = None,
         max_offset_width: float | None = None,
         tags: list[str] = ...,
+        tare_weight: int | None = None,
+        axle_groups: list[tuple[str, int, int, int | None]] = ...,
     ) -> None: ...
     id: str
     length: int
@@ -153,6 +156,12 @@ class Container:
     """The same across, as a share of half the width. None = no limit."""
     tags: list[str]
     """Names an item's allowed_containers may use besides the id."""
+    tare_weight: int | None
+    """The vehicle's empty weight, taken at the middle of the cargo space; not with empty loads
+    (give both axle groups an empty_load, or neither)."""
+    axle_groups: list[tuple[str, int, int, int | None]]
+    """(id, position, max_load, empty_load): two axle groups, front then rear, or none. position
+    is along x from the closed end (negative = ahead of it)."""
     items: list[int]
     """The decision variable: item indices in loading order."""
     @property
@@ -173,6 +182,10 @@ class Container:
     @property
     def fill_ratio(self) -> float:
         """loaded_volume / the container's volume."""
+    @property
+    def axle_loads(self) -> list[tuple[int | None, list[float]]]:
+        """With axle groups: (after_stop, loads) at departure (None) and after each stop, one
+        load per axle group; [] without them."""
 
 class ContainerLoadingProblem:
     """Problem and solution in one object. NOTE: `containers` and `items` element access
@@ -184,7 +197,8 @@ class ContainerLoadingProblem:
     limit outside 0..1, a stacking rule with an empty group, a priority outside
     1..1,000,000, a group rule for no item's group or a group ruled twice, allowed_containers
     naming no container's id or tag, a segregation rule without a class or with a distance
-    outside 1..1,000,000, an item listed
+    outside 1..1,000,000, axle groups that are not two or stand at one place, a negative axle
+    limit, empty load or tare, one empty load without the other or with a tare, an item listed
     twice, or items without a container."""
 
     def __init__(
@@ -418,7 +432,7 @@ class Solver:
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
     unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
-    unloading_order_cost, balance_limit_cost, segregation_cost, used_container_cost,
+    unloading_order_cost, balance_limit_cost, segregation_cost, axle_load_cost, used_container_cost,
     optional_item_cost,
     used_length_cost, load_balance_cost, group_split_cost, incomplete_group_cost,
     single_container_cost.
@@ -431,9 +445,9 @@ def constraint_costs(
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. The eleven per-container
+    "default_weight": float, "default_level": str}}. The twelve per-container
     constraints list one cost per container, an empty one included (the scoped
-    stacking_rule_cost, balance_limit_cost, segregation_cost and optional_item_cost also name the containers
+    stacking_rule_cost, balance_limit_cost, segregation_cost, axle_load_cost and optional_item_cost also name the containers
     they evaluate, `units`); the three globals (group_split_cost, incomplete_group_cost,
     single_container_cost) list their one total. None = the default constraints; a pick list (as for
     solve) scores exactly those picks, each entry carrying its pick's knobs, the k-th
@@ -454,7 +468,7 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order:
     unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
-    unloading_order_cost, balance_limit_cost and segregation_cost (hard, 1), used_container_cost and
+    unloading_order_cost, balance_limit_cost, segregation_cost and axle_load_cost (hard, 1), used_container_cost and
     optional_item_cost (soft, 1), used_length_cost and
     load_balance_cost (soft, 0: opt-in, default_enabled False), group_split_cost
     (soft, 1, global), incomplete_group_cost and single_container_cost (hard, 1, global);

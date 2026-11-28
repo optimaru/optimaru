@@ -139,6 +139,9 @@ ContainerLoadingProblem busyProblem(std::uint64_t seed, int containers = 4, int 
         if (more() % 3 == 0) item.segregationClass = "k" + std::to_string(more() % 3);
     }
     p.segregationRules = {{"k0", "k1", std::nullopt}, {"k2", "k1", 3}};
+    p.containers[0].axleGroups = {{"front", -3, 60, 3}, {"rear", 9, 80, 5}};
+    p.containers[2].axleGroups = {{"front", -2, 40, std::nullopt}, {"rear", 10, 40, std::nullopt}};
+    p.containers[2].tareWeight = 30;
     p.containers[0].maxStackHeight = 7;
     p.containers[1].maxOffsetLength = 0.2;
     p.containers[2].maxOffsetWidth = 0.3;
@@ -436,6 +439,22 @@ void verifyRawCostsByHand() {
               "segregationCost: 0 with no pair the rules name");
     }
     {
+        // axleLoadCost: groups at 0 and 10 of a space 10 long, 60 on each; an
+        // item of 100 with its middle at 2 puts 80 on the front: 20 over.
+        ContainerLoadingProblem p;
+        addContainer(p, 10, 4, 4);
+        addContainer(p, 10, 4, 4);
+        p.containers[0].axleGroups = {{"front", 0, 60, std::nullopt},
+                                      {"rear", 10, 60, std::nullopt}};
+        p.containers[0].items = {addItem(p, 4, 4, 4, 100)};
+        p.containers[1].items = {addItem(p, 4, 4, 4, 100)};
+        check(rawCosts(p, "axleLoadCost") == std::vector<double>({20.0, 0.0}),
+              "axleLoadCost: 20 over the front group; a container without axles costs 0");
+        p.containers[0].axleGroups[0].maxLoad = 80;
+        check(rawCosts(p, "axleLoadCost") == std::vector<double>({0.0, 0.0}),
+              "axleLoadCost: 0 at the limit");
+    }
+    {
         // usedContainerCost: the container's cost when something stands in it.
         ContainerLoadingProblem p;
         addContainer(p, 4, 4, 4);
@@ -514,24 +533,25 @@ void verifyCatalog() {
     const auto rows = defaultConstraints().info();
     const optimaru::Level hard = optimaru::Level::Hard;
     const optimaru::Level soft = optimaru::Level::Soft;
-    check(rows.size() == 14 &&
+    check(rows.size() == 15 &&
                   rowIs<UnplacedItemCost>(rows[0], "unplacedItemCost", hard, 1.0, false) &&
                   rowIs<ContainerWeightCost>(rows[1], "containerWeightCost", hard, 1.0, false) &&
                   rowIs<StackingLoadCost>(rows[2], "stackingLoadCost", hard, 1.0, false) &&
                   rowIs<StackingRuleCost>(rows[3], "stackingRuleCost", hard, 1.0, false) &&
                   rowIs<UnloadingOrderCost>(rows[4], "unloadingOrderCost", hard, 1.0, false) &&
                   rowIs<BalanceLimitCost>(rows[5], "balanceLimitCost", hard, 1.0, false) &&
-                  rowIs<SegregationCost>(rows[6], "segregationCost", hard, 1.0, false),
-          "info(): seven hard unit constraints at weight 1");
-    check(rows.size() == 14 &&
-                  rowIs<UsedContainerCost>(rows[7], "usedContainerCost", soft, 1.0, false) &&
-                  rowIs<OptionalItemCost>(rows[8], "optionalItemCost", soft, 1.0, false) &&
-                  rowIs<UsedLengthCost>(rows[9], "usedLengthCost", soft, 0.0, false) &&
-                  rowIs<LoadBalanceCost>(rows[10], "loadBalanceCost", soft, 0.0, false),
+                  rowIs<SegregationCost>(rows[6], "segregationCost", hard, 1.0, false) &&
+                  rowIs<AxleLoadCost>(rows[7], "axleLoadCost", hard, 1.0, false),
+          "info(): eight hard unit constraints at weight 1");
+    check(rows.size() == 15 &&
+                  rowIs<UsedContainerCost>(rows[8], "usedContainerCost", soft, 1.0, false) &&
+                  rowIs<OptionalItemCost>(rows[9], "optionalItemCost", soft, 1.0, false) &&
+                  rowIs<UsedLengthCost>(rows[10], "usedLengthCost", soft, 0.0, false) &&
+                  rowIs<LoadBalanceCost>(rows[11], "loadBalanceCost", soft, 0.0, false),
           "info(): four soft unit constraints, two of them opt-in at weight 0");
-    check(rows.size() == 14 && rowIs<GroupSplitCost>(rows[11], "groupSplitCost", soft, 1.0, true) &&
-                  rowIs<IncompleteGroupCost>(rows[12], "incompleteGroupCost", hard, 1.0, true) &&
-                  rowIs<SingleContainerCost>(rows[13], "singleContainerCost", hard, 1.0, true),
+    check(rows.size() == 15 && rowIs<GroupSplitCost>(rows[12], "groupSplitCost", soft, 1.0, true) &&
+                  rowIs<IncompleteGroupCost>(rows[13], "incompleteGroupCost", hard, 1.0, true) &&
+                  rowIs<SingleContainerCost>(rows[14], "singleContainerCost", hard, 1.0, true),
           "info(): the three globals last");
     check(!throwsInvalid([] { defaultConstraints().soft("unplacedItemCost"); }) &&
                   !throwsInvalid([] { defaultConstraints().hard("groupSplitCost"); }),
@@ -630,7 +650,7 @@ void verifyConstraintTotals() {
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
                   std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraint_totals().size() == 14, "one total per assembled component");
+    check(calculator.constraint_totals().size() == 15, "one total per assembled component");
     std::printf("\n");
 }
 
@@ -658,6 +678,10 @@ ConstraintAssembly weightedAssembly() {
     assembly.add_instances(std::move(copyOf("groupSplitCost")
                                              .weight("groupSplitCost", 2.0)
                                              .exponent("groupSplitCost", 2.0)));
+    assembly.add_instances(std::move(copyOf("axleLoadCost")
+                                             .soft("axleLoadCost")
+                                             .weight("axleLoadCost", 0.5)
+                                             .exponent("axleLoadCost", 2.0)));
     assembly.add_instances(std::move(copyOf("segregationCost")
                                              .soft("segregationCost")
                                              .weight("segregationCost", 1.5)

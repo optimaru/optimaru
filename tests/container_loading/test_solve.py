@@ -375,6 +375,25 @@ def test_segregated_classes_are_kept_apart_and_items_go_where_allowed():
     assert {where["chem-0"], where["chem-1"]}.isdisjoint({where["food-0"], where["food-1"]})
 
 
+def test_the_heavy_box_goes_back_when_the_front_axle_is_full():
+    """A truck with its front axle group under the closed end (0) and the rear one at the door
+    (16): a heavy crate loaded first, at the closed end, overloads the front group; the solve
+    puts it further back."""
+    items = [cl.Item("crate", 4, 4, 4, weight=1000, rotations=cl.Rotation.FIXED)] + [
+        cl.Item(f"light-{i}", 4, 4, 4, weight=10, rotations=cl.Rotation.FIXED) for i in range(3)
+    ]
+    truck = cl.Container("truck", 16, 4, 4, axle_groups=[("front", 0, 600, None), ("rear", 16, 1000, None)])
+    problem = cl.ContainerLoadingProblem([truck], items)
+    problem.set_loading([[0, 1, 2, 3]])
+    cl.calculate_score(problem)
+    assert problem.score.hard < 0  # 1000 x 14 / 16 = 875 on the front group
+    cl.solve(problem, time_limit_seconds=1.0, random_seed=1)
+    assert problem.score.hard == 0
+    assert problem.items[0].x >= 8
+    front, rear = problem.containers[0].axle_loads[0][1]
+    assert front <= 600 and rear <= 1000
+
+
 def test_the_constraints_path_scores_with_the_picks():
     """used_length_cost at a weight: the soft score carries the loading length, and the
     search packs towards the closed end."""

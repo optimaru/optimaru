@@ -16,6 +16,7 @@ Score, at the default weights:
   + percent a load's centre of gravity lies beyond `max_offset_length` / `max_offset_width`:
     `balance_limit_cost`
   + pairs a segregation rule keeps apart that are not: `segregation_cost`
+  + axle loads above `max_load` at the worst stage of the route: `axle_load_cost`
   + all-or-none groups loaded in part: `incomplete_group_cost`
   + one-container groups in several containers: `single_container_cost`)
 - soft = -(the `cost` of the containers in use: `used_container_cost`
@@ -47,7 +48,7 @@ score(raw, [GroupSplitCost(), GroupSplitCost(weight=100, offset=1)])
 `weight` (None = the default), `level` (None = the default level, otherwise "hard" or
 "soft", or `Level.HARD` / `Level.SOFT`; the domain has no medium level, so "medium" raises
 `ValueError`), `exponent` (1.0) and the keyword-only `offset` (0.0) / `clip` (True) are the
-knobs. The exponent shapes each container's cost for the eleven per-container constraints
+knobs. The exponent shapes each container's cost for the twelve per-container constraints
 and the one total of each global (`group_split_cost`, `incomplete_group_cost`,
 `single_container_cost`). `offset` / `clip` shift that shaping at the same
 granularity: `clip=True` counts only what lies beyond the offset, `clip=False` shapes
@@ -55,7 +56,8 @@ granularity: `clip=True` counts only what lies beyond the offset, `clip=False` s
 included (`stacking_rule_cost` evaluates every container only when an item can break a
 rule or a layer limit, `balance_limit_cost` only the containers with a limit,
 `optional_item_cost` every container only when some item is optional, `segregation_cost`
-every container only when some item's class is named by a rule;
+every container only when some item's class is named by a rule, `axle_load_cost` the
+containers with axle groups;
 `constraint_costs()` lists them as `units`). That is refused on
 hard, where hard 0 must mean no violation: `ValueError: constraint 'container_weight_cost':
 clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation;
@@ -70,6 +72,7 @@ use clip=True (a threshold) or another level`. On soft it is allowed.
 | `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: the weight resting on each item above its `max_load_on_top`, rounded up per item |
 | `stacking_rule_cost` | `StackingRuleCost` | hard | 1 | per container: the pairs where an item stands on another although a stacking rule forbids its `stack_group` on the other's, plus the layers above each item's `max_stack_layers` |
 | `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs where an item with a higher `unload_order` stands between one with a lower order and the door, or above it |
+| `axle_load_cost` | `AxleLoadCost` | hard | 1 | per container with axle groups: at the worst stage of the route, what the two groups carry above `max_load` (lever rule), each rounded up, added |
 | `segregation_cost` | `SegregationCost` | hard | 1 | per container: the pairs of placed items whose classes a rule keeps out of one container, plus the pairs closer than a rule's distance |
 | `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: the percent of half its length (width) its load's centre of gravity lies beyond `max_offset_length` (`max_offset_width`), each rounded up |
 | `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |
@@ -80,7 +83,7 @@ use clip=True (a threshold) or another level`. On soft it is allowed.
 | `incomplete_group_cost` | `IncompleteGroupCost` (global) | hard | 1 | over the groups whose rule sets `all_or_none`: the smaller of the items placed and the items left out |
 | `single_container_cost` | `SingleContainerCost` (global) | hard | 1 | over the groups whose rule sets `single_container`: the containers holding a placed item of it, beyond the first |
 
-All fourteen are flippable and none is a reward; the [guide](README.md#constraints) defines
+All fifteen are flippable and none is a reward; the [guide](README.md#constraints) defines
 each raw cost exactly.
 
 ## Install and test
@@ -118,7 +121,8 @@ print(problem.loading(), problem.containers[0].used_length, problem.containers[0
 
 The derived fields (`Item.container`, `sequence`, `x`, `y`, `z`, `placed_length`,
 `placed_width`, `placed_height`, `is_placed()`; `Container.placed_items`,
-`unplaced_items`, `loaded_weight`, `loaded_volume`, `used_length`, `fill_ratio`;
+`unplaced_items`, `loaded_weight`, `loaded_volume`, `used_length`, `fill_ratio`,
+`axle_loads`;
 `problem.containers_used()`, `problem.unplaced_items()`) are written by `calculate_score`
 and by every solve. `problem.loading()` is the decision, one list of item indices per
 container; `problem.set_loading([...])` writes it.
@@ -194,7 +198,8 @@ refused: it is solved in place, which a result that comes back as JSON cannot do
 A model that sets a field which acts only through a cost, while its constraints leave
 every such cost out, is refused with `ValueError` naming the field and the cost to add;
 a pick at weight 0 counts. Here: a container's `max_weight` (`container_weight_cost`) and
-`max_offset_length` / `max_offset_width` (`balance_limit_cost`), an item's
+`max_offset_length` / `max_offset_width` (`balance_limit_cost`) and `axle_groups` /
+`tare_weight` (`axle_load_cost`), an item's
 `max_load_on_top` (`stacking_load_cost`), `unload_order` (`unloading_order_cost`), `group`
 (`group_split_cost`), `max_stack_layers` / `stack_group` (`stacking_rule_cost`) and a
 `priority` other than 1 (`unplaced_item_cost` or `optional_item_cost`) and `optional`

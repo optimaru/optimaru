@@ -17,7 +17,7 @@ Two of the constraints are outside the CP-SAT model (stacking loads and unloadin
 order); they are scored here all the same, so an instance that uses them is still
 compared correctly for the engine and refused by the model. The stacking rules, layer
 limits, `bottom_only`, stack heights, balance limits, priorities, optional items and group
-rules, allowed containers and segregation are not scored here: no instance
+rules, allowed containers, segregation and axle loads are not scored here: no instance
 of the comparison sets them, and a model that does is refused (ValueError).
 """
 
@@ -161,6 +161,8 @@ def _refuse_unscored_inputs(model: ContainerLoadingProblemModel) -> None:
         if container.max_stack_height is not None
         or container.max_offset_length is not None
         or container.max_offset_width is not None
+        or container.axle_groups
+        or container.tare_weight is not None
     ]
     if model.stacking_rules:
         unscored.append("the problem's stacking_rules")
@@ -171,7 +173,7 @@ def _refuse_unscored_inputs(model: ContainerLoadingProblemModel) -> None:
     if unscored:
         raise ValueError(
             "the evaluator does not score stacking rules, layers, balance limits, priorities, optional "
-            f"items, group rules, allowed containers or segregation: {unscored[:3]}"
+            f"items, group rules, allowed containers, segregation or axle loads: {unscored[:3]}"
         )
 
 
@@ -196,6 +198,7 @@ def raw_costs(model: ContainerLoadingProblemModel) -> dict[str, list[float]]:
         costs["balance_limit_cost"].append(0)
         costs["optional_item_cost"].append(0)
         costs["segregation_cost"].append(0)
+        costs["axle_load_cost"].append(0)
         costs["used_container_cost"].append(container.cost if boxes else 0.0)
         costs["used_length_cost"].append(max((box.x + box.placed_length for box in boxes), default=0))
         costs["load_balance_cost"].append(_balance(container, boxes))

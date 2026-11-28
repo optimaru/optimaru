@@ -446,6 +446,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | item `group` (None) | `group_split_cost` |
 | | item `max_stack_layers`, `stack_group` (None), `stacking_rules` ([]) | `stacking_rule_cost` |
 | | container `max_offset_length`, `max_offset_width` (None) | `balance_limit_cost` |
+| | container `axle_groups` ([]), `tare_weight` (None) | `axle_load_cost` |
 | | item `priority` (1) | `unplaced_item_cost` or `optional_item_cost` |
 | | item `optional` (False) | `optional_item_cost` |
 | | item `segregation_class` (None), `segregation_rules` ([]) | `segregation_cost` |

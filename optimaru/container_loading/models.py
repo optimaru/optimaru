@@ -31,6 +31,8 @@ from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
 __all__ = [
+    "AxleGroupModel",
+    "AxleLoadModel",
     "ContainerLoadingProblemModel",
     "ContainerLoadingRequest",
     "ContainerModel",
@@ -46,6 +48,10 @@ __all__ = [
 #: The largest length and the largest weight the engine takes (`_core` refuses more).
 MAX_LENGTH = 1_000_000
 MAX_WEIGHT = 1_000_000_000
+#: The largest axle load, tare or empty load (`_core` refuses more).
+MAX_AXLE_LOAD = 10**15
+#: How far an axle group may be from the closed end, either way.
+MAX_AXLE_POSITION = 10 * MAX_LENGTH
 #: The largest item priority.
 MAX_PRIORITY = 1_000_000
 #: The largest weight limit (`max_weight`, `max_load_on_top`): what a 64-bit integer holds.
@@ -132,6 +138,31 @@ class ItemModel(StrictModel):
     placed_height: int | None = Field(default=None, gt=0, description="Output: size along z after rotation.")
 
 
+class AxleGroupModel(StrictModel):
+    """One axle group of the vehicle a container is the cargo space of."""
+
+    id: str = Field(min_length=1, description='Unique among the container\'s axle groups ("front", "rear").')
+    position: int = Field(
+        ge=-MAX_AXLE_POSITION,
+        le=MAX_AXLE_POSITION,
+        description="Where it is along x, from the closed end (negative = ahead of it: a cab's or a kingpin's).",
+    )
+    max_load: int = Field(ge=0, le=MAX_AXLE_LOAD, description="What it may carry, in the weight unit.")
+    empty_load: int | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_AXLE_LOAD,
+        description="What it carries with the vehicle empty: on both groups or neither, and then no tare_weight.",
+    )
+
+
+class AxleLoadModel(StrictModel):
+    """Output: the axle loads of a container at one stage of its route."""
+
+    after_stop: int | None = Field(description="None = at departure; else after this stop's items are off.")
+    loads: dict[str, float] = Field(description="The load on each axle group, by its id.")
+
+
 class ContainerModel(StrictModel):
     """One physical space: a pallet, a rack bay, a cargo space, one carton.
 
@@ -173,6 +204,16 @@ class ContainerModel(StrictModel):
         default_factory=list,
         description="Names an item's allowed_containers may use besides the id; not a container's id.",
     )
+    tare_weight: int | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_AXLE_LOAD,
+        description="The vehicle's empty weight, taken at the middle of the cargo space (not with empty_load).",
+    )
+    axle_groups: list[AxleGroupModel] = Field(
+        default_factory=list,
+        description="Two axle groups (front first, then rear) or none; their loads are axle_load_cost's.",
+    )
     initial_items: list[str] = Field(
         default_factory=list,
         description=(
@@ -200,6 +241,26 @@ class ContainerModel(StrictModel):
     used_length: int | None = Field(
         default=None, ge=0, description="Output: largest x + placed_length of a placed item (0 when empty)."
     )
+    axle_loads: list[AxleLoadModel] | None = Field(
+        default=None,
+        description="Output, with axle groups: the load on each at departure and after each stop.",
+    )
+
+    @model_validator(mode="after")
+    def validate_axles(self) -> ContainerModel:
+        if self.axle_groups:
+            if len(self.axle_groups) != 2:
+                raise ValueError(f"container {self.id!r}: axle_groups must be two (front and rear) or none")
+            front, rear = self.axle_groups
+            if front.id == rear.id:
+                raise ValueError(f"container {self.id!r}: axle group ids must be unique")
+            if front.position == rear.position:
+                raise ValueError(f"container {self.id!r}: the two axle groups must be apart")
+            if (front.empty_load is None) != (rear.empty_load is None):
+                raise ValueError(f"container {self.id!r}: give both axle groups an empty_load or neither")
+            if front.empty_load is not None and self.tare_weight is not None:
+                raise ValueError(f"container {self.id!r}: tare_weight or the empty loads, not both")
+        return self
 
     def loading_order(self) -> list[str]:
         """The loading order this container goes into a solve with: `items` (and the
@@ -278,7 +339,7 @@ class ContainerLoadingProblemModel(StrictModel):
         default=None,
         description=(
             "Negative weighted hard score (unplaced items, weight and stacking limits, stacking rules, "
-            "unloading order, centre of gravity limits, segregation, group rules)."
+            "unloading order, centre of gravity limits, segregation, axle loads, group rules)."
         ),
     )
     score_soft: float | None = Field(
@@ -308,7 +369,8 @@ class ContainerLoadingProblemModel(StrictModel):
         for container in self.containers:
             for tag in container.tags:
                 if tag in ids:
-                    raise ValueError(f"container {container.id!r}: its tag {tag!r} is another container's id")
+                    whose = "its own id" if tag == container.id else "another container's id"
+                    raise ValueError(f"container {container.id!r}: its tag {tag!r} is {whose}")
         names = ids | {tag for container in self.containers for tag in container.tags}
         for item in self.items:
             for name in item.allowed_containers:
@@ -345,6 +407,10 @@ class ContainerLoadingProblemModel(StrictModel):
                     max_offset_length=container.max_offset_length,
                     max_offset_width=container.max_offset_width,
                     tags=list(container.tags),
+                    tare_weight=container.tare_weight,
+                    axle_groups=[
+                        (axle.id, axle.position, axle.max_load, axle.empty_load) for axle in container.axle_groups
+                    ],
                 )
                 for container in self.containers
             ],
@@ -406,6 +472,20 @@ class ContainerLoadingProblemModel(StrictModel):
                     loaded_volume=container.loaded_volume,
                     fill_ratio=container.fill_ratio,
                     used_length=container.used_length,
+                    tare_weight=container.tare_weight,
+                    axle_groups=[
+                        AxleGroupModel(id=axle_id, position=position, max_load=max_load, empty_load=empty_load)
+                        for axle_id, position, max_load, empty_load in container.axle_groups
+                    ],
+                    axle_loads=[
+                        AxleLoadModel(
+                            after_stop=after_stop,
+                            loads={axle[0]: load for axle, load in zip(container.axle_groups, loads)},
+                        )
+                        for after_stop, loads in container.axle_loads
+                    ]
+                    if container.axle_groups
+                    else None,
                 )
                 for container in containers
             ],
@@ -479,6 +559,10 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
         for field in ("max_offset_length", "max_offset_width"):
             if getattr(container, field) is not None:
                 uses.append(ParameterUse(where, field, None, ("balance_limit_cost",)))
+        if container.axle_groups:
+            uses.append(ParameterUse(where, "axle_groups", [], ("axle_load_cost",)))
+        if container.tare_weight is not None and container.axle_groups:
+            uses.append(ParameterUse(where, "tare_weight", None, ("axle_load_cost",)))
     if problem.stacking_rules:
         uses.append(ParameterUse("the problem", "stacking_rules", [], ("stacking_rule_cost",)))
     for item in problem.items:
@@ -562,6 +646,8 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 max_offset_length=container.max_offset_length,
                 max_offset_width=container.max_offset_width,
                 tags=list(container.tags),
+                tare_weight=container.tare_weight,
+                axle_groups=[axle.model_copy() for axle in container.axle_groups],
                 initial_items=orders.get(container.id, []),
             )
             for container in problem.containers

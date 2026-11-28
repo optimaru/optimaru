@@ -56,6 +56,15 @@ std::vector<GroupRule> toGroupRules(const std::vector<GroupRuleTuple>& rules) {
     return out;
 }
 
+using AxleTuple = std::tuple<std::string, int, std::int64_t, std::optional<std::int64_t>>;
+
+std::vector<AxleGroup> toAxles(const std::vector<AxleTuple>& axles) {
+    std::vector<AxleGroup> out;
+    for (const auto& [id, position, maxLoad, emptyLoad] : axles)
+        out.push_back({id, position, maxLoad, emptyLoad});
+    return out;
+}
+
 using SegregationTuple = std::tuple<std::string, std::string, std::optional<int>>;
 
 std::vector<SegregationRule> toSegregationRules(const std::vector<SegregationTuple>& rules) {
@@ -146,7 +155,9 @@ PYBIND11_MODULE(_core, m) {
                              std::optional<std::int64_t> maxWeight, double cost,
                              std::vector<int> items, std::optional<int> maxStackHeight,
                              std::optional<double> maxOffsetLength,
-                             std::optional<double> maxOffsetWidth, std::vector<std::string> tags) {
+                             std::optional<double> maxOffsetWidth, std::vector<std::string> tags,
+                             std::optional<std::int64_t> tareWeight,
+                             const std::vector<AxleTuple>& axleGroups) {
                      Container container;
                      container.id = std::move(id);
                      container.length = length;
@@ -159,6 +170,8 @@ PYBIND11_MODULE(_core, m) {
                      container.maxOffsetLength = maxOffsetLength;
                      container.maxOffsetWidth = maxOffsetWidth;
                      container.tags = std::move(tags);
+                     container.tareWeight = tareWeight;
+                     container.axleGroups = toAxles(axleGroups);
                      return container;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
@@ -166,7 +179,8 @@ PYBIND11_MODULE(_core, m) {
                  py::arg("items") = std::vector<int>{}, py::arg("max_stack_height") = py::none(),
                  py::arg("max_offset_length") = py::none(),
                  py::arg("max_offset_width") = py::none(),
-                 py::arg("tags") = std::vector<std::string>{})
+                 py::arg("tags") = std::vector<std::string>{}, py::arg("tare_weight") = py::none(),
+                 py::arg("axle_groups") = std::vector<AxleTuple>{})
             .def_readwrite("id", &Container::id)
             .def_readwrite("length", &Container::length)
             .def_readwrite("width", &Container::width)
@@ -177,6 +191,20 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("max_offset_length", &Container::maxOffsetLength)
             .def_readwrite("max_offset_width", &Container::maxOffsetWidth)
             .def_readwrite("tags", &Container::tags)
+            .def_readwrite("tare_weight", &Container::tareWeight)
+            // (id, position, max_load, empty_load): two axle groups or none.
+            .def_property(
+                    "axle_groups",
+                    [](const Container& container) {
+                        std::vector<AxleTuple> axles;
+                        for (const AxleGroup& axle : container.axleGroups)
+                            axles.emplace_back(axle.id, axle.position, axle.maxLoad,
+                                               axle.emptyLoad);
+                        return axles;
+                    },
+                    [](Container& container, const std::vector<AxleTuple>& axles) {
+                        container.axleGroups = toAxles(axles);
+                    })
             // The decision: the item indices in loading order.
             .def_readwrite("items", &Container::items)
             // Derived (refreshed by calculate_score / solve).
@@ -185,6 +213,15 @@ PYBIND11_MODULE(_core, m) {
             .def_readonly("loaded_weight", &Container::loadedWeight)
             .def_readonly("loaded_volume", &Container::loadedVolume)
             .def_readonly("used_length", &Container::usedLength)
+            // Derived: per stage (after_stop, None at departure), the load on each axle group.
+            .def_property_readonly(
+                    "axle_loads",
+                    [](const Container& container) {
+                        std::vector<std::pair<std::optional<int>, std::vector<double>>> stages;
+                        for (const AxleStage& stage : container.axleLoads)
+                            stages.emplace_back(stage.afterStop, stage.loads);
+                        return stages;
+                    })
             .def_property_readonly("fill_ratio", &Container::fillRatio)
             .def("__repr__", &containerRepr);
 
