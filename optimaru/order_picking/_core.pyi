@@ -332,8 +332,8 @@ class Solver:
         variables and stores the best score in solution.score.
 
         The solution is the solve's own while it runs (it also keeps its table of distances
-        on it, removed at the end): do not solve or score the same solution object from
-        another thread meanwhile."""
+        on it, and on a grid numbers the locations, both removed at the end): do not read,
+        copy, score or solve the same solution object from another thread meanwhile."""
 
     def solve_with_constraints(self, solution: OrderPickingSolution, constraints: Iterable[Any] | None = ...) -> None:
         """Same solve, scored by a caller-chosen constraint set (see

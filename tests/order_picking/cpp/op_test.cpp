@@ -792,6 +792,26 @@ void verifyLayouts() {
         }
         check(tableSkipped && tableGone(large), "a grid over the table's size limit gets no table");
 
+        // A solve that ends in an exception (here: the callback's) leaves no
+        // table and no node behind either, on a grid and on named locations.
+        for (OrderPickingSolution thrown : {build(60), namedSolution()}) {
+            Solver::Config throwing;
+            throwing.time_limit = std::chrono::seconds(5);
+            throwing.seed = 1;
+            throwing.on_new_best = [](std::int64_t, const Score&) {
+                throw std::runtime_error("stop");
+            };
+            bool threw = false;
+            try {
+                Solver(throwing).solve(thrown);
+            } catch (const std::runtime_error&) {
+                threw = true;
+            }
+            check(threw && tableGone(thrown),
+                  std::string(thrown.warehouse.isGrid() ? "grid" : "named") +
+                          ": a solve that throws leaves no table behind");
+        }
+
         // A solve of it runs on the grid arithmetic (from given routes: the
         // construction of two thousand picks is not what is tested here).
         for (int p = 0; p < static_cast<int>(large.pickTasks.size()); ++p)

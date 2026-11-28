@@ -257,16 +257,21 @@ def _distance_rows(locations: list[str], distances: dict[str, dict[str, int]]) -
     """The square table of `distances` over `locations`, row = from, column = to.
 
     A location is 0 meters from itself and a pair given one way only is as long the other way.
-    What `_check_distances` refuses is refused here (ValueError).
+    For a table that `_check_distances` accepted, which a validated request's is. A request
+    changed afterwards is still refused: a pair with no distance here (ValueError), a distance
+    out of range by the compiled `Warehouse`.
     """
-    _check_distances(locations, distances)
     rows = []
     for start in locations:
         given = distances.get(start, _NO_DISTANCES)
         row = []
         for end in locations:
             meters = 0 if start == end else given.get(end)
-            row.append(distances[end][start] if meters is None else meters)
+            if meters is None:
+                meters = distances.get(end, _NO_DISTANCES).get(start)
+                if meters is None:
+                    raise ValueError(f"distances: no distance between {start!r} and {end!r}")
+            row.append(meters)
         rows.append(row)
     return rows
 
@@ -412,8 +417,8 @@ def _to_warehouse(request: OrderPickingRequest) -> "_core.Warehouse":
     """The compiled layout of the request: its named locations, or its grid (the default one
     without `warehouse`).
 
-    The table is checked again as it is laid out, after the request's validator checked it: a
-    request can be changed after it was validated."""
+    The request's validator checked the table; what a change made since could break is refused
+    as the table is laid out (`_distance_rows`) and by the compiled `Warehouse`."""
     if request.locations is not None:
         return _core.Warehouse.from_distances(
             request.locations, _distance_rows(request.locations, request.distances or {})

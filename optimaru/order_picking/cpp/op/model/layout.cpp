@@ -55,7 +55,9 @@ void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location
         }
         return;
     }
-    // While a solve's table is set, a grid location carries its node in it.
+    // While a solve's table is set, a grid location carries its node in it
+    // (ActiveDistances), and the solve checks such solutions too: each
+    // parallel start checks its candidate, a copy made with the table set.
     if (location.node >= 0 && warehouse.active == nullptr) {
         throw std::invalid_argument(owner +
                                     ": a named location in a grid warehouse (one solution uses "

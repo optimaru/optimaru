@@ -2,6 +2,7 @@
 #define OP_DOMAIN_HPP
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -96,17 +97,19 @@ struct Warehouse {
     int shelvingHeight = DEFAULT_SHELVING_HEIGHT;
     int shelvingPadding = DEFAULT_SHELVING_PADDING;
 
-    // Set for a layout of named locations (see makeDistanceTable in
+    // Set for a layout of named locations (see makeNamedWarehouse in
     // op/model/layout.hpp); null for a grid. Shared, so that copying a
     // solution does not copy the table.
     std::shared_ptr<const DistanceTable> locations;
 
     // The table the distances are read from while a solve runs, set and
-    // removed by Solver::solve (activateDistances / deactivateDistances in
-    // op/model/layout.hpp): `locations` itself for a named layout, a table
-    // over the grid locations the solution uses otherwise. While it is set
-    // every location of the solution carries a valid `node`, so
-    // calculateDistance reads it unchecked. Null outside a solve.
+    // removed by Solver::solve (ActiveDistances in op/model/layout.hpp):
+    // `locations` itself for a named layout, a table over the grid locations
+    // the solution uses otherwise. While it is set every location of the
+    // solution carries a valid `node`, so calculateDistance reads it
+    // unchecked. Null outside a solve. The solution is the solve's own
+    // meanwhile: another thread must not read, score or copy it (a copy taken
+    // then would keep the table and the nodes).
     std::shared_ptr<const DistanceTable> active;
 
     bool isGrid() const { return locations == nullptr; }
@@ -228,7 +231,10 @@ inline int gridDistance(const Warehouse& warehouse, const WarehouseLocation& sta
 // location that is not one of its named ones), computed on a grid.
 inline int calculateDistance(const Warehouse& warehouse, const WarehouseLocation& start,
                              const WarehouseLocation& end) {
-    if (const DistanceTable* table = warehouse.active.get()) return table->at(start.node, end.node);
+    if (const DistanceTable* table = warehouse.active.get()) {
+        assert(table->holds(start.node) && table->holds(end.node));
+        return table->at(start.node, end.node);
+    }
     if (const DistanceTable* table = warehouse.locations.get()) {
         if (!table->holds(start.node) || !table->holds(end.node))
             throw std::invalid_argument("a location is not one of the warehouse's named locations");

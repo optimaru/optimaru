@@ -444,7 +444,12 @@ def test_a_request_changed_after_validation_is_still_refused_with_a_value_error(
 
     request = table_request()
     request.distances = {"dock": {"a": 5}}
-    with pytest.raises(ValueError, match="no distance between"):
+    with pytest.raises(ValueError, match="no distance between 'dock' and 'b'"):
+        solve_request(request)
+
+    request = table_request()
+    request.distances = DISTANCES | {"c": {"dock": -4}}
+    with pytest.raises(ValueError, match="from 'c' to 'dock' must be 0..1000000, not -4"):
         solve_request(request)
 
     request = grid_request()
