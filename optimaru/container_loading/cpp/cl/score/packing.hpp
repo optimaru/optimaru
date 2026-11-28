@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "cl/model/domain.hpp"
@@ -37,10 +38,26 @@ namespace cl {
 //     points).
 //   - An item for which no point works is unplaced. It stays in the list,
 //     changes nothing for the items after it, and unplacedItemCost counts it.
+//   - When items set an unloadOrder or a maxLoadOnTop, a place is also
+//     judged by what it would break, and the first point that breaks nothing
+//     wins over earlier ones that do. A place "blocks" when the item would
+//     stand in the way of a placed item that leaves earlier (between it and
+//     the door, or above it), or have a placed item that leaves later in its
+//     own way; it "overloads" when its weight, passed down through the items
+//     it stands on, would put more on a placed item than that item's
+//     maxLoadOnTop. The item goes to the first point where some orientation
+//     does neither; if there is none, to the first that only blocks; if
+//     there is none either, to the first feasible point, as without them.
+//     So an item is never left unplaced for the sake of an order or a limit,
+//     and a list in the construction's order (what leaves last first) comes
+//     out with every stop nearer the door than the stops after it wherever
+//     the room allows. The loads passed down are tracked as the items are
+//     placed: an item placed later under an overhang does not take load from
+//     the item above it, which the stacking cost on the result does count.
 //
 // The decode is a pure function of (problem facts, container, list in order):
-// it reads no weight limit, no unloading order and nothing of the other
-// containers; those are costs computed on its result.
+// it reads no weight limit of a container and nothing of the other
+// containers. The costs are computed on its result.
 //
 // It is also a function of the list's prefix: item k's place depends on items
 // 0 .. k - 1 only. A Packing keeps what a decode needs to go on from any
@@ -69,6 +86,12 @@ struct Point {
     int z = 0;
     int born = -1;     // position whose placement added it; -1 = the origin
     int died = kOpen;  // position whose placement covered it; kOpen = still free
+    // While it is free: how far the room reaches from it along x, y and z, up
+    // to the first placed item the ray from it meets or the wall. An item
+    // longer than that along an axis cannot stand at it. Measured when the
+    // decode first looks at the point (room[0] < 0 until then), and kept up
+    // as items are placed.
+    int room[3] = {-1, -1, -1};
 };
 
 // One container's list, decoded.
@@ -80,6 +103,29 @@ struct Packing {
     std::int64_t loadedVolume = 0;  // volume of the placed items
     std::int64_t loadedWeight = 0;  // weight of the placed items
     int usedLength = 0;             // largest x + length of a placed item
+
+    // The boxes by where they are along x: cells[c] holds, in increasing
+    // order, the indices into `boxes` of those whose x-range meets
+    // [c * cellLength, (c + 1) * cellLength). A box is checked only against
+    // the boxes of the cells its own x-range meets.
+    int cellLength = 1;
+    std::vector<std::vector<int>> cells;
+    // The boxes by the height of their tops: (z + height, index into
+    // `boxes`), sorted. What an item at height z can stand on is the run of
+    // boxes whose tops are at z.
+    std::vector<std::pair<int, int>> tops;
+
+    // Only when some item sets maxLoadOnTop: per box, the load resting on it
+    // as passed down so far (kept current on the boxes that carry a limit),
+    // whether it carries a limit or stands, directly or not, on one that
+    // does (bearsLimit), and what it stands on: the boxes
+    // supportBox[supportStart[b] .. supportStart[b + 1]), each with the share
+    // of its load (by contact area) in supportShare.
+    std::vector<double> carried;
+    std::vector<char> bearsLimit;
+    std::vector<int> supportStart;
+    std::vector<int> supportBox;
+    std::vector<double> supportShare;
 
     int unplaced() const { return static_cast<int>(members.size() - boxes.size()); }
 
@@ -144,10 +190,10 @@ public:
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
     // (sizes, rotations, the support ratio, and the weights, load limits and
-    // unloading orders the kept costs read) are not the ones the kept decodes
-    // were made for. The facts are compared through a 64-bit hash,
-    // which is trusted: a collision (practically impossible) would keep
-    // decodes made for other facts.
+    // unloading orders the decode and the kept costs read) are not the ones
+    // the kept decodes were made for. The facts are compared through a
+    // 64-bit hash, which is trusted: a collision (practically impossible)
+    // would keep decodes made for other facts.
     void reset(const ContainerLoadingProblem& problem);
 
     const Packing& packing(const ContainerLoadingProblem& problem, int container,

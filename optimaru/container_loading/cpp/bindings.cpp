@@ -242,7 +242,13 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("repack_moves", &Solver::Config::repack_moves)
             // SwitchContainerMove: a load into empty containers of another size or
             // cost (cpp/cl/search/moves/switch_container.hpp).
-            .def_readwrite("switch_container_moves", &Solver::Config::switch_container_moves);
+            .def_readwrite("switch_container_moves", &Solver::Config::switch_container_moves)
+            // StopOrderMove: a loading order put back in stop blocks, with one
+            // change inside a block (cpp/cl/search/moves/stop_order.hpp).
+            .def_readwrite("stop_order_moves", &Solver::Config::stop_order_moves)
+            // Nearby selection by stop, only with unloading orders.
+            .def_readwrite("nearby_probability", &Solver::Config::nearby_probability)
+            .def_readwrite("nearby_size", &Solver::Config::nearby_size);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

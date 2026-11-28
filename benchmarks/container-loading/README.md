@@ -28,6 +28,7 @@ OPTIMARU_USE_CASES=container_loading uv sync   # also builds this checkout's opt
 uv run pytest -q                           # the model, the evaluator and the instances
 uv run container-loading-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 uv run container-loading-known-optimum --seconds 10         # the engine alone, larger instances
+uv run container-loading-vehicle-loads --seconds 10 30      # the engine alone, trucks with many stops (--warehouse)
 ```
 
 What the CP-SAT model covers, and what it refuses:
@@ -103,3 +104,47 @@ solve returns. Where the three seeds differ they are listed in seed order.
 
 Measured 2026-11-28 on one Apple M4 Max Mac (16 cores), while other jobs were running on
 the machine. Single runs: treat a difference of one container as noise.
+
+## Vehicle loads
+
+`container-loading-vehicle-loads`
+([`vehicle_loads.py`](cpsat/container_loading_cpsat/vehicle_loads.py)) runs the engine alone
+on one cargo space with many stops, every box's `unload_order` its stop: *catalog* trucks
+(cartons of nine sizes, most upright, a tenth with a `max_load_on_top`; whether every order
+and limit can be met is not known) and *cut* trucks (the space cut into one slab per stop,
+each slab into boxes, half the volume taken out again from the top; the positions they were
+cut into meet every order and limit, which `tests/test_benchmark.py` checks). Three seeds per
+row, one thread per solve, the default weights (`--warehouse`: the weights a warehouse
+system sends, `vehicle_loads.warehouse_weights()`):
+
+| truck | budget | hard 0 | pairs left (mean) | unplaced (mean) | first hard 0 (s) |
+| --- | --- | --- | --- | --- | --- |
+| catalog 2.5t, 12 stops, 120 boxes | 5 s | 1/3 | 0 | 3.0 | 1.7 |
+| catalog 2.5t, 12 stops, 120 boxes | 10 s | 1/3 | 0 | 3.0 | 1.7 |
+| catalog 2.5t, 12 stops, 120 boxes | 30 s | 1/3 | 0 | 3.0 | 1.8 |
+| catalog 5t, 15 stops, 200 boxes | 5 s | 2/3 | 0 | 0.3 | 2.1/0.3 |
+| catalog 5t, 15 stops, 200 boxes | 10 s | 3/3 | 0 | 0.0 | 2.1/0.3/5.9 |
+| catalog 5t, 15 stops, 200 boxes | 30 s | 3/3 | 0 | 0.0 | 2.1/0.3/5.5 |
+| catalog 5t, 20 stops, 250 boxes | 5 s | 0/3 | 101 | 8.3 | - |
+| catalog 5t, 20 stops, 250 boxes | 10 s | 0/3 | 71 | 16.3 | - |
+| catalog 5t, 20 stops, 250 boxes | 30 s | 0/3 | 15 | 10.7 | - |
+| catalog 5t, 25 stops, 220 boxes | 5 s | 0/3 | 58 | 13.7 | - |
+| catalog 5t, 25 stops, 220 boxes | 10 s | 0/3 | 26 | 11.3 | - |
+| catalog 5t, 25 stops, 220 boxes | 30 s | 0/3 | 26 | 11.3 | - |
+| catalog 5t, 20 stops, 300 boxes | 5 s | 0/3 | 335 | 38.7 | - |
+| catalog 5t, 20 stops, 300 boxes | 10 s | 0/3 | 309 | 48.3 | - |
+| catalog 5t, 20 stops, 300 boxes | 30 s | 0/3 | 151 | 54.7 | - |
+| cut 2.5t, 10 stops | 5 s | 3/3 | 0 | 0.0 | 0.2/0.0/0.4 |
+| cut 2.5t, 10 stops | 10 s | 3/3 | 0 | 0.0 | 0.2/0.0/0.3 |
+| cut 2.5t, 10 stops | 30 s | 3/3 | 0 | 0.0 | 0.2/0.0/0.3 |
+| cut 5t, 15 stops | 5 s | 0/3 | 79 | 15.0 | - |
+| cut 5t, 15 stops | 10 s | 0/3 | 223 | 28.0 | - |
+| cut 5t, 15 stops | 30 s | 1/3 | 186 | 16.3 | 18.4 |
+| cut 5t, 20 stops | 5 s | 0/3 | 255 | 40.7 | - |
+| cut 5t, 20 stops | 10 s | 0/3 | 255 | 40.7 | - |
+| cut 5t, 20 stops | 30 s | 0/3 | 255 | 40.7 | - |
+
+Measured 2026-11-28 on one Apple M4 Max Mac (16 cores), four solves at a time, while other
+jobs were running on the machine. 0.9.0 met every constraint on none of these trucks and
+left 150 to 1,730 pairs per truck after 30 s; the guide has the comparison
+([How good, how fast](../../docs/use-cases/container-loading/README.md#how-good-how-fast)).

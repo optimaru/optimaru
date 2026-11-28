@@ -17,7 +17,8 @@
 //   (g) the moves: EmptyContainerMove empties a container, RepackPairMove
 //       gathers the groups two containers share, SwitchContainerMove moves a
 //       load to a cheaper container or splits it over two (never over ones
-//       that cost more together), all undo exactly
+//       that cost more together), StopOrderMove puts a load back in stop
+//       blocks, all undo exactly
 //   (h) the solver: the demo under ScoreChecks::Full, a zero budget returns the
 //       construction, parallel starts return the best single start
 #include <algorithm>
@@ -39,6 +40,7 @@
 #include "cl/score/score_calculator.hpp"
 #include "cl/search/moves/empty_container.hpp"
 #include "cl/search/moves/repack_pair.hpp"
+#include "cl/search/moves/stop_order.hpp"
 #include "cl/search/moves/switch_container.hpp"
 #include "cl/solver.hpp"
 #include "optimaru/solution/editor.hpp"
@@ -280,6 +282,76 @@ void verifyDecoderByHand() {
         loadAll(q);
         ScoreCalculator::score(q);
         check(sized(q.items[0], 3, 3, 2), "without a better fit, the lowest orientation is taken");
+    }
+    {
+        // A stop-1 box finds the hole at the closed end beside the stop-2
+        // box, but that hole is behind the stop-2 box in front: it is
+        // skipped for the floor in front of everything.
+        ContainerLoadingProblem p;
+        addContainer(p, 12, 4, 4);
+        const int back = addItem(p, 2, 2, 4);
+        const int front = addItem(p, 2, 4, 4);
+        const int early = addItem(p, 2, 2, 4);
+        p.items[static_cast<std::size_t>(back)].unloadOrder = 3;
+        p.items[static_cast<std::size_t>(front)].unloadOrder = 2;
+        p.items[static_cast<std::size_t>(early)].unloadOrder = 1;
+        p.containers[0].items = {back, front, early};
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 2, 0, 0) && at(p.items[2], 4, 0, 0) &&
+                      ScoreCalculator::calculateTotals(p).unloadingOrderCost == 0,
+              "unloading orders: an earlier stop skips the hole behind a later one for the room "
+              "in front");
+        p.items[static_cast<std::size_t>(front)].unloadOrder.reset();
+        ScoreCalculator::score(p);
+        check(at(p.items[2], 0, 2, 0),
+              "the hole is taken when what stands in front of it has no order");
+        // An earlier stop with no clean place left still finds one.
+        ContainerLoadingProblem q;
+        addContainer(q, 4, 4, 4);
+        const int later = addItem(q, 2, 4, 4);
+        const int earlier = addItem(q, 2, 4, 4);
+        q.items[static_cast<std::size_t>(later)].unloadOrder = 1;
+        q.items[static_cast<std::size_t>(earlier)].unloadOrder = 2;
+        q.containers[0].items = {later, earlier};
+        ScoreCalculator::score(q);
+        check(at(q.items[1], 2, 0, 0) &&
+                      ScoreCalculator::calculateTotals(q).unloadingOrderCost == 1,
+              "with no place that keeps the order, the first feasible one is taken");
+    }
+    {
+        // Load limits: a box that carries nothing on the floor, then a heavy
+        // box that fits on top of it or beside it. It goes beside it; once
+        // the floor is full, on top (an item is not left out for a limit).
+        ContainerLoadingProblem p;
+        addContainer(p, 4, 2, 4);
+        const int fragile = addItem(p, 2, 2, 2, Rotation::Fixed, 1);
+        addItem(p, 2, 2, 2, Rotation::Fixed, 5);
+        addItem(p, 2, 2, 2, Rotation::Fixed, 5);
+        p.items[static_cast<std::size_t>(fragile)].maxLoadOnTop = 0;
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 2, 0, 0) && at(p.items[2], 2, 0, 2),
+              "load limits: a heavy box goes beside the fragile one and on the other, not on it");
+        addItem(p, 2, 2, 2, Rotation::Fixed, 5);
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(at(p.items[3], 0, 0, 2) && ScoreCalculator::calculateTotals(p).stackingLoadCost == 5,
+              "with no other place left it goes on the fragile box, and the cost counts it");
+        // A limit of 6 on the box under the heavy pair: the third box's
+        // weight passed down through the second would exceed it.
+        ContainerLoadingProblem q;
+        addContainer(q, 4, 2, 6);
+        const int base = addItem(q, 2, 2, 2, Rotation::Fixed, 1);
+        addItem(q, 2, 2, 2, Rotation::Fixed, 5);
+        addItem(q, 2, 2, 2, Rotation::Fixed, 5);
+        q.items[static_cast<std::size_t>(base)].maxLoadOnTop = 6;
+        q.containers[0].items = {base, 1, 2};
+        // Point order: the second goes on the base (5 <= 6), so the third,
+        // which would make it 10, goes to the floor beside them.
+        ScoreCalculator::score(q);
+        check(at(q.items[1], 0, 0, 2) && at(q.items[2], 2, 0, 0) &&
+                      ScoreCalculator::calculateTotals(q).stackingLoadCost == 0,
+              "a load passed down through another box counts against the limit below");
     }
     std::printf("\n");
 }
@@ -748,6 +820,68 @@ std::vector<std::vector<int>> listsOf(const ContainerLoadingProblem& p) {
 
 void verifyMoves() {
     std::printf("== (g) The moves ==\n");
+    {
+        // One container with three stops, loaded in a mixed order, and one
+        // item without an order. The move puts the stops back in blocks,
+        // latest first, leaves the unordered item where it is, changes
+        // something inside one block, and undoes exactly.
+        ContainerLoadingProblem p;
+        addContainer(p, 20, 4, 4);
+        std::vector<int> mixed;
+        for (int stop : {1, 3, 2, 1, 3, 2, 2}) {
+            const int item = addItem(p, 2, 2, 2 + static_cast<int>(p.items.size()) % 2);
+            p.items[static_cast<std::size_t>(item)].unloadOrder = stop;
+            mixed.push_back(item);
+        }
+        const int free = addItem(p, 1, 1, 1);
+        mixed.insert(mixed.begin() + 2, free);
+        p.containers[0].items = mixed;
+        ScoreCalculator::prepare(p);
+        check(StopOrderMove::applies(p), "StopOrderMove applies when an item has an order");
+        MoveHarness harness(p);
+        const Score before = harness.editor.score();
+        const auto lists = listsOf(p);
+        StopOrderMove move;
+        std::mt19937_64 rng(5);
+        bool blocks = true;
+        bool kept = true;
+        bool undone = true;
+        for (int round = 0; round < 30; ++round) {
+            if (!harness.apply(move, rng)) {
+                blocks = false;
+                break;
+            }
+            const std::vector<int>& list = p.containers[0].items;
+            kept = kept && list[2] == free;
+            int previous = 1 << 30;
+            for (int item : list) {
+                const auto& order = p.items[static_cast<std::size_t>(item)].unloadOrder;
+                if (!order) continue;
+                blocks = blocks && *order <= previous;
+                previous = *order;
+            }
+            harness.undo(move);
+            undone = undone && listsOf(p) == lists && harness.editor.score() == before;
+        }
+        check(blocks, "StopOrderMove puts the ordered items in stop blocks, the latest first");
+        check(kept, "and leaves an item without an order where it was");
+        check(undone, "undo_last puts the list and the score back");
+        // Already in blocks: it changes the order inside one block.
+        std::vector<int> sorted = mixed;
+        std::stable_sort(sorted.begin(), sorted.end(), [&p](int a, int b) {
+            return p.items[static_cast<std::size_t>(a)].unloadOrder.value_or(0) >
+                   p.items[static_cast<std::size_t>(b)].unloadOrder.value_or(0);
+        });
+        harness.editor.solution().containers[0].items = sorted;
+        MoveHarness again(p);
+        bool changed = true;
+        for (int round = 0; round < 30; ++round) {
+            again.apply(move, rng);
+            changed = changed && p.containers[0].items != sorted;
+            again.undo(move);
+        }
+        check(changed, "on a list in blocks it always changes something");
+    }
     {
         // Three containers, each holding a few small boxes that fit in one.
         ContainerLoadingProblem p;

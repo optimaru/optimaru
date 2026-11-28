@@ -265,6 +265,13 @@ class SolverConfig:
         containers of another size or cost that cost no more, as it is into one or
         split over several. Used only when the containers differ; it is how a load
         reaches a cheaper carton."""
+        stop_order: bool
+        """Enable StopOrderMove (registered only when some item sets an
+        unload_order, also for a single container): a container's loading order is
+        put back in stop blocks, the latest stop first (items without an order keep
+        their places), with one change inside one stop's block: an item moved or two
+        swapped, or the block ordered afresh by volume, height, base area, depth or
+        at random."""
 
     custom_moves: CustomMoves
     """A step's move, next: this use case's own moves, chosen adaptively on their share of steps."""
@@ -279,6 +286,21 @@ class SolverConfig:
 
     moves: Moves
     """A step's move, otherwise: the move mix, by relative weight (0 turns a move off)."""
+
+    class Selection:
+        """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
+
+        nearby_probability: float
+        """Used only when some item sets an unload_order: how often the move mix
+        moves an item next to one of its nearby items, those of the same stop and
+        the stops next to it (then the closest in volume), which keeps the stops in
+        blocks; a ruin-and-recreate kick then tries only the places next to them
+        (0.8). 0 disables nearby selection."""
+        nearby_size: int
+        """Size of the nearby neighbor list (20)."""
+
+    selection: Selection
+    """What the move mix moves: nearby candidates and this use case's hints."""
 
     class Acceptance:
         """``config.acceptance``: Whether the candidate becomes the current solution."""
@@ -318,8 +340,8 @@ class SolverConfig:
 
 class Solver:
     """First-fit-decreasing construction by decode + Late Acceptance local search over
-    the loading orders (+ EmptyContainerMove, RepackPairMove, SwitchContainerMove and
-    adaptive ruin-and-recreate). Solves IN PLACE: sets every container's `items`, the derived
+    the loading orders (+ EmptyContainerMove, RepackPairMove, SwitchContainerMove,
+    StopOrderMove and adaptive ruin-and-recreate). Solves IN PLACE: sets every container's `items`, the derived
     fields and problem.score. The lists the problem comes with are kept as the starting
     point."""
 

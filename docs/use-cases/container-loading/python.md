@@ -108,8 +108,9 @@ For finer control build `cl.SolverConfig()` and set attributes (time budget
 the move mix `moves.relocate_weight` / `list_swap_weight` / `two_opt_weight` /
 `or_opt_weight`, the construction `construction.first_fit_decreasing`, the domain's moves
 `custom_moves.empty_container` / `custom_moves.empty_container_candidates`,
-`custom_moves.repack` and `custom_moves.switch_container` (see the guide's
-[Search](README.md#search)),
+`custom_moves.repack`, `custom_moves.switch_container` and `custom_moves.stop_order`,
+nearby selection by stop `selection.nearby_probability` / `selection.nearby_size` (see the
+guide's [Search](README.md#search)),
 `stop.target_score`, the `on_new_best(step, score)` callback, `full_assert`, ...), then
 call `cl.Solver(cfg).solve(problem)` or `cl.solve(problem, config=cfg)`. Zero budget is
 `stop.time_limit_seconds = 0`, a fixed number of steps is `stop.step_limit`.

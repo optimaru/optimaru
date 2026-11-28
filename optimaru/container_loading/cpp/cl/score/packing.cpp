@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <utility>
+#include <vector>
 
 namespace cl {
 
@@ -23,98 +25,316 @@ int shared(int a, int la, int b, int lb) {
     return high > low ? high - low : 0;
 }
 
+// The share of a load that counts as more than an item carries: the
+// tolerance of stackingExcess, which absorbs the rounding of the shares.
+bool over(double load, double carried) {
+    return load - carried > std::max(1e-6, 1e-12 * std::max(load, carried));
+}
+
+// The loads resting on the boxes, passed down again from the boxes as they
+// stand: every box's supports were placed before it, so the boxes from last
+// to first are an order in which everything above a box comes before it.
+void recomputeCarried(const ContainerLoadingProblem& problem, Packing& packing) {
+    const std::size_t count = packing.boxes.size();
+    packing.carried.assign(count, 0.0);
+    for (std::size_t b = count; b-- > 0;) {
+        const double passed =
+                static_cast<double>(
+                        problem.items[static_cast<std::size_t>(packing.boxes[b].item)].weight) +
+                packing.carried[b];
+        if (passed == 0.0) continue;
+        for (int s = packing.supportStart[b]; s < packing.supportStart[b + 1]; ++s) {
+            packing.carried[static_cast<std::size_t>(
+                    packing.supportBox[static_cast<std::size_t>(s)])] +=
+                    passed * packing.supportShare[static_cast<std::size_t>(s)];
+        }
+    }
+}
+
 // Forget everything the decode did from list position `keep` on.
-void truncate(Packing& packing, int keep) {
-    while (!packing.boxes.empty() && packing.boxes.back().position >= keep)
-        packing.boxes.pop_back();
+void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep) {
+    std::size_t kept = packing.boxes.size();
+    while (kept > 0 && packing.boxes[kept - 1].position >= keep) --kept;
+    // The boxes taken away, which may have stopped the rays of points that stay.
+    std::vector<Box> removed(packing.boxes.begin() + static_cast<std::ptrdiff_t>(kept),
+                             packing.boxes.end());
+    packing.boxes.resize(kept);
+    for (std::vector<int>& cell : packing.cells) {
+        while (!cell.empty() && cell.back() >= static_cast<int>(kept)) cell.pop_back();
+    }
+    packing.tops.erase(std::remove_if(packing.tops.begin(), packing.tops.end(),
+                                      [kept](const std::pair<int, int>& top) {
+                                          return top.second >= static_cast<int>(kept);
+                                      }),
+                       packing.tops.end());
     auto& points = packing.points;
     points.erase(std::remove_if(points.begin(), points.end(),
                                 [keep](const Point& point) { return point.born >= keep; }),
                  points.end());
+    // The rooms of the free points, as the boxes kept leave them: a point
+    // covered again, or one whose ray a removed box stopped, is measured anew.
     for (Point& point : points) {
-        if (point.died != Point::kOpen && point.died >= keep) point.died = Point::kOpen;
+        bool stale = false;
+        if (point.died != Point::kOpen) {
+            if (point.died < keep) continue;
+            point.died = Point::kOpen;
+            stale = true;
+        }
+        for (std::size_t r = 0; r < removed.size() && !stale; ++r) {
+            const Box& box = removed[r];
+            const bool inX = box.x <= point.x && point.x < box.x + box.length;
+            const bool inY = box.y <= point.y && point.y < box.y + box.width;
+            const bool inZ = box.z <= point.z && point.z < box.z + box.height;
+            stale = (inY && inZ && box.x >= point.x && point.room[0] == box.x - point.x) ||
+                    (inX && inZ && box.y >= point.y && point.room[1] == box.y - point.y) ||
+                    (inX && inY && box.z >= point.z && point.room[2] == box.z - point.z);
+        }
+        if (stale) point.room[0] = -1;
+    }
+    if (problem.anyLoadLimit) {
+        packing.supportStart.resize(packing.boxes.size() + 1);
+        packing.supportBox.resize(static_cast<std::size_t>(packing.supportStart.back()));
+        packing.supportShare.resize(static_cast<std::size_t>(packing.supportStart.back()));
+        packing.bearsLimit.resize(kept);
+        recomputeCarried(problem, packing);
     }
 }
 
-bool feasible(const ContainerLoadingProblem& problem, const Container& container,
-              const std::vector<Box>& boxes, const Point& point, const Orientation& o) {
-    if (point.x + o.length > container.length || point.y + o.width > container.width ||
-        point.z + o.height > container.height)
-        return false;
-    for (const Box& box : boxes) {
-        if (point.x < box.x + box.length && box.x < point.x + o.length &&
-            point.y < box.y + box.width && box.y < point.y + o.width &&
-            point.z < box.z + box.height && box.z < point.z + o.height)
-            return false;
-    }
-    if (point.z == 0) return true;
-    // The base rests on the tops that end exactly where it starts. Placed
-    // items do not overlap, so the areas add up without counting any twice.
-    const double base = static_cast<double>(o.length) * static_cast<double>(o.width);
-    const double needed = problem.minSupportRatio * base;
-    // The tolerance absorbs the rounding of ratio * base; capped at half an
-    // area unit, since `supported` is a sum of whole areas, so the decoder
-    // never accepts a base a whole unit short (the evaluators check at 1e-6).
-    const double enough = needed - std::min(0.5, 1e-9 * std::max(1.0, needed));
-    double supported = 0.0;
-    for (const Box& box : boxes) {
-        if (box.z + box.height != point.z) continue;
-        const int dx = shared(point.x, o.length, box.x, box.length);
-        if (dx == 0) continue;
-        const int dy = shared(point.y, o.width, box.y, box.width);
-        if (dy == 0) continue;
-        supported += static_cast<double>(dx) * static_cast<double>(dy);
-        if (supported >= enough) return true;
+// How many cells a container's length is cut into for Packing::cells.
+constexpr int kCells = 32;
+
+int cellOf(const Packing& packing, int x) {
+    return std::min(static_cast<int>(packing.cells.size()) - 1, x / packing.cellLength);
+}
+
+// Calls visit(box) for every box whose x-range may meet [low, high) (high >
+// low): once per cell, so a box that spans several cells may be visited more
+// than once. visit returns true to stop; the function then returns true.
+template <typename Visit>
+bool anyInRange(const Packing& packing, int low, int high, Visit&& visit) {
+    const int first = cellOf(packing, std::max(0, low));
+    const int last = cellOf(packing, std::max(0, high - 1));
+    for (int c = first; c <= last; ++c) {
+        for (int index : packing.cells[static_cast<std::size_t>(c)]) {
+            if (visit(packing.boxes[static_cast<std::size_t>(index)])) return true;
+        }
     }
     return false;
 }
 
+// Calls visit(index, box) for every box whose top is at height z, in index
+// order; visit returns true to stop.
+template <typename Visit>
+void eachTopAt(const Packing& packing, int z, Visit&& visit) {
+    auto at = std::lower_bound(packing.tops.begin(), packing.tops.end(), std::make_pair(z, -1));
+    for (; at != packing.tops.end() && at->first == z; ++at) {
+        if (visit(at->second, packing.boxes[static_cast<std::size_t>(at->second)])) return;
+    }
+}
+
+bool feasible(const ContainerLoadingProblem& problem, const Container& container,
+              const Packing& packing, const Point& point, const Orientation& o) {
+    if (point.x + o.length > container.length || point.y + o.width > container.width ||
+        point.z + o.height > container.height)
+        return false;
+    if (point.z > 0) {
+        // The base rests on the tops that end exactly where it starts. Placed
+        // items do not overlap, so the areas add up without counting any
+        // twice (and, being whole numbers, to the same sum in any order).
+        // Checked first: high up, most points fail here.
+        const double base = static_cast<double>(o.length) * static_cast<double>(o.width);
+        const double needed = problem.minSupportRatio * base;
+        // The tolerance absorbs the rounding of ratio * base; capped at half an
+        // area unit, since `supported` is a sum of whole areas, so the decoder
+        // never accepts a base a whole unit short (the evaluators check at 1e-6).
+        const double enough = needed - std::min(0.5, 1e-9 * std::max(1.0, needed));
+        double supported = 0.0;
+        bool done = false;
+        eachTopAt(packing, point.z, [&](int, const Box& box) {
+            const int dx = shared(point.x, o.length, box.x, box.length);
+            if (dx == 0) return false;
+            const int dy = shared(point.y, o.width, box.y, box.width);
+            if (dy == 0) return false;
+            supported += static_cast<double>(dx) * static_cast<double>(dy);
+            done = supported >= enough;
+            return done;
+        });
+        if (!done) return false;
+    }
+    return !anyInRange(packing, point.x, point.x + o.length, [&](const Box& box) {
+        return point.x < box.x + box.length && box.x < point.x + o.length &&
+               point.y < box.y + box.width && box.y < point.y + o.width &&
+               point.z < box.z + box.height && box.z < point.z + o.height;
+    });
+}
+
 // Slide the point (x, y, z) back along one axis until it meets the far face
 // of a placed item or the wall at 0; returns its coordinate on that axis.
-int slide(const std::vector<Box>& boxes, int x, int y, int z, int axis) {
+int slide(const Packing& packing, int x, int y, int z, int axis) {
     int best = 0;
-    for (const Box& box : boxes) {
+    if (axis == 0) {
+        for (const Box& box : packing.boxes) {
+            const bool inY = box.y <= y && y < box.y + box.width;
+            const bool inZ = box.z <= z && z < box.z + box.height;
+            if (inY && inZ && box.x + box.length <= x) best = std::max(best, box.x + box.length);
+        }
+        return best;
+    }
+    // Along y or z only the boxes whose x-range holds x can stop it.
+    anyInRange(packing, x, x + 1, [&](const Box& box) {
         const bool inX = box.x <= x && x < box.x + box.length;
         const bool inY = box.y <= y && y < box.y + box.width;
         const bool inZ = box.z <= z && z < box.z + box.height;
-        if (axis == 0) {
-            if (inY && inZ && box.x + box.length <= x) best = std::max(best, box.x + box.length);
-        } else if (axis == 1) {
+        if (axis == 1) {
             if (inX && inZ && box.y + box.width <= y) best = std::max(best, box.y + box.width);
         } else {
             if (inX && inY && box.z + box.height <= z) best = std::max(best, box.z + box.height);
         }
-    }
+        return false;
+    });
     return best;
 }
 
 // How far the room reaches from a point along x, y and z: up to the next
 // placed item the ray from the point meets, or the wall.
-void freeRoom(const Container& container, const std::vector<Box>& boxes, const Point& point,
-              int room[3]) {
+void freeRoom(const Container& container, const Packing& packing, const Point& point, int room[3]) {
     int endX = container.length;
     int endY = container.width;
     int endZ = container.height;
-    for (const Box& box : boxes) {
-        const bool inX = box.x <= point.x && point.x < box.x + box.length;
+    // Along y and z only the boxes whose x-range holds the point's x can stop
+    // the ray: those of its cell.
+    anyInRange(packing, point.x, point.x + 1, [&](const Box& box) {
+        if (!(box.x <= point.x && point.x < box.x + box.length)) return false;
         const bool inY = box.y <= point.y && point.y < box.y + box.width;
         const bool inZ = box.z <= point.z && point.z < box.z + box.height;
-        if (inY && inZ && box.x >= point.x) endX = std::min(endX, box.x);
-        if (inX && inZ && box.y >= point.y) endY = std::min(endY, box.y);
-        if (inX && inY && box.z >= point.z) endZ = std::min(endZ, box.z);
+        if (inZ && box.y >= point.y) endY = std::min(endY, box.y);
+        if (inY && box.z >= point.z) endZ = std::min(endZ, box.z);
+        return false;
+    });
+    // Along x: the cells from the point's on, until a cell starts beyond the
+    // nearest box found.
+    const int cellCount = static_cast<int>(packing.cells.size());
+    for (int c = cellOf(packing, point.x); c < cellCount && c * packing.cellLength < endX; ++c) {
+        for (int index : packing.cells[static_cast<std::size_t>(c)]) {
+            const Box& box = packing.boxes[static_cast<std::size_t>(index)];
+            if (box.x < point.x || box.x >= endX) continue;
+            if (box.y <= point.y && point.y < box.y + box.width && box.z <= point.z &&
+                point.z < box.z + box.height)
+                endX = box.x;
+        }
     }
     room[0] = endX - point.x;
     room[1] = endY - point.y;
     room[2] = endZ - point.z;
 }
 
+// Whether an item that leaves at `order`, put at `point` in orientation `o`,
+// would block a placed item or be blocked by one (the pairs
+// unloadingBlocks counts).
+bool blocks(const ContainerLoadingProblem& problem, const std::vector<Box>& boxes, int order,
+            const Point& point, const Orientation& o) {
+    for (const Box& box : boxes) {
+        const auto& other = problem.items[static_cast<std::size_t>(box.item)].unloadOrder;
+        if (!other || *other == order) continue;
+        const bool overX = shared(point.x, o.length, box.x, box.length) > 0;
+        const bool overY = shared(point.y, o.width, box.y, box.width) > 0;
+        const bool overZ = shared(point.z, o.height, box.z, box.height) > 0;
+        if (*other > order) {
+            // The placed item leaves later: it must not be in the new one's way.
+            if (box.x >= point.x + o.length && overY && overZ) return true;
+            if (box.z >= point.z + o.height && overX && overY) return true;
+        } else {
+            // The placed item leaves earlier: the new one must not be in its way.
+            if (point.x >= box.x + box.length && overY && overZ) return true;
+            if (point.z >= box.z + box.height && overX && overY) return true;
+        }
+    }
+    return false;
+}
+
+// What a box at `point` in orientation `o` would stand on: the placed boxes
+// whose tops are at its base, each with its share of the contact area.
+void supportsOf(const Packing& packing, const Point& point, const Orientation& o,
+                std::vector<std::pair<int, double>>& out) {
+    out.clear();
+    if (point.z == 0) return;
+    double contact = 0.0;
+    eachTopAt(packing, point.z, [&](int index, const Box& box) {
+        const int dx = shared(point.x, o.length, box.x, box.length);
+        if (dx == 0) return false;
+        const int dy = shared(point.y, o.width, box.y, box.width);
+        if (dy == 0) return false;
+        const double area = static_cast<double>(dx) * static_cast<double>(dy);
+        out.emplace_back(index, area);
+        contact += area;
+        return false;
+    });
+    if (contact <= 0.0) {
+        out.clear();
+        return;
+    }
+    for (auto& support : out) support.second /= contact;
+}
+
+// The load `weight`, resting on `supports`, passed down through the placed
+// boxes to those that carry a limit or stand on one that does: `added` gets
+// (box, what it adds on that box), highest box index first. A box's supports
+// come before it in `boxes`, so taking the entries by falling index passes
+// everything a box receives on before the box is reached.
+void passDown(const Packing& packing, const std::vector<std::pair<int, double>>& supports,
+              double weight, std::vector<std::pair<int, double>>& added) {
+    added.clear();
+    const auto add = [&added](std::size_t from, int box, double load) {
+        std::size_t at = from;
+        while (at < added.size() && added[at].first > box) ++at;
+        if (at < added.size() && added[at].first == box) {
+            added[at].second += load;
+        } else {
+            added.insert(added.begin() + static_cast<std::ptrdiff_t>(at), {box, load});
+        }
+    };
+    for (const auto& [box, share] : supports) {
+        if (packing.bearsLimit[static_cast<std::size_t>(box)]) add(0, box, weight * share);
+    }
+    for (std::size_t next = 0; next < added.size(); ++next) {
+        const auto [box, load] = added[next];
+        for (int s = packing.supportStart[static_cast<std::size_t>(box)];
+             s < packing.supportStart[static_cast<std::size_t>(box) + 1]; ++s) {
+            const int below = packing.supportBox[static_cast<std::size_t>(s)];
+            if (packing.bearsLimit[static_cast<std::size_t>(below)])
+                add(next + 1, below, load * packing.supportShare[static_cast<std::size_t>(s)]);
+        }
+    }
+}
+
+// Whether an item of `weight` at `point` in orientation `o` would put more on
+// a placed box than its maxLoadOnTop.
+bool overloads(const ContainerLoadingProblem& problem, const Packing& packing, double weight,
+               const Point& point, const Orientation& o,
+               std::vector<std::pair<int, double>>& supports,
+               std::vector<std::pair<int, double>>& added) {
+    if (point.z == 0 || weight <= 0.0) return false;
+    supportsOf(packing, point, o, supports);
+    passDown(packing, supports, weight, added);
+    for (const auto& [box, load] : added) {
+        const auto& limit =
+                problem.items[static_cast<std::size_t>(
+                                      packing.boxes[static_cast<std::size_t>(box)].item)]
+                        .maxLoadOnTop;
+        if (limit && over(packing.carried[static_cast<std::size_t>(box)] + load,
+                          static_cast<double>(*limit)))
+            return true;
+    }
+    return false;
+}
+
 void addPoint(Packing& packing, const Container& container, int x, int y, int z, int position) {
     if (x >= container.length || y >= container.width || z >= container.height) return;
-    for (const Box& box : packing.boxes) {
-        if (box.x <= x && x < box.x + box.length && box.y <= y && y < box.y + box.width &&
-            box.z <= z && z < box.z + box.height)
-            return;  // inside a placed item
-    }
+    const bool inside = anyInRange(packing, x, x + 1, [&](const Box& box) {
+        return box.x <= x && x < box.x + box.length && box.y <= y && y < box.y + box.width &&
+               box.z <= z && z < box.z + box.height;
+    });
+    if (inside) return;  // inside a placed item
     Point point;
     point.x = x;
     point.y = y;
@@ -125,11 +345,26 @@ void addPoint(Packing& packing, const Container& container, int x, int y, int z,
     for (auto same = at; same != points.end() && !before(point, *same); ++same) {
         if (same->died == Point::kOpen) return;  // already a free point
     }
+    point.room[0] = -1;  // measured when first asked for
     points.insert(at, point);
 }
 
-void place(Packing& packing, const Container& container, const Point& at, const Orientation& o,
-           int item, int position) {
+void place(const ContainerLoadingProblem& problem, Packing& packing, const Container& container,
+           const Point& at, const Orientation& o, int item, int position,
+           std::vector<std::pair<int, double>>& supports) {
+    bool reachesLimit = false;
+    if (problem.anyLoadLimit) {
+        // What it stands on, and whether a limit is under it.
+        supportsOf(packing, at, o, supports);
+        for (const auto& [below, share] : supports) {
+            packing.supportBox.push_back(below);
+            packing.supportShare.push_back(share);
+            reachesLimit = reachesLimit || packing.bearsLimit[static_cast<std::size_t>(below)];
+        }
+        packing.supportStart.push_back(static_cast<int>(packing.supportBox.size()));
+        packing.bearsLimit.push_back(
+                reachesLimit || problem.items[static_cast<std::size_t>(item)].maxLoadOnTop ? 1 : 0);
+    }
     Box box;
     box.item = item;
     box.position = position;
@@ -145,17 +380,44 @@ void place(Packing& packing, const Container& container, const Point& at, const 
             point.z < box.z + box.height)
             point.died = position;
     }
+    const int index = static_cast<int>(packing.boxes.size());
     packing.boxes.push_back(box);
-    const std::vector<Box>& boxes = packing.boxes;
+    if (problem.anyLoadLimit) {
+        // The loads passed down again, always the same way (recomputeCarried),
+        // so that a decode resumed from a prefix has exactly the loads of one
+        // made from scratch. Only the loads on boxes that carry a limit are
+        // read, and those change only when the new box's weight reaches one.
+        if (reachesLimit && problem.items[static_cast<std::size_t>(item)].weight > 0)
+            recomputeCarried(problem, packing);
+        else
+            packing.carried.push_back(0.0);
+    }
+    for (int c = cellOf(packing, box.x); c <= cellOf(packing, box.x + box.length - 1); ++c)
+        packing.cells[static_cast<std::size_t>(c)].push_back(index);
+    const std::pair<int, int> top(box.z + box.height, index);
+    packing.tops.insert(std::lower_bound(packing.tops.begin(), packing.tops.end(), top), top);
+    // The rays from the free points that the new box now stops.
+    for (Point& point : packing.points) {
+        if (point.died != Point::kOpen || point.room[0] < 0) continue;
+        const bool inX = box.x <= point.x && point.x < box.x + box.length;
+        const bool inY = box.y <= point.y && point.y < box.y + box.width;
+        const bool inZ = box.z <= point.z && point.z < box.z + box.height;
+        if (inY && inZ && box.x >= point.x)
+            point.room[0] = std::min(point.room[0], box.x - point.x);
+        if (inX && inZ && box.y >= point.y)
+            point.room[1] = std::min(point.room[1], box.y - point.y);
+        if (inX && inY && box.z >= point.z)
+            point.room[2] = std::min(point.room[2], box.z - point.z);
+    }
     const int farX = box.x + box.length;
     const int farY = box.y + box.width;
     const int farZ = box.z + box.height;
-    addPoint(packing, container, farX, slide(boxes, farX, box.y, box.z, 1), box.z, position);
-    addPoint(packing, container, farX, box.y, slide(boxes, farX, box.y, box.z, 2), position);
-    addPoint(packing, container, slide(boxes, box.x, farY, box.z, 0), farY, box.z, position);
-    addPoint(packing, container, box.x, farY, slide(boxes, box.x, farY, box.z, 2), position);
-    addPoint(packing, container, slide(boxes, box.x, box.y, farZ, 0), box.y, farZ, position);
-    addPoint(packing, container, box.x, slide(boxes, box.x, box.y, farZ, 1), farZ, position);
+    addPoint(packing, container, farX, slide(packing, farX, box.y, box.z, 1), box.z, position);
+    addPoint(packing, container, farX, box.y, slide(packing, farX, box.y, box.z, 2), position);
+    addPoint(packing, container, slide(packing, box.x, farY, box.z, 0), farY, box.z, position);
+    addPoint(packing, container, box.x, farY, slide(packing, box.x, farY, box.z, 2), position);
+    addPoint(packing, container, slide(packing, box.x, box.y, farZ, 0), box.y, farZ, position);
+    addPoint(packing, container, box.x, slide(packing, box.x, box.y, farZ, 1), farZ, position);
 }
 
 }  // namespace
@@ -168,59 +430,110 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
         keep = 0;
         out.boxes.clear();
         out.points.clear();
-        out.points.push_back(Point());
+        Point origin;
+        origin.room[0] = space.length;
+        origin.room[1] = space.width;
+        origin.room[2] = space.height;
+        out.points.push_back(origin);
+        for (std::vector<int>& cell : out.cells) cell.clear();
+        out.tops.clear();
+        out.carried.clear();
+        out.supportStart.assign(problem.anyLoadLimit ? 1 : 0, 0);
+        out.supportBox.clear();
+        out.supportShare.clear();
+        out.bearsLimit.clear();
     } else {
-        truncate(out, keep);
+        truncate(problem, out, keep);
+    }
+    // One cell per 16 items of the list, up to kCells: a short list is
+    // checked box by box, where cells would cost more than they save. When
+    // the count changes the kept boxes are filed again; the cells change how
+    // long a decode takes and never what it gives.
+    const int cells = std::clamp(count / 16, 1, kCells);
+    if (static_cast<int>(out.cells.size()) != cells) {
+        out.cellLength = std::max(1, (space.length + cells - 1) / cells);
+        out.cells.assign(static_cast<std::size_t>(cells), std::vector<int>());
+        for (std::size_t b = 0; b < out.boxes.size(); ++b) {
+            const Box& box = out.boxes[b];
+            for (int c = cellOf(out, box.x); c <= cellOf(out, box.x + box.length - 1); ++c)
+                out.cells[static_cast<std::size_t>(c)].push_back(static_cast<int>(b));
+        }
     }
     out.members.assign(members.begin(), members.end());
     out.boxOf.resize(static_cast<std::size_t>(count));
 
+    std::vector<std::pair<int, double>> supports;
+    std::vector<std::pair<int, double>> added;
     for (int position = keep; position < count; ++position) {
         const int item = members[static_cast<std::size_t>(position)];
+        const Item& box = problem.items[static_cast<std::size_t>(item)];
         const int smallest = problem.smallestSide[static_cast<std::size_t>(item)];
         const int first = problem.orientationStart[static_cast<std::size_t>(item)];
         const int last = problem.orientationStart[static_cast<std::size_t>(item) + 1];
-        int chosenPoint = -1;
-        int chosenOrientation = -1;
-        int chosenFit = -1;
+        // What a place may break: 0 nothing, 1 an unloading order, 2 a load
+        // limit. Per class, the first point that takes the item in an
+        // orientation of that class, and of those orientations the one that
+        // divides the free room best (the earliest of equals). The search
+        // stops at the first point of class 0; without orders and limits
+        // every place is of class 0.
+        const bool ordered = problem.anyUnloadOrder && box.unloadOrder.has_value();
+        const bool limited = problem.anyLoadLimit && box.weight > 0;
+        const double weight = static_cast<double>(box.weight);
+        int chosenPoint[3] = {-1, -1, -1};
+        int chosenOrientation[3] = {-1, -1, -1};
+        int chosenFit[3] = {-1, -1, -1};
         const int pointCount = static_cast<int>(out.points.size());
-        for (int k = 0; k < pointCount && chosenPoint < 0; ++k) {
-            const Point& point = out.points[static_cast<std::size_t>(k)];
+        for (int k = 0; k < pointCount && chosenPoint[0] < 0; ++k) {
+            Point& point = out.points[static_cast<std::size_t>(k)];
             if (point.died != Point::kOpen) continue;
             if (point.x + smallest > space.length || point.y + smallest > space.width ||
                 point.z + smallest > space.height)
                 continue;
-            // The first point that takes the item decides where it goes; of
-            // the orientations feasible there, the one that divides the free
-            // room best is taken (the earliest of equals).
-            int room[3] = {-1, -1, -1};
+            if (point.room[0] < 0) freeRoom(space, out, point, point.room);
             for (int o = first; o < last; ++o) {
                 const Orientation& orientation = problem.orientations[static_cast<std::size_t>(o)];
-                if (!feasible(problem, space, out.boxes, point, orientation)) continue;
-                if (last - first == 1) {
-                    chosenPoint = k;
-                    chosenOrientation = o;
-                    break;
+                // Longer than the room along an axis: the item in the way overlaps it.
+                if (orientation.length > point.room[0] || orientation.width > point.room[1] ||
+                    orientation.height > point.room[2])
+                    continue;
+                if (!feasible(problem, space, out, point, orientation)) continue;
+                int kind = 0;
+                if (limited && overloads(problem, out, weight, point, orientation, supports, added))
+                    kind = 2;
+                else if (ordered &&
+                         blocks(problem, out.boxes, *box.unloadOrder, point, orientation))
+                    kind = 1;
+                // A class already taken by an earlier point stays with it.
+                if (chosenPoint[kind] >= 0 && chosenPoint[kind] != k) continue;
+                int fit = 0;
+                if (last - first > 1) {
+                    const int* room = point.room;
+                    fit = (room[0] % orientation.length == 0 ? 1 : 0) +
+                          (room[1] % orientation.width == 0 ? 1 : 0) +
+                          (room[2] % orientation.height == 0 ? 1 : 0);
+                    // An item that leaves at a stop: the shallowest
+                    // orientation along x first, so that a stop builds a
+                    // thin wall across the space and not a long row.
+                    if (ordered) fit += 4 * (kMaxLength - orientation.length);
                 }
-                if (room[0] < 0) freeRoom(space, out.boxes, point, room);
-                const int fit = (room[0] % orientation.length == 0 ? 1 : 0) +
-                                (room[1] % orientation.width == 0 ? 1 : 0) +
-                                (room[2] % orientation.height == 0 ? 1 : 0);
-                if (fit > chosenFit) {
-                    chosenPoint = k;
-                    chosenOrientation = o;
-                    chosenFit = fit;
+                if (fit > chosenFit[kind]) {
+                    chosenPoint[kind] = k;
+                    chosenOrientation[kind] = o;
+                    chosenFit[kind] = fit;
                 }
             }
         }
-        if (chosenPoint < 0) {
+        int kind = 0;
+        while (kind < 3 && chosenPoint[kind] < 0) ++kind;
+        if (kind == 3) {
             out.boxOf[static_cast<std::size_t>(position)] = -1;
             continue;
         }
         out.boxOf[static_cast<std::size_t>(position)] = static_cast<int>(out.boxes.size());
-        const Point at = out.points[static_cast<std::size_t>(chosenPoint)];
-        place(out, space, at, problem.orientations[static_cast<std::size_t>(chosenOrientation)],
-              item, position);
+        const Point at = out.points[static_cast<std::size_t>(chosenPoint[kind])];
+        place(problem, out, space, at,
+              problem.orientations[static_cast<std::size_t>(chosenOrientation[kind])], item,
+              position, supports);
     }
 
     out.loadedVolume = 0;

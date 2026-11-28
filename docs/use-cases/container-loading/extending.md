@@ -49,7 +49,7 @@ the same loading (`cl_plugin_test` checks the assembly against a full recompute,
 | Scored by | the assembly: one component per constraint, `cpp/cl/constraints/` | the same |
 | Constraints | the eight, at their defaults (two of them at weight 0) | the ones you list, with your knobs |
 | Steps per second | 39.4 thousand | 41.8 thousand with the defaults listed (one search: the difference is noise) |
-| Moves | the built-in list moves, `EmptyContainerMove`, `RepackPairMove`, `SwitchContainerMove` | the same |
+| Moves | the built-in list moves, `EmptyContainerMove`, `RepackPairMove`, `SwitchContainerMove`, `StopOrderMove` | the same |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are the demo made larger, `cl.generate_demo_data(item_count=120,
