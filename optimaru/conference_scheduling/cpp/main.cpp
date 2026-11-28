@@ -10,13 +10,13 @@
 
 #include "cs/model/domain.hpp"
 #include "cs/solver.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace cs;
 
 namespace {
 
-// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+// Seeded, platform-independent draws (see optimaru/utils/random.hpp).
 using DemoRandom = optimaru::PortableRandom;
 
 constexpr int LAB = 0;

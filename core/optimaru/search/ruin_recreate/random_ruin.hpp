@@ -11,7 +11,7 @@
 
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"
 #include "optimaru/search/operators.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 

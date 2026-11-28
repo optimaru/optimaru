@@ -12,7 +12,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/search/ruin_recreate/random_ruin.hpp"
 #include "optimaru/search/operators.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 

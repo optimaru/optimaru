@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_PORTABLE_RANDOM_HPP
-#define OPTIMARU_PORTABLE_RANDOM_HPP
+#ifndef OPTIMARU_UTILS_RANDOM_HPP
+#define OPTIMARU_UTILS_RANDOM_HPP
 
 #include <cstdint>
 #include <random>
@@ -45,4 +45,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_PORTABLE_RANDOM_HPP
+#endif  // OPTIMARU_UTILS_RANDOM_HPP

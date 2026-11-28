@@ -7,13 +7,13 @@
 #include <utility>
 #include <vector>
 #include <random>
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace mnt {
 
 namespace {
 
-// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+// Seeded, platform-independent draws (see optimaru/utils/random.hpp).
 using DemoRandom = optimaru::PortableRandom;
 
 const char* const kJobAreaNames[] = {"Downtown", "Uptown", "Park",    "Airport",  "Bay",

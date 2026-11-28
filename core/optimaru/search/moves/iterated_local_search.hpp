@@ -20,7 +20,7 @@
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/model/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 

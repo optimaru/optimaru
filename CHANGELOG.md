@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Breaking (C++): `utils/` holds what the engine's folders share.** `portable_random.hpp`
+  moves to `core/optimaru/utils/random.hpp` and `worker_threads.hpp` to
+  `core/optimaru/utils/worker_threads.hpp`; the include guards follow
+  (`OPTIMARU_UTILS_RANDOM_HPP`, `OPTIMARU_UTILS_WORKER_THREADS_HPP`). The top of
+  `core/optimaru/` keeps the solver, its settings and its config. Nothing changes in the
+  Python package or in what the solvers do.
 - **Breaking (C++): no umbrella header.** `core/optimaru/optimaru.hpp` is gone. It included a
   dozen engine headers for convenience, but only employee scheduling's bindings and the engine
   test used it; every other use case includes the headers it needs, and those two now do too.

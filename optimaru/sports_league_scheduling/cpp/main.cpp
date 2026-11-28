@@ -12,13 +12,13 @@
 #include "sls/model/domain.hpp"
 #include "sls/score/score_calculator.hpp"
 #include "sls/solver.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace sls;
 
 namespace {
 
-// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+// Seeded, platform-independent draws (see optimaru/utils/random.hpp).
 using DemoRandom = optimaru::PortableRandom;
 
 constexpr int ROUNDS = 32;

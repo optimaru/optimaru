@@ -12,7 +12,7 @@
 #include "ts/model/domain.hpp"
 #include "ts/score/score_calculator.hpp"
 #include "ts/solver.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace ts;
 
@@ -22,7 +22,7 @@ constexpr int DAY_COUNT = 18;
 constexpr int ASSIGNMENTS_PER_DAY = 4;
 constexpr int UNAVAILABILITY_PENALTY_COUNT = 12;
 
-// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+// Seeded, platform-independent draws (see optimaru/utils/random.hpp).
 using DemoRandom = optimaru::PortableRandom;
 
 // The demo instance: teams, days, penalties, assignments.

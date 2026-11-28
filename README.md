@@ -303,9 +303,6 @@ core/optimaru/
 │                                 NeighborSettings, AlnsSettings, ...
 ├── solver_config.hpp             what every use case's Solver::Config shares:
 │                                 its bases, their Settings, parallel starts
-├── portable_random.hpp           random_index, and seeded draws that match on
-│                                 every standard library
-├── worker_threads.hpp            thread start-up / shutdown for parallel pools
 ├── model/                        the solution as the engine sees it
 │   ├── solution_traits.hpp       SolutionTraits, Shape (Assignment | Sequence),
 │   │                             pinning
@@ -355,6 +352,10 @@ core/optimaru/
 │                                 the step loop draws next: MoveOutcome,
 │                                 roulette wheel, segmented roulette, alpha-UCB,
 │                                 uniform
+├── utils/                        what the folders above share
+│   ├── random.hpp                random_index, and seeded draws that match on
+│   │                             every standard library
+│   └── worker_threads.hpp        thread start-up / shutdown for parallel pools
 ├── python/                       pybind11 helpers: constraint specs ->
 │                                 ConstraintAssembly, constraint_info(),
 │                                 constraint_costs(), names, the level guard,
