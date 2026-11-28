@@ -20,6 +20,10 @@ namespace optimaru {
 // exchange values. The partner is nearby-biased when nearby selection is
 // configured, never pinned, and holds another value when any entity does.
 // Applies the move.
+//
+// Expects move.entities[0] = e and move.previous[0] = e's value, filled in by
+// MoveMixSampler before it chose this move. `entity_pick` is the sampler's own
+// distribution, passed in so the draws stay those of the sampler.
 template <typename Solution>
 void apply_swap(Editor<Solution>& editor, MoveDraw<Solution>& draw,
                 std::uniform_int_distribution<int>& entity_pick, std::mt19937_64& rng,
