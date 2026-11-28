@@ -609,9 +609,21 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     std::vector<std::pair<int, double>> supports;
     std::vector<std::pair<int, double>> added;
     std::vector<int> reach;
+    // The weight placed so far, which an optional item may not take above the
+    // container's limit.
+    const bool weighed = problem.anyOptional && space.maxWeight.has_value();
+    std::int64_t placedWeight = 0;
+    if (weighed) {
+        for (const Box& kept : out.boxes)
+            placedWeight += problem.items[static_cast<std::size_t>(kept.item)].weight;
+    }
     for (int position = keep; position < count; ++position) {
         const int item = members[static_cast<std::size_t>(position)];
         const Item& box = problem.items[static_cast<std::size_t>(item)];
+        if (weighed && box.optional && placedWeight + box.weight > *space.maxWeight) {
+            out.boxOf[static_cast<std::size_t>(position)] = -1;
+            continue;
+        }
         const int smallest = problem.smallestSide[static_cast<std::size_t>(item)];
         const int first = problem.orientationStart[static_cast<std::size_t>(item)];
         const int last = problem.orientationStart[static_cast<std::size_t>(item) + 1];
@@ -679,6 +691,7 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
             continue;
         }
         out.boxOf[static_cast<std::size_t>(position)] = static_cast<int>(out.boxes.size());
+        placedWeight += box.weight;
         const Point at = out.points[static_cast<std::size_t>(chosenPoint[kind])];
         place(problem, out, space, at,
               problem.orientations[static_cast<std::size_t>(chosenOrientation[kind])], item,
@@ -699,6 +712,7 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     out.balancePerMille = -1;
     out.stackingViolations = -1;
     out.balanceExcess = -1;
+    out.unplacedCost = -1;
 }
 
 void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,
@@ -821,6 +835,43 @@ int balancePerMille(const ContainerLoadingProblem& problem, int container, const
     return result;
 }
 
+// Over the unplaced items of the list: their priorities, the optional ones
+// apart, and the weight of the optional ones. Kept with the decode.
+void tallyUnplaced(const ContainerLoadingProblem& problem, const Packing& packing) {
+    packing.unplacedCost = 0;
+    packing.optionalCost = 0;
+    packing.optionalWeight = 0;
+    for (std::size_t position = 0; position < packing.members.size(); ++position) {
+        if (packing.boxOf[position] >= 0) continue;
+        const Item& item = problem.items[static_cast<std::size_t>(packing.members[position])];
+        if (item.optional) {
+            packing.optionalCost += item.priority;
+            packing.optionalWeight += item.weight;
+        } else {
+            packing.unplacedCost += item.priority;
+        }
+    }
+}
+
+std::int64_t unplacedCost(const ContainerLoadingProblem& problem, const Packing& packing) {
+    if (!problem.anyOptional && !problem.anyPriority) return packing.unplaced();
+    if (packing.unplacedCost < 0) tallyUnplaced(problem, packing);
+    return packing.unplacedCost;
+}
+
+std::int64_t optionalCost(const ContainerLoadingProblem& problem, const Packing& packing) {
+    if (!problem.anyOptional) return 0;
+    if (packing.unplacedCost < 0) tallyUnplaced(problem, packing);
+    return packing.optionalCost;
+}
+
+std::int64_t unplacedOptionalWeight(const ContainerLoadingProblem& problem,
+                                    const Packing& packing) {
+    if (!problem.anyOptional) return 0;
+    if (packing.unplacedCost < 0) tallyUnplaced(problem, packing);
+    return packing.optionalWeight;
+}
+
 std::int64_t stackingViolations(const ContainerLoadingProblem& problem, const Packing& packing) {
     if (packing.stackingViolations >= 0) return packing.stackingViolations;
     packing.stackingViolations = 0;
@@ -937,6 +988,8 @@ std::uint64_t factsOf(const ContainerLoadingProblem& problem) {
         hash.add(container.length);
         hash.add(container.width);
         hash.add(container.fillHeight);  // what the decoder fills up to
+        // An optional item may not take the placed weight above the limit.
+        if (problem.anyOptional) hash.add(container.maxWeight ? *container.maxWeight : -1);
         // The balance limit's cost is kept with a decode too.
         if (container.maxOffsetLength || container.maxOffsetWidth) {
             hash.add(container.maxOffsetLength ? *container.maxOffsetLength : -1.0);
@@ -955,7 +1008,9 @@ std::uint64_t factsOf(const ContainerLoadingProblem& problem) {
         // layer limit (0 = none) in one word: a reset hashes every item.
         hash.add(static_cast<std::int64_t>(item.unloadOrder ? 1 : 0) |
                  static_cast<std::int64_t>(item.bottomOnly ? 2 : 0) |
-                 (static_cast<std::int64_t>(item.maxStackLayers ? *item.maxStackLayers : 0) << 2));
+                 (static_cast<std::int64_t>(item.optional ? 4 : 0)) |
+                 (static_cast<std::int64_t>(item.maxStackLayers ? *item.maxStackLayers : 0) << 3) |
+                 (static_cast<std::int64_t>(item.priority) << 34));
         hash.add(item.unloadOrder ? *item.unloadOrder : 0);
     }
     if (problem.anyStackRule) {

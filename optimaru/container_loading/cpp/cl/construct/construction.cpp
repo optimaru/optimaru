@@ -32,6 +32,8 @@ bool loadsBefore(const ContainerLoadingProblem& problem, int a, int b) {
     const Item& first = problem.items[static_cast<std::size_t>(a)];
     const Item& second = problem.items[static_cast<std::size_t>(b)];
     if (unloadRank(first) != unloadRank(second)) return unloadRank(first) > unloadRank(second);
+    if (first.optional != second.optional) return !first.optional;
+    if (first.priority != second.priority) return first.priority > second.priority;
     if (first.bottomOnly != second.bottomOnly) return first.bottomOnly;
     if (first.maxLoadOnTop.has_value() != second.maxLoadOnTop.has_value())
         return !first.maxLoadOnTop.has_value();
@@ -76,6 +78,8 @@ void constructLoading(ContainerLoadingProblem& problem) {
         const Item& first = problem.items[static_cast<std::size_t>(a)];
         const Item& second = problem.items[static_cast<std::size_t>(b)];
         if (unloadRank(first) != unloadRank(second)) return unloadRank(first) > unloadRank(second);
+        if (first.optional != second.optional) return !first.optional;
+        if (first.priority != second.priority) return first.priority > second.priority;
         if (first.bottomOnly != second.bottomOnly) return first.bottomOnly;
         if (first.maxLoadOnTop.has_value() != second.maxLoadOnTop.has_value())
             return !first.maxLoadOnTop.has_value();

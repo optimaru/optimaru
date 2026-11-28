@@ -40,6 +40,7 @@ def test_the_field_names_are_the_contract():
         "items",
         "min_support_ratio",
         "stacking_rules",
+        "group_rules",
         "score_hard",
         "score_soft",
         "containers_used",
@@ -76,6 +77,8 @@ def test_the_field_names_are_the_contract():
         "bottom_only",
         "max_stack_layers",
         "stack_group",
+        "priority",
+        "optional",
         "container",
         "sequence",
         "x",
@@ -96,8 +99,9 @@ def test_the_defaults():
     assert ItemModel(id="a", length=1, width=1, height=1).weight == 0
     bare = ItemModel(id="a", length=1, width=1, height=1)
     assert (bare.bottom_only, bare.max_stack_layers, bare.stack_group) == (False, None, None)
+    assert (bare.priority, bare.optional) == (1, False)
     assert (container.max_stack_height, container.max_offset_length, container.max_offset_width) == (None, None, None)
-    assert model.stacking_rules == []
+    assert model.stacking_rules == [] and model.group_rules == []
     assert (item.container, item.sequence, item.x, item.placed_length) == (None, None, None, None)
 
 
@@ -244,6 +248,13 @@ def test_solve_request_is_solve_with_the_request_settings():
         (lambda data: data["containers"][0].update(max_offset_width=-0.1), "greater than or equal to 0"),
         (lambda data: data.update(stacking_rules=[{"top": "", "bottom": "food"}]), "at least 1 character"),
         (lambda data: data.update(stacking_rules=[{"top": "a", "bottom": "b", "allowed": True}]), "Extra inputs"),
+        (lambda data: data["items"][0].update(priority=0), "greater than or equal to 1"),
+        (lambda data: data["items"][0].update(priority=1_000_001), "less than or equal to 1000000"),
+        (lambda data: data.update(group_rules=[{"id": "nobody", "all_or_none": True}]), "no item has this group"),
+        (
+            lambda data: data.update(group_rules=[{"id": "stop-1"}, {"id": "stop-1", "single_container": True}]),
+            "group rule ids must be unique",
+        ),
     ],
 )
 def test_a_bad_model_is_refused(change, message):
@@ -286,3 +297,22 @@ def test_the_stacking_inputs_go_through_to_the_engine_and_back():
     assert not (by_id["chem"].z == 4 and (by_id["chem"].x, by_id["chem"].y) == (by_id["food"].x, by_id["food"].y))
     assert solved.stacking_rules == model.stacking_rules
     assert ContainerLoadingProblemModel.from_core(solved.to_core()).containers[0].max_stack_height == 8
+
+
+def test_priorities_optional_items_and_group_rules_go_through_to_the_engine_and_back():
+    model = ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [{"id": "c", "length": 8, "width": 4, "height": 4}],
+            "items": [
+                {"id": "a", "length": 4, "width": 4, "height": 4, "priority": 3, "group": "g"},
+                {"id": "b", "length": 4, "width": 4, "height": 4, "optional": True, "group": "g"},
+            ],
+            "group_rules": [{"id": "g", "all_or_none": True, "single_container": True}],
+        }
+    )
+    core = model.to_core()
+    assert core.group_rules == [("g", True, True)]
+    assert (core.items[0].priority, core.items[1].optional) == (3, True)
+    back = ContainerLoadingProblemModel.from_core(core)
+    assert back.group_rules == model.group_rules
+    assert (back.items[0].priority, back.items[1].optional) == (3, True)

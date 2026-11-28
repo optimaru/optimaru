@@ -24,7 +24,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def random_problem(seed: int) -> cl.ContainerLoadingProblem:
     """Boxes with sides of 1 to 6 for a few spaces of two sizes, with every optional field in use
-    (stacking rules, layer limits, bottom_only, stack heights and balance limits included)."""
+    (stacking rules, layer limits, bottom_only, stack heights, balance limits, priorities,
+    optional items and group rules included)."""
     rng = random.Random(seed)
     containers = [
         cl.Container(
@@ -54,12 +55,20 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             bottom_only=rng.random() < 0.1,
             max_stack_layers=rng.choice([None, None, None, 1, 2, 3]),
             stack_group=rng.choice([None, "food", "chem"]),
+            priority=rng.choice([1, 1, 2, 5]),
+            optional=rng.random() < 0.25,
         )
         for i in range(rng.randint(8, 40))
     ]
     rules = rng.choice([[], [("chem", "food")], [("chem", "food"), ("food", "food")]])
+    groups = sorted({item.group for item in items if item.group is not None})
+    group_rules = [(group, rng.random() < 0.5, rng.random() < 0.5) for group in groups if rng.random() < 0.7]
     return cl.ContainerLoadingProblem(
-        containers, items, min_support_ratio=rng.choice([0.5, 0.8, 1.0]), stacking_rules=rules
+        containers,
+        items,
+        min_support_ratio=rng.choice([0.5, 0.8, 1.0]),
+        stacking_rules=rules,
+        group_rules=group_rules,
     )
 
 

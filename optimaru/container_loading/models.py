@@ -34,6 +34,7 @@ __all__ = [
     "ContainerLoadingProblemModel",
     "ContainerLoadingRequest",
     "ContainerModel",
+    "GroupRuleModel",
     "ItemModel",
     "StackingRuleModel",
     "parameter_uses",
@@ -44,6 +45,8 @@ __all__ = [
 #: The largest length and the largest weight the engine takes (`_core` refuses more).
 MAX_LENGTH = 1_000_000
 MAX_WEIGHT = 1_000_000_000
+#: The largest item priority.
+MAX_PRIORITY = 1_000_000
 #: The largest weight limit (`max_weight`, `max_load_on_top`): what a 64-bit integer holds.
 MAX_LIMIT = 2**63 - 1
 
@@ -92,6 +95,19 @@ class ItemModel(StrictModel):
     )
     stack_group: str | None = Field(
         default=None, min_length=1, description="The group the problem's stacking_rules name."
+    )
+    priority: int = Field(
+        default=1,
+        ge=1,
+        le=MAX_PRIORITY,
+        description="What leaving it out costs: an unplaced item counts its priority (1 = count items).",
+    )
+    optional: bool = Field(
+        default=False,
+        description=(
+            "Loaded where there is room: left out, it costs optional_item_cost (soft) instead of "
+            "unplaced_item_cost, and its weight does not count against max_weight."
+        ),
     )
 
     container: str | None = Field(
@@ -194,6 +210,18 @@ class StackingRuleModel(StrictModel):
     bottom: str = Field(min_length=1, description="The stack group of the item it may not stand on.")
 
 
+class GroupRuleModel(StrictModel):
+    """How the items whose `group` is `id` are loaded. A rule with both flags false does nothing."""
+
+    id: str = Field(min_length=1, description="The group: an item's `group`.")
+    all_or_none: bool = Field(
+        default=False, description="Load every item of the group or none (incomplete_group_cost)."
+    )
+    single_container: bool = Field(
+        default=False, description="Load the group's items in one container (single_container_cost)."
+    )
+
+
 class ContainerLoadingProblemModel(StrictModel):
     """The containers and the items to load into them. The score fields, `containers_used`
     and `unplaced_items` are outputs."""
@@ -210,15 +238,19 @@ class ContainerLoadingProblemModel(StrictModel):
         default_factory=list,
         description="Pairs of stack groups where the top one may not stand on the bottom one; anything else may.",
     )
+    group_rules: list[GroupRuleModel] = Field(
+        default_factory=list, description="How the items of a group are loaded: all or none, in one container."
+    )
     score_hard: int | None = Field(
         default=None,
         description=(
             "Negative weighted hard score (unplaced items, weight and stacking limits, stacking rules, "
-            "unloading order, centre of gravity limits)."
+            "unloading order, centre of gravity limits, group rules)."
         ),
     )
     score_soft: float | None = Field(
-        default=None, description="Negative weighted soft score (cost of the containers used, split groups)."
+        default=None,
+        description="Negative weighted soft score (cost of the containers used, optional items left out, split groups).",
     )
     containers_used: int | None = Field(default=None, ge=0, description="Containers that hold a placed item.")
     unplaced_items: list[str] | None = Field(default=None, description="Ids of the items that are not placed.")
@@ -232,6 +264,13 @@ class ContainerLoadingProblemModel(StrictModel):
         known = set(item_ids)
         if len(item_ids) != len(known):
             raise ValueError("item ids must be unique")
+        groups = {item.group for item in self.items if item.group is not None}
+        ruled = [rule.id for rule in self.group_rules]
+        if len(ruled) != len(set(ruled)):
+            raise ValueError("group rule ids must be unique")
+        for group in ruled:
+            if group not in groups:
+                raise ValueError(f"group rule {group!r}: no item has this group")
         listed: set[str] = set()
         for container in self.containers:
             for item_id in container.loading_order():
@@ -279,11 +318,14 @@ class ContainerLoadingProblemModel(StrictModel):
                     bottom_only=item.bottom_only,
                     max_stack_layers=item.max_stack_layers,
                     stack_group=item.stack_group,
+                    priority=item.priority,
+                    optional=item.optional,
                 )
                 for item in self.items
             ],
             min_support_ratio=self.min_support_ratio,
             stacking_rules=[(rule.top, rule.bottom) for rule in self.stacking_rules],
+            group_rules=[(rule.id, rule.all_or_none, rule.single_container) for rule in self.group_rules],
         )
 
     @classmethod
@@ -333,6 +375,8 @@ class ContainerLoadingProblemModel(StrictModel):
                     bottom_only=item.bottom_only,
                     max_stack_layers=item.max_stack_layers,
                     stack_group=item.stack_group,
+                    priority=item.priority,
+                    optional=item.optional,
                     **(
                         {
                             "container": containers[item.container].id,
@@ -352,6 +396,10 @@ class ContainerLoadingProblemModel(StrictModel):
             ],
             min_support_ratio=problem.min_support_ratio,
             stacking_rules=[StackingRuleModel(top=top, bottom=bottom) for top, bottom in problem.stacking_rules],
+            group_rules=[
+                GroupRuleModel(id=group, all_or_none=all_or_none, single_container=single)
+                for group, all_or_none, single in problem.group_rules
+            ],
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
             containers_used=problem.containers_used(),
@@ -366,7 +414,10 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
     (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
     docs/use-cases/README.md. The sizes and `min_support_ratio` are read by the decoder,
     whatever the selection, and so are `bottom_only` and `max_stack_height`; `cost` is
-    `used_container_cost`'s own scale."""
+    `used_container_cost`'s own scale. `optional` needs optional_item_cost although it also
+    changes what unplaced_item_cost and container_weight_cost count and what the decoder leaves
+    out: without the cost an optional item left out would count nowhere (pick it at weight 0
+    to mean that)."""
     uses = []
     for container in problem.containers:
         where = f"container {container.id}"
@@ -388,6 +439,16 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
         for field in ("max_stack_layers", "stack_group"):
             if getattr(item, field) is not None:
                 uses.append(ParameterUse(where, field, None, ("stacking_rule_cost",)))
+        if item.optional:
+            uses.append(ParameterUse(where, "optional", False, ("optional_item_cost",)))
+        if item.priority != 1:
+            uses.append(ParameterUse(where, "priority", 1, ("unplaced_item_cost", "optional_item_cost")))
+    for rule in problem.group_rules:
+        where = f"group rule {rule.id}"
+        if rule.all_or_none:
+            uses.append(ParameterUse(where, "all_or_none", False, ("incomplete_group_cost",)))
+        if rule.single_container:
+            uses.append(ParameterUse(where, "single_container", False, ("single_container_cost",)))
     return uses
 
 
@@ -461,11 +522,14 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 bottom_only=item.bottom_only,
                 max_stack_layers=item.max_stack_layers,
                 stack_group=item.stack_group,
+                priority=item.priority,
+                optional=item.optional,
             )
             for item in problem.items
         ],
         min_support_ratio=problem.min_support_ratio,
         stacking_rules=[rule.model_copy() for rule in problem.stacking_rules],
+        group_rules=[rule.model_copy() for rule in problem.group_rules],
     )
 
 

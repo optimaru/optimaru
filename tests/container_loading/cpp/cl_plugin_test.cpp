@@ -121,6 +121,17 @@ ContainerLoadingProblem busyProblem(std::uint64_t seed, int containers = 4, int 
         if (more() % 2 == 0) item.stackGroup = "s" + std::to_string(more() % 3);
     }
     p.stackingRules = {{"s0", "s1"}, {"s1", "s1"}};
+    for (Item& item : p.items) {
+        if (more() % 4 == 0) item.optional = true;
+        if (more() % 3 == 0) item.priority = 1 + static_cast<int>(more() % 4);
+    }
+    std::vector<std::string> named;
+    for (const Item& item : p.items) {
+        if (item.group && std::find(named.begin(), named.end(), *item.group) == named.end())
+            named.push_back(*item.group);
+    }
+    for (std::size_t g = 0; g < named.size(); ++g)
+        p.groupRules.push_back({named[g], g % 2 == 0, g % 3 != 2});
     p.containers[0].maxStackHeight = 7;
     p.containers[1].maxOffsetLength = 0.2;
     p.containers[2].maxOffsetWidth = 0.3;
@@ -357,6 +368,47 @@ void verifyRawCostsByHand() {
               "balanceLimitCost: 0 at the limit");
     }
     {
+        // optionalItemCost and the priorities: in a space with room for one
+        // cube, an optional cube of priority 3 left out.
+        ContainerLoadingProblem p;
+        addContainer(p, 4, 4, 4);
+        addContainer(p, 4, 4, 4);
+        p.containers[0].items = {addItem(p, 4, 4, 4), addItem(p, 4, 4, 4)};
+        itemOf(p, 1).optional = true;
+        itemOf(p, 1).priority = 3;
+        check(rawCosts(p, "optionalItemCost") == std::vector<double>({3.0, 0.0}) &&
+                      rawCosts(p, "unplacedItemCost") == std::vector<double>({0.0, 0.0}),
+              "optionalItemCost: its priority, and nothing in unplacedItemCost");
+        itemOf(p, 1).optional = false;
+        check(rawCosts(p, "optionalItemCost") == std::vector<double>({0.0, 0.0}) &&
+                      rawCosts(p, "unplacedItemCost") == std::vector<double>({3.0, 0.0}),
+              "unplacedItemCost: a required item counts its priority");
+    }
+    {
+        // incompleteGroupCost and singleContainerCost: globals, one total. A
+        // group of three in containers with room for one cube each.
+        ContainerLoadingProblem p;
+        for (int c = 0; c < 3; ++c) addContainer(p, 4, 4, 4);
+        for (int i = 0; i < 4; ++i) addItem(p, 4, 4, 4);
+        for (int i = 0; i < 3; ++i) itemOf(p, i).group = "order";
+        p.containers[0].items = {0};
+        p.containers[1].items = {1};
+        p.containers[2].items = {3, 2};
+        p.groupRules = {{"order", true, true}};
+        check(rawCosts(p, "incompleteGroupCost") == std::vector<double>{1.0} &&
+                      rawCosts(p, "singleContainerCost") == std::vector<double>{1.0},
+              "the group: 2 of 3 placed (1), in two containers (1)");
+        p.containers[1].items = {};
+        p.containers[2].items = {3, 1, 2};
+        check(rawCosts(p, "incompleteGroupCost") == std::vector<double>{1.0} &&
+                      rawCosts(p, "singleContainerCost") == std::vector<double>{0.0},
+              "1 of 3 placed costs 1; in one container, 0");
+        p.containers[0].items = {};
+        p.containers[2].items = {3, 0, 1, 2};
+        check(rawCosts(p, "incompleteGroupCost") == std::vector<double>{0.0},
+              "none of it placed costs 0");
+    }
+    {
         // usedContainerCost: the container's cost when something stands in it.
         ContainerLoadingProblem p;
         addContainer(p, 4, 4, 4);
@@ -435,7 +487,7 @@ void verifyCatalog() {
     const auto rows = defaultConstraints().info();
     const optimaru::Level hard = optimaru::Level::Hard;
     const optimaru::Level soft = optimaru::Level::Soft;
-    check(rows.size() == 10 &&
+    check(rows.size() == 13 &&
                   rowIs<UnplacedItemCost>(rows[0], "unplacedItemCost", hard, 1.0, false) &&
                   rowIs<ContainerWeightCost>(rows[1], "containerWeightCost", hard, 1.0, false) &&
                   rowIs<StackingLoadCost>(rows[2], "stackingLoadCost", hard, 1.0, false) &&
@@ -443,12 +495,16 @@ void verifyCatalog() {
                   rowIs<UnloadingOrderCost>(rows[4], "unloadingOrderCost", hard, 1.0, false) &&
                   rowIs<BalanceLimitCost>(rows[5], "balanceLimitCost", hard, 1.0, false),
           "info(): six hard constraints at weight 1");
-    check(rows.size() == 10 &&
+    check(rows.size() == 13 &&
                   rowIs<UsedContainerCost>(rows[6], "usedContainerCost", soft, 1.0, false) &&
-                  rowIs<UsedLengthCost>(rows[7], "usedLengthCost", soft, 0.0, false) &&
-                  rowIs<LoadBalanceCost>(rows[8], "loadBalanceCost", soft, 0.0, false) &&
-                  rowIs<GroupSplitCost>(rows[9], "groupSplitCost", soft, 1.0, true),
-          "info(): four soft ones, two of them opt-in at weight 0, the global one last");
+                  rowIs<OptionalItemCost>(rows[7], "optionalItemCost", soft, 1.0, false) &&
+                  rowIs<UsedLengthCost>(rows[8], "usedLengthCost", soft, 0.0, false) &&
+                  rowIs<LoadBalanceCost>(rows[9], "loadBalanceCost", soft, 0.0, false),
+          "info(): four soft unit constraints, two of them opt-in at weight 0");
+    check(rows.size() == 13 && rowIs<GroupSplitCost>(rows[10], "groupSplitCost", soft, 1.0, true) &&
+                  rowIs<IncompleteGroupCost>(rows[11], "incompleteGroupCost", hard, 1.0, true) &&
+                  rowIs<SingleContainerCost>(rows[12], "singleContainerCost", hard, 1.0, true),
+          "info(): the three globals last");
     check(!throwsInvalid([] { defaultConstraints().soft("unplacedItemCost"); }) &&
                   !throwsInvalid([] { defaultConstraints().hard("groupSplitCost"); }),
           "every level flips both ways");
@@ -546,7 +602,7 @@ void verifyConstraintTotals() {
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
                   std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraint_totals().size() == 10, "one total per assembled component");
+    check(calculator.constraint_totals().size() == 13, "one total per assembled component");
     std::printf("\n");
 }
 
@@ -574,6 +630,12 @@ ConstraintAssembly weightedAssembly() {
     assembly.add_instances(std::move(copyOf("groupSplitCost")
                                              .weight("groupSplitCost", 2.0)
                                              .exponent("groupSplitCost", 2.0)));
+    assembly.add_instances(std::move(copyOf("incompleteGroupCost")
+                                             .soft("incompleteGroupCost")
+                                             .weight("incompleteGroupCost", 2.0)
+                                             .exponent("incompleteGroupCost", 2.0)));
+    assembly.add_instances(std::move(
+            copyOf("optionalItemCost").hard("optionalItemCost").weight("optionalItemCost", 3.0)));
     assembly.add_instances(std::move(copyOf("balanceLimitCost")
                                              .soft("balanceLimitCost")
                                              .weight("balanceLimitCost", 0.01)

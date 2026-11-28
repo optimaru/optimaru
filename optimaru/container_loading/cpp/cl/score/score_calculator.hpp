@@ -10,7 +10,7 @@ namespace cl {
 // The raw cost of every constraint on one solution, from one full recompute:
 // each member is named after its constraint's registry name
 // (cl/constraints/<subject>_cost.hpp) and holds that constraint's raw cost
-// summed over the containers (groupSplitCost: over the groups). toScore()
+// summed over the containers (the three globals: over the groups). toScore()
 // applies the components' default weights and levels, so the two opt-in costs
 // (weight 0) are reported here and leave the score alone.
 struct ConstraintTotals {
@@ -20,7 +20,10 @@ struct ConstraintTotals {
     std::int64_t stackingRuleCost = 0;     // hard: pairs against a rule + layers above a limit
     std::int64_t unloadingOrderCost = 0;   // hard: pairs where a later item blocks an earlier one
     std::int64_t balanceLimitCost = 0;     // hard: centre of gravity beyond its limits, percent
+    std::int64_t incompleteGroupCost = 0;  // hard: all-or-none groups loaded in part
+    std::int64_t singleContainerCost = 0;  // hard: one-container groups in several, beyond one
     double usedContainerCost = 0.0;        // soft: cost of the containers holding a placed item
+    std::int64_t optionalItemCost = 0;     // soft: priorities of the optional items left out
     std::int64_t groupSplitCost = 0;       // soft: containers a group is in, beyond its first
     std::int64_t usedLengthCost = 0;       // soft, opt-in: used length, summed
     std::int64_t loadBalanceCost = 0;      // soft, opt-in: centre-of-gravity offsets, summed

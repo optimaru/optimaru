@@ -1,7 +1,8 @@
 // Container-loading tests, engine test/ style: check() + a non-zero exit on any failure.
 //   (a) the decoder by hand: the (x, z, y) order of the points, the support
 //       rule, the rotations, which orientation is taken, an item that finds
-//       no place, bottomOnly, maxStackHeight, stacking rules and layer limits
+//       no place, bottomOnly, maxStackHeight, stacking rules and layer
+//       limits, an optional item above the weight limit
 //   (b) the decoder on random lists, short and long, a third of them with
 //       stacking rules, layer limits, bottomOnly items and a stack height:
 //       every decode is a valid loading (inside the container and below its
@@ -12,7 +13,8 @@
 //       down, shared by contact area, exact at loads of 5.6e10), unloading
 //       order (in front, on top),
 //       used length, load balance, stacking rules and layer limits, the
-//       balance limit
+//       balance limit, priorities and optional items, all-or-none and
+//       single-container groups
 //   (d) PackingCache: what it returns is decode()'s result, a repeated list
 //       is a hit, changed facts drop the decodes
 //   (e) ScoreCalculator: prepare's refusals, the derived fields, the totals
@@ -467,6 +469,29 @@ void verifyDecoderByHand() {
         check(at(q.items[1], 4, 0, 0) && at(q.items[2], 0, 0, 4),
               "a box that allows one layer stays on the floor, and nothing on it");
     }
+    {
+        // Optional items and the weight limit: 6 + 6 against 10. A second
+        // required item is placed (and overweight); a second optional one is
+        // left out although there is room.
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 4, 4);
+        p.containers[0].maxWeight = 10;
+        addItem(p, 4, 4, 4, Rotation::Fixed, 6);
+        addItem(p, 4, 4, 4, Rotation::Fixed, 6);
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(p.items[1].isPlaced() && ScoreCalculator::calculateTotals(p).containerWeightCost == 2,
+              "a required item is placed whatever it weighs");
+        p.items[1].optional = true;
+        ScoreCalculator::score(p);
+        const ConstraintTotals totals = ScoreCalculator::calculateTotals(p);
+        check(!p.items[1].isPlaced() && totals.containerWeightCost == 0 &&
+                      totals.optionalItemCost == 1 && totals.unplacedItemCost == 0,
+              "an optional item that would go over the limit is left out, and its weight with it");
+        p.containers[0].maxWeight = 12;
+        ScoreCalculator::score(p);
+        check(p.items[1].isPlaced(), "within the limit it is loaded");
+    }
     std::printf("\n");
 }
 
@@ -711,6 +736,52 @@ void verifyCostsByHand() {
               "layers: a box across two bases tops both columns");
     }
     {
+        // Priorities: three cubes for room for two; the third, of priority 5,
+        // costs 5. Optional, it costs 5 in optionalItemCost and nothing in
+        // unplacedItemCost, and its weight leaves the list's.
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 4, 4);
+        addItem(p, 4, 4, 4, Rotation::Fixed, 1);
+        addItem(p, 4, 4, 4, Rotation::Fixed, 1);
+        const int third = addItem(p, 4, 4, 4, Rotation::Fixed, 9);
+        p.items[static_cast<std::size_t>(third)].priority = 5;
+        p.containers[0].maxWeight = 2;
+        loadAll(p);
+        ConstraintTotals totals = ScoreCalculator::calculateTotals(p);
+        check(totals.unplacedItemCost == 5 && totals.containerWeightCost == 9,
+              "priority: an unplaced item counts its priority");
+        p.items[static_cast<std::size_t>(third)].optional = true;
+        totals = ScoreCalculator::calculateTotals(p);
+        check(totals.unplacedItemCost == 0 && totals.optionalItemCost == 5 &&
+                      totals.containerWeightCost == 0,
+              "optional: counted soft, its weight out of the load");
+    }
+    {
+        // Groups: "order" of three cubes in containers with room for one
+        // each. All or none: 2 placed and 1 left out cost 1; one container:
+        // two hold it, so 1.
+        ContainerLoadingProblem p;
+        addContainer(p, 4, 4, 4);
+        addContainer(p, 4, 4, 4);
+        for (int i = 0; i < 3; ++i) addItem(p, 4, 4, 4);
+        p.items[0].group = p.items[1].group = p.items[2].group = "order";
+        p.containers[0].items = {0, 2};
+        p.containers[1].items = {1};
+        p.groupRules = {{"order", true, true}};
+        ConstraintTotals totals = ScoreCalculator::calculateTotals(p);
+        check(totals.incompleteGroupCost == 1 && totals.singleContainerCost == 1,
+              "groups: two of three placed costs 1; placed in two containers costs 1");
+        p.containers[0].items = {0, 1, 2};
+        p.containers[1].items = {};
+        totals = ScoreCalculator::calculateTotals(p);
+        check(totals.incompleteGroupCost == 1 && totals.singleContainerCost == 0,
+              "groups: one placed and two left out costs 1; one container holds the placed one");
+        p.groupRules = {{"order", false, false}};
+        totals = ScoreCalculator::calculateTotals(p);
+        check(totals.incompleteGroupCost == 0 && totals.singleContainerCost == 0,
+              "groups: a rule that asks for nothing costs nothing");
+    }
+    {
         // The balance limit. One item of 4 x 4 in the corner of an 8 x 8
         // floor: its centre (2, 2) is half of the half size off along both
         // axes. Limits 0.2 along and 0.5 across: 30 percent over.
@@ -890,6 +961,17 @@ void verifyScoreCalculator() {
           }) && broken([](ContainerLoadingProblem& p) { p.stackingRules = {{"", "food"}}; }),
           "a layer limit below 1, a stack height outside 1..1'000'000, an offset limit outside "
           "0..1 and a rule without a group are refused");
+    check(broken([](ContainerLoadingProblem& p) {
+              p.items[0].priority = 0;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.items[0].priority = kMaxPriority + 1;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.groupRules = {{"nobody", true, false}};
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.groupRules = {{*p.items[0].group, true, false}, {*p.items[0].group, false, true}};
+          }),
+          "a priority outside 1..1'000'000, a group rule for no item's group and a group ruled "
+          "twice are refused");
 
     // Two pallets, hand-built: weight above the limit, a group over both, a
     // container cost.

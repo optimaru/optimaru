@@ -59,10 +59,12 @@ namespace cl {
 //     the room allows. The loads passed down are tracked as the items are
 //     placed: an item placed later under an overhang does not take load from
 //     the item above it, which the stacking cost on the result does count.
+//   - An optional item whose weight would put the items placed so far above
+//     the container's maxWeight is unplaced, wherever there is room.
 //
 // The decode is a pure function of (problem facts, container, list in order):
-// it reads no weight limit of a container and nothing of the other
-// containers. The costs are computed on its result.
+// it reads the container's weight limit only for optional items, and nothing
+// of the other containers. The costs are computed on its result.
 //
 // It is also a function of the list's prefix: item k's place depends on items
 // 0 .. k - 1 only. A Packing keeps what a decode needs to go on from any
@@ -147,6 +149,10 @@ struct Packing {
     mutable int balancePerMille = -1;
     mutable std::int64_t stackingViolations = -1;
     mutable std::int64_t balanceExcess = -1;
+    // Only with optional items or priorities (unplacedCost < 0 = not yet).
+    mutable std::int64_t unplacedCost = -1;
+    mutable std::int64_t optionalCost = 0;
+    mutable std::int64_t optionalWeight = 0;
 };
 
 // Decode `members` as the loading order of container `container` into `out`.
@@ -166,6 +172,17 @@ void measureRoom(const ContainerLoadingProblem& problem, int container, const Pa
 // Each is the raw cost of the constraint of the same name
 // (cl/constraints/<name>.hpp), written once here: the components and
 // ScoreCalculator both call these.
+
+// unplacedItemCost: over the unplaced items of the list that are not
+// optional, their priorities (the count of them while every priority is 1).
+std::int64_t unplacedCost(const ContainerLoadingProblem& problem, const Packing& packing);
+
+// optionalItemCost: over the unplaced optional items, their priorities.
+std::int64_t optionalCost(const ContainerLoadingProblem& problem, const Packing& packing);
+
+// The weight of the unplaced optional items of the list, which
+// containerWeightCost does not count.
+std::int64_t unplacedOptionalWeight(const ContainerLoadingProblem& problem, const Packing& packing);
 
 // stackingLoadCost: over the placed items that set maxLoadOnTop, the weight
 // resting on the item above that limit, rounded up to a whole unit. An item
