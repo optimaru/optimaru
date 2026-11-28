@@ -60,7 +60,10 @@ namespace cl {
 //     placed: an item placed later under an overhang does not take load from
 //     the item above it, which the stacking cost on the result does count.
 //   - An optional item whose weight would put the items placed so far above
-//     the container's maxWeight is unplaced, wherever there is room.
+//     the container's maxWeight is unplaced, wherever there is room, and so
+//     is an item whose allowedContainers leave this container out.
+//   - An item whose segregation class must keep a distance from a placed
+//     item's treats a place closer than that as one that breaks a limit.
 //
 // The decode is a pure function of (problem facts, container, list in order):
 // it reads the container's weight limit only for optional items, and nothing
@@ -149,6 +152,7 @@ struct Packing {
     mutable int balancePerMille = -1;
     mutable std::int64_t stackingViolations = -1;
     mutable std::int64_t balanceExcess = -1;
+    mutable std::int64_t segregationPairs = -1;
     // Only with optional items or priorities (unplacedCost < 0 = not yet).
     mutable std::int64_t unplacedCost = -1;
     mutable std::int64_t optionalCost = 0;
@@ -183,6 +187,12 @@ std::int64_t optionalCost(const ContainerLoadingProblem& problem, const Packing&
 // The weight of the unplaced optional items of the list, which
 // containerWeightCost does not count.
 std::int64_t unplacedOptionalWeight(const ContainerLoadingProblem& problem, const Packing& packing);
+
+// segregationCost: the pairs of placed items whose segregation classes may
+// not share a container, plus the pairs whose classes must keep a distance and
+// stand closer than it in the floor plane (the larger of the gaps between
+// their footprints along x and along y).
+std::int64_t segregationPairs(const ContainerLoadingProblem& problem, const Packing& packing);
 
 // stackingLoadCost: over the placed items that set maxLoadOnTop, the weight
 // resting on the item above that limit, rounded up to a whole unit. An item
@@ -243,8 +253,9 @@ public:
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
     // (sizes, rotations, the support ratio, the stack heights, bottomOnly, the
-    // layer limits and stacking rules, and the weights, load limits, unloading
-    // orders and balance limits the decode and the kept costs read) are not the ones
+    // layer limits and stacking rules, the allowed containers, the segregation
+    // classes and distances, and the weights, load limits, unloading orders and
+    // balance limits the decode and the kept costs read) are not the ones
     // the kept decodes were made for. The facts are compared through a
     // 64-bit hash, which is trusted: a collision (practically impossible)
     // would keep decodes made for other facts.

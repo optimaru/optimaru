@@ -74,6 +74,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `items` | list of `ItemModel` | the boxes |
 | `min_support_ratio` | float in (0, 1], 0.8 | share of an item's base that must rest on the floor or on other items |
 | `group_rules` | list of `GroupRuleModel`, [] | how the items of a group are loaded: `{"id": "order-17", "all_or_none": true, "single_container": true}` = every item whose `group` is `order-17` or none of them, and all in one container; `id` must be some item's `group`, each once |
+| `segregation_rules` | list of `SegregationRuleModel`, [] | classes kept apart: `{"a": "hazmat", "b": "food"}` = items of the two classes not in one container; with `"distance": 1000`, at least 1000 apart in the floor plane instead; `a` may equal `b`; a class no item has is accepted and keeps nothing apart (a standing catalog of rules) |
 | `stacking_rules` | list of `StackingRuleModel`, [] | pairs of stack groups: `{"top": "chemicals", "bottom": "food"}` = an item whose `stack_group` is `chemicals` may not stand on one whose `stack_group` is `food`; anything not listed may stand on anything |
 | `score_hard`, `score_soft` | output | the score (hard 0 = feasible) |
 | `containers_used` | output, int | containers that hold a placed item |
@@ -88,6 +89,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `max_weight` | int or None, None | weight it may hold; None = no limit |
 | `cost` | float >= 0, 1.0 | what using this container costs (1 = count containers) |
 | `max_stack_height` | int or None, None | how high the load may reach (a hand's height): the decoder fills up to the lower of it and `height`; None = up to `height` |
+| `tags` | list of non-empty str, [] | names an item's `allowed_containers` may use besides the id (`reefer`, a vehicle type); a tag may not be a container's id |
 | `max_offset_length`, `max_offset_width` | float in [0, 1] or None, None | how far the placed load's centre of gravity may lie from the container's centre, as a share of half the length (width); None = no limit |
 | `initial_items` | list of item ids, [] | warm start: the loading order to start from |
 | `items` | output, list of ids | the placed items, in loading order |
@@ -111,6 +113,8 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `max_stack_layers` | int >= 1 or None, None | at most this many items in a column through this item, itself included (see [Constraints](#constraints)); None = no limit |
 | `stack_group` | non-empty str or None, None | the group the problem's `stacking_rules` name |
 | `priority` | int, 1 to 1,000,000, 1 | what leaving it out costs: an unplaced item counts its priority |
+| `allowed_containers` | list of str, [] | the containers it may go in, by id or tag; [] = any; each name must be some container's id or tag |
+| `segregation_class` | non-empty str or None, None | the class the problem's `segregation_rules` name |
 | `optional` | bool, false | loaded where there is room: left out, it costs `optional_item_cost` (soft) instead of `unplaced_item_cost`, and its weight does not count against `max_weight` |
 | `container` | output, id or None | the container it stands in; None = not placed |
 | `sequence` | output, int | 0-based place in its container's loading order |
@@ -169,6 +173,9 @@ is the whole problem: ten parcels for three stops in one van):
   reach, and `stacking_rules` forbid one kind of item on another (chemicals on food).
   `max_offset_length` and `max_offset_width` put a hard limit on how far a load's centre of
   gravity may lie off the centre, which `load_balance_cost` only prefers.
+- **Which goods where.** `allowed_containers` sends chilled goods only to containers tagged
+  `reefer` (or to named ones), and `segregation_rules` keep classes apart: hazardous goods
+  and food not in one container, or a distance between them.
 - **More than fits.** When not everything fits, `priority` says what to leave out first, and
   `optional` marks what may be left out at a soft cost (fillers, next-day goods). A
   `group_rules` entry keeps an order whole or out (`all_or_none`) and in one container
@@ -202,6 +209,8 @@ is the whole problem: ten parcels for three stops in one van):
 - **Optional items and the weight limit.** An `optional` item whose weight would put the
   items placed so far in its container above `max_weight` is left out, wherever there is
   room: the only place where the decoder reads a weight limit.
+- **Allowed containers.** An item in the list of a container its `allowed_containers`
+  leave out finds no place there, and counts as unplaced.
 - **Floor and height.** A `bottom_only` item is tried only at points on the floor, and
   nothing is placed above a container's `max_stack_height`: where there is no such room,
   the item is unplaced.
@@ -212,7 +221,8 @@ is the whole problem: ten parcels for three stops in one van):
   have a placed item that leaves later in its own way; it *breaks a stacking limit* when
   the item's weight, passed down through what it stands on, would put more on a placed
   item than its `max_load_on_top`, when it would stand on an item (or have one stand on
-  it) against a stacking rule, or when it would make a column taller than its own
+  it) against a stacking rule, when it would stand closer to a placed item than a
+  segregation distance between their classes, or when it would make a column taller than its own
   `max_stack_layers` or that of an item under it (columns as the decode builds them: a
   box that ends under another's overhang is not seen carrying it, as for the load
   limits, while the cost counts it). The item goes to the first point where
@@ -228,7 +238,8 @@ is the whole problem: ten parcels for three stops in one van):
   ([Parameters and their costs](#parameters-and-their-costs)).
 - The decode reads the sizes, the rotations, `min_support_ratio`, `max_stack_height`,
   `bottom_only`, the unloading orders, the weights, the load limits, the layer limits and
-  the stacking rules, `optional` and, for optional items, the containers' `max_weight`,
+  the stacking rules, `allowed_containers`, the segregation distances, `optional` and, for
+  optional items, the containers' `max_weight`,
   and nothing of the balance limits or the groups. Whatever it does, every constraint is a cost computed on its result. So a hard
   cost of 0 means every one of them holds, and a solve that cannot reach 0 still returns a
   loading, with what is broken counted.
@@ -250,6 +261,7 @@ The score is the engine's `Score` type as it is, with no mapping.
 | `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: over its placed items with `max_load_on_top`, the weight resting on the item above that limit, rounded up per item |
 | `stacking_rule_cost` | `StackingRuleCost` | hard | 1 | per container: the pairs (a, b) of placed items where a stands on b and a stacking rule forbids a's `stack_group` on b's, plus, over the placed items with `max_stack_layers`, the layers the tallest column through the item has beyond that limit |
 | `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs (a, b) of placed items with `unload_order(a) < unload_order(b)` where b blocks a |
+| `segregation_cost` | `SegregationCost` | hard | 1 | per container: the pairs of its placed items whose classes a rule keeps out of one container, plus the pairs whose classes must keep a distance and stand closer than it |
 | `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: how far the placed items' centre of gravity lies from the container's centre beyond `max_offset_length` (in percent of half the length) plus beyond `max_offset_width` (in percent of half the width), each rounded up to a whole percent |
 | `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |
 | `optional_item_cost` | `OptionalItemCost` | soft | 1 | per container: the priorities of the optional items of its list that found no place |
@@ -261,7 +273,7 @@ The score is the engine's `Score` type as it is, with no mapping.
 
 Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
 `Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
-is a reward, and eleven of the thirteen are scored by default (`default_enabled`):
+is a reward, and twelve of the fourteen are scored by default (`default_enabled`):
 `used_length_cost` and `load_balance_cost` weigh 0 until a selection gives them a weight.
 `container_loading.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`). The unit constraints come first in
@@ -303,6 +315,14 @@ What the raw costs mean exactly:
   prefer the centre. One percent costs as much as an unplaced item at the default weights;
   give `BalanceLimitCost` a lower weight where the limit should give way to a box left
   out.
+- **Segregation.** Two placed items in one container whose `segregation_class`es a rule
+  without a `distance` names count one pair, whatever stands between them. With a
+  `distance`, they count when the gap between their footprints is less than it: the larger
+  of the gaps along x and across (two boxes in line 500 apart along x and overlapping
+  across are 500 apart; stacked or touching, 0). Of two rules for one pair of classes, the
+  one without a distance holds, else the larger distance. The decoder can steer only among
+  the corners the placed items make, so a distance longer than an item it can stand next
+  to is met by what goes between.
 - **Priorities and optional items.** An unplaced item counts its `priority` in
   `unplaced_item_cost`, or in `optional_item_cost` when it is `optional`. Three items of
   priority 1, 1 and 5 for room for two cost 1 when the solve leaves out one of the first
@@ -329,7 +349,7 @@ What the raw costs mean exactly:
 - **Used container.** A container whose list holds only unplaced items is not in use.
 - **The hard costs are in different units.** `unplaced_item_cost` counts items (times
   their priority), `incomplete_group_cost` items, `single_container_cost` containers,
-  `unloading_order_cost` counts pairs, `stacking_rule_cost` pairs and layers,
+  `unloading_order_cost` and `segregation_cost` count pairs, `stacking_rule_cost` pairs and layers,
   `balance_limit_cost` percent, and `container_weight_cost` and `stacking_load_cost`
   count weight units (grams in the guide's examples). With the
   default weights one gram over a limit weighs as much as one unplaced item, and a 10 kg
@@ -342,7 +362,8 @@ What the raw costs mean exactly:
 ### Parameters and their costs
 
 `max_weight`, `max_load_on_top`, `unload_order`, `group`, `max_stack_layers`,
-`stack_group`, `stacking_rules`, `max_offset_length`, `max_offset_width`, `priority`
+`stack_group`, `stacking_rules`, `segregation_class`, `segregation_rules`,
+`max_offset_length`, `max_offset_width`, `priority`
 (either `unplaced_item_cost` or `optional_item_cost` will do), `optional`
 (`optional_item_cost`: without it an optional item left out would count nowhere) and a
 group rule's `all_or_none` and `single_container` act only through their cost (a `stack_group` no rule names too: it is refused without
@@ -353,8 +374,8 @@ counts. `models.parameter_uses(model)` lists the fields an input sets, and
 [Parameters and their costs](../README.md#parameters-and-their-costs) has the table for
 every use case. It is checked where the input is the JSON model (`solve_request`,
 `solve(model)`); a compiled problem is solved as given. The sizes, `rotations`,
-`min_support_ratio`, `bottom_only` and `max_stack_height` are the decoder's and hold under
-every selection; `cost` is `used_container_cost`'s own scale.
+`min_support_ratio`, `bottom_only`, `max_stack_height`, `allowed_containers` and `tags`
+are the decoder's and hold under every selection; `cost` is `used_container_cost`'s own scale.
 
 ### Scoring and the Python API
 
@@ -376,17 +397,18 @@ every selection; `cost` is `used_container_cost`'s own scale.
   `custom_moves.repack`, `custom_moves.switch_container`, `on_new_best`, `full_assert`). Zero budget is
   `stop.time_limit_seconds = 0`; a fixed number of steps is `stop.step_limit = N`.
 - **Exponent granularity.** The engine shapes a unit constraint per unit and a global on
-  its total. The units are containers: the ten per-container constraints are shaped per
+  its total. The units are containers: the eleven per-container constraints are shaped per
   container (two overloads of 3 and 4 at exponent 2 cost 9 + 16, not 49), and the three
   globals shape their one total.
 - **`constraint_costs()` shape.** The standard C++-package dict `{name: {costs, weight,
   exponent, offset, clip, global, level, reward, level_flippable, name, label,
-  default_weight, default_level}}`. The ten per-container constraints list one cost per
+  default_weight, default_level}}`. The eleven per-container constraints list one cost per
   container, an empty one included; the three globals are `[total]`. Hard costs are
-  rounded per container, as the engine does. Three are scoped, and their entries name the
+  rounded per container, as the engine does. Four are scoped, and their entries name the
   containers they evaluate as `units`: `stacking_rule_cost` every container when an item
   sets `max_stack_layers` or a `stack_group` a rule names, else none, and
-  `balance_limit_cost` the containers with a `max_offset_*`, and `optional_item_cost`
+  `balance_limit_cost` the containers with a `max_offset_*`, `segregation_cost` every
+  container when some item's class is named by a rule, else none, and `optional_item_cost`
   every container when some item is optional, else none. A problem that uses none of them
   pays nothing for them per move; the two group-rule globals cost nothing per move either
   without a rule that sets a flag.
@@ -395,7 +417,9 @@ every selection; `cost` is `used_container_cost`'s own scale.
   outside 0..1,000,000,000, a negative `max_weight`, `max_load_on_top` or `cost`, a
   `max_stack_layers` outside 1..1,000,000,000, a `max_stack_height` outside 1..1,000,000, a `max_offset_*`
   outside 0..1, a stacking rule with an empty group, a `priority` outside 1..1,000,000, a
-  group rule for no item's group or a group ruled twice, an item listed twice and items
+  group rule for no item's group or a group ruled twice, `allowed_containers` naming no
+  container's id or tag, a segregation rule without a class or with a distance outside
+  1..1,000,000, an item listed twice and items
   without a container (`ValueError`; the pydantic model refuses
   the same). The bounds keep a volume inside 64 bits.
 - **The lists a problem comes with are the starting point.** A solve keeps them and
@@ -410,12 +434,12 @@ every selection; `cost` is `used_container_cost`'s own scale.
 
 Every constraint takes the knobs `weight`, `level`, `exponent` and, keyword-only,
 `offset` and `clip`, and may be picked several times. A raw cost `x` (per container for
-the ten unit constraints, the one total for each of the three globals) is shaped as
+the eleven unit constraints, the one total for each of the three globals) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every container below the offset, an empty one included); `offset=0` is the plain power
 shaping. `clip=False` with an offset is refused on hard, because hard 0 must mean no
-violation. On `stacking_rule_cost`, `balance_limit_cost` and `optional_item_cost`, `clip=False` shifts only the
+violation. On `stacking_rule_cost`, `balance_limit_cost`, `segregation_cost` and `optional_item_cost`, `clip=False` shifts only the
 containers they evaluate (the `units` of their `constraint_costs()` entries). Each pick is its own instance with its own knobs, its level included, and the
 instances add up:
 
@@ -450,7 +474,8 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   into the first container that *takes* it: one whose weight limit holds and whose decode,
   with the new item added, leaves no more items unplaced than before, no more weight on an
   item than it carries, no more items in the way of an earlier stop and no more stacking
-  rules or layer limits broken.
+  rules, layer limits or segregation rules broken. Only the containers its
+  `allowed_containers` name are tried.
   Containers are tried in this order: those that already hold an item of the item's
   group, the other containers in use, then the empty ones, cheapest per volume first. An
   item no container takes goes to the one with the most free volume. It is
@@ -473,8 +498,8 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   the construction's loading order and decoded; what finds no place goes on to the next
   container. The groups the two shared come out whole wherever they fit, and when
   everything fits the first container the second is empty. It is made only when every
-  load comes out clean (everything placed, no stacking limit, stacking rule or unloading
-  order broken).
+  load comes out clean (everything placed, no stacking limit, stacking rule, segregation
+  rule or unloading order broken).
 - **`SwitchContainerMove`** (`custom_moves.switch_container`; used only when the
   containers differ in size, cost or weight limit). The load of one container goes into
   empty containers of another kind that cost no more: as it is into one, or split, in its
@@ -502,7 +527,7 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   decoded again from the place it changes: item k's place depends on items 0 .. k - 1
   only, so a decode keeps what it needs to go on from any position
   (`cpp/cl/score/packing.hpp`). The constraints share one decode per container and list
-  (`PackingCache`), so ten constraints cost one decode, not ten.
+  (`PackingCache`), so eleven constraints cost one decode, not eleven.
 
 ### How good, how fast
 
@@ -647,8 +672,8 @@ read only where a container has no `items` yet.
   `optimaru::SolutionTraits` specialization; `model/demo_data.cpp`: the demo
 - `optimaru/container_loading/cpp/cl/score/packing.hpp`: the decoder (`decode`), the
   costs of one decoded container (`unplacedCost`, `optionalCost`, `stackingExcess`,
-  `stackingViolations`, `unloadingBlocks`, `balancePerMille`, `balanceExcess`) and
-  `PackingCache`
+  `stackingViolations`, `unloadingBlocks`, `balancePerMille`, `balanceExcess`,
+  `segregationPairs`) and `PackingCache`
 - `optimaru/container_loading/cpp/cl/score/score_calculator.hpp`: `prepare()` (the fact
   checks, the orientations in the decoder's order, the groups and the stack groups the
   rules name), `updateDerived()` and the full recompute
@@ -680,7 +705,7 @@ any shared prefix equal to one from scratch), the costs of a decoded container b
 checks and derived fields, the construction, the three moves (applied, undone, repeated)
 and the solver (a `ScoreChecks::Full` solve, a zero budget, parallel starts).
 `cl_plugin_test`: the default assembly against the full recompute on random loadings and
-over random moves (on problems with every input in use), raw costs by hand for all thirteen
+over random moves (on problems with every input in use), raw costs by hand for all fourteen
 constraints, the catalog, overrides and
 partial assemblies, `constraint_totals()`, every move preview against the applied score,
 and `ScoreChecks::Full` solves, with repeated and shifted components too.

@@ -98,6 +98,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
     std::vector<std::int64_t> excess(containerCount, 0);  // stacking excess
     std::vector<std::int64_t> blocks(containerCount, 0);  // unloading blocks
     std::vector<std::int64_t> rules(containerCount, 0);   // stacking rule violations
+    std::vector<std::int64_t> apart(containerCount, 0);   // segregation pairs
     for (std::size_t c = 0; c < containerCount; ++c) {
         const Container& container = problem.containers[c];
         for (int item : container.items)
@@ -109,6 +110,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
         excess[c] = stackingExcess(problem, packing);
         blocks[c] = unloadingBlocks(problem, packing);
         rules[c] = stackingViolations(problem, packing);
+        apart[c] = segregationPairs(problem, packing);
     }
     // The empty containers, cheapest per volume first.
     std::vector<int> byPrice(containerCount);
@@ -153,6 +155,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
         for (int c : candidates) {
             const auto index = static_cast<std::size_t>(c);
             const Container& container = problem.containers[index];
+            if (!problem.allowed(item, c)) continue;
             if (container.maxWeight && weight[index] + box.weight > *container.maxWeight) continue;
             if (volume[index] + box.volume() > container.volume()) continue;
             trial = container.items;
@@ -163,12 +166,19 @@ void constructLoading(ContainerLoadingProblem& problem) {
             if (stackingExcess(problem, packing) > excess[index]) continue;
             if (unloadingBlocks(problem, packing) > blocks[index]) continue;
             if (stackingViolations(problem, packing) > rules[index]) continue;
+            if (segregationPairs(problem, packing) > apart[index]) continue;
             chosen = c;
             break;
         }
         if (chosen < 0) {
+            // The one with the most free volume, of those it may go in (always some once the
+            // problem is validated: every allowed name is some container's; kept as a guard).
+            bool anyAllowed = false;
+            for (std::size_t c = 0; c < containerCount; ++c)
+                anyAllowed = anyAllowed || problem.allowed(item, static_cast<int>(c));
             std::int64_t mostFree = -1;
             for (std::size_t c = 0; c < containerCount; ++c) {
+                if (anyAllowed && !problem.allowed(item, static_cast<int>(c))) continue;
                 const std::int64_t free = problem.containers[c].volume() - volume[c];
                 if (free > mostFree) {
                     mostFree = free;
@@ -186,6 +196,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
         excess[home] = stackingExcess(problem, packing);
         blocks[home] = unloadingBlocks(problem, packing);
         rules[home] = stackingViolations(problem, packing);
+        apart[home] = segregationPairs(problem, packing);
     }
 }
 

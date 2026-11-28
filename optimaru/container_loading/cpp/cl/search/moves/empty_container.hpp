@@ -29,7 +29,8 @@ namespace cl {
 // and whose decode, with the item added where its unloading order asks,
 // places the item, leaves no more items unplaced than before, and has no more
 // weight above what an item carries, no more items in the way of an earlier
-// stop and no more stacking rules or layer limits broken than before (not the
+// stop and no more stacking rules, layer limits or segregation rules broken
+// than before (not the
 // balance limit, which a load half moved cannot be judged by). (The unplaced count is
 // compared, not the set: an item of the target may trade its place with one that had none. The hard
 // score is the same either way.)
@@ -107,13 +108,14 @@ public:
         excess_.assign(containerCount, 0);
         blocks_.assign(containerCount, 0);
         rules_.assign(containerCount, 0);
+        apart_.assign(containerCount, 0);
         moved_.clear();
         for (int item : members_) {
             const Item& box = problem.items[static_cast<std::size_t>(item)];
             for (auto target = used_.rbegin(); target != used_.rend(); ++target) {
                 const int c = target->container;
                 const auto index = static_cast<std::size_t>(c);
-                if (c == source) continue;
+                if (c == source || !problem.allowed(item, c)) continue;
                 const Container& container = problem.containers[index];
                 if (volume_[index] + static_cast<double>(box.volume()) >
                     static_cast<double>(container.volume()))
@@ -130,6 +132,7 @@ public:
                     excess_[index] = stackingExcess(problem, before);
                     blocks_[index] = unloadingBlocks(problem, before);
                     rules_[index] = stackingViolations(problem, before);
+                    apart_[index] = segregationPairs(problem, before);
                 }
                 trial_ = plan_[index];
                 const int position = insertPosition(problem, trial_, item);
@@ -145,9 +148,12 @@ public:
                 if (blocks > blocks_[index]) continue;
                 const std::int64_t rules = stackingViolations(problem, after);
                 if (rules > rules_[index]) continue;
+                const std::int64_t apart = segregationPairs(problem, after);
+                if (apart > apart_[index]) continue;
                 excess_[index] = excess;
                 blocks_[index] = blocks;
                 rules_[index] = rules;
+                apart_[index] = apart;
                 unplaced_[index] = after.unplaced();
                 plan_[index].swap(trial_);
                 volume_[index] += static_cast<double>(box.volume());
@@ -203,6 +209,7 @@ private:
     std::vector<std::int64_t> excess_;  // per target: stacking excess of its plan
     std::vector<std::int64_t> blocks_;  // per target: unloading blocks of its plan
     std::vector<std::int64_t> rules_;   // per target: stacking rule violations of its plan
+    std::vector<std::int64_t> apart_;   // per target: segregation pairs of its plan
     std::vector<int> trial_;
     std::vector<int> moved_;
     std::vector<int> remaining_;

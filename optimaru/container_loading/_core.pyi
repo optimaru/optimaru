@@ -13,7 +13,8 @@ caller's unit.
 Score (hard/soft, lexicographic), at the default weights: hard = -(items that found no
 place + weight above a container's max_weight + weight on an item above its
 max_load_on_top + stacking rules and layer limits broken + pairs where a later item
-blocks an earlier one + centre of gravity beyond its limits, in percent + all-or-none groups
+blocks an earlier one + centre of gravity beyond its limits, in percent + pairs kept apart
+by a segregation rule that are not + all-or-none groups
 loaded in part + one-container groups in several), soft = -(cost of the containers in use +
 optional items left out + containers a group is in beyond its first). An unplaced item counts
 its priority. The weights are the C++
@@ -43,7 +44,7 @@ class Rotation(Enum):
     """As given."""
 
 class Item:
-    """One box. The fields after `optional` are derived: `calculate_score` and every solve write them."""
+    """One box. The fields after `segregation_class` are derived: `calculate_score` and every solve write them."""
 
     def __init__(
         self,
@@ -61,6 +62,8 @@ class Item:
         stack_group: str | None = None,
         priority: int = 1,
         optional: bool = False,
+        allowed_containers: list[str] = ...,
+        segregation_class: str | None = None,
     ) -> None: ...
     id: str
     length: int
@@ -88,6 +91,11 @@ class Item:
     """Loaded where there is room: left out, it counts in optional_item_cost (soft), not in
     unplaced_item_cost, its weight does not count against max_weight, and the decoder leaves it
     out where it would put the placed weight above max_weight."""
+    allowed_containers: list[str]
+    """The containers it may go in, by id or tag; [] = any. In another container's list it finds
+    no place."""
+    segregation_class: str | None
+    """The class the problem's segregation_rules name."""
     @property
     def container(self) -> int:
         """Index of the container it stands in; -1 = not placed."""
@@ -125,6 +133,7 @@ class Container:
         max_stack_height: int | None = None,
         max_offset_length: float | None = None,
         max_offset_width: float | None = None,
+        tags: list[str] = ...,
     ) -> None: ...
     id: str
     length: int
@@ -142,6 +151,8 @@ class Container:
     of half the length (0 to 1). None = no limit."""
     max_offset_width: float | None
     """The same across, as a share of half the width. None = no limit."""
+    tags: list[str]
+    """Names an item's allowed_containers may use besides the id."""
     items: list[int]
     """The decision variable: item indices in loading order."""
     @property
@@ -171,7 +182,9 @@ class ContainerLoadingProblem:
     id, a size outside 1..1,000,000, a weight outside 0..1,000,000,000, a negative limit
     or cost, a max_stack_layers outside 1..1,000,000,000, a max_stack_height outside 1..1,000,000, an offset
     limit outside 0..1, a stacking rule with an empty group, a priority outside
-    1..1,000,000, a group rule for no item's group or a group ruled twice, an item listed
+    1..1,000,000, a group rule for no item's group or a group ruled twice, allowed_containers
+    naming no container's id or tag, a segregation rule without a class or with a distance
+    outside 1..1,000,000, an item listed
     twice, or items without a container."""
 
     def __init__(
@@ -181,6 +194,7 @@ class ContainerLoadingProblem:
         min_support_ratio: float = 0.8,
         stacking_rules: list[tuple[str, str]] = ...,
         group_rules: list[tuple[str, bool, bool]] = ...,
+        segregation_rules: list[tuple[str, str, int | None]] = ...,
     ) -> None: ...
     containers: list[Container]
     items: list[Item]
@@ -192,6 +206,9 @@ class ContainerLoadingProblem:
     group_rules: list[tuple[str, bool, bool]]
     """(group, all_or_none, single_container): load the items whose group is `group` all or
     none, and in one container."""
+    segregation_rules: list[tuple[str, str, int | None]]
+    """(a, b, distance): items of classes a and b in different containers (distance None), or
+    at least `distance` apart in the floor plane."""
     @property
     def score(self) -> Score: ...
     def loading(self) -> list[list[int]]:
@@ -401,7 +418,8 @@ class Solver:
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
     unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
-    unloading_order_cost, balance_limit_cost, used_container_cost, optional_item_cost,
+    unloading_order_cost, balance_limit_cost, segregation_cost, used_container_cost,
+    optional_item_cost,
     used_length_cost, load_balance_cost, group_split_cost, incomplete_group_cost,
     single_container_cost.
     The same names optimaru.container_loading.constraints uses."""
@@ -413,9 +431,9 @@ def constraint_costs(
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. The ten per-container
+    "default_weight": float, "default_level": str}}. The eleven per-container
     constraints list one cost per container, an empty one included (the scoped
-    stacking_rule_cost, balance_limit_cost and optional_item_cost also name the containers
+    stacking_rule_cost, balance_limit_cost, segregation_cost and optional_item_cost also name the containers
     they evaluate, `units`); the three globals (group_split_cost, incomplete_group_cost,
     single_container_cost) list their one total. None = the default constraints; a pick list (as for
     solve) scores exactly those picks, each entry carrying its pick's knobs, the k-th
@@ -436,7 +454,7 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order:
     unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
-    unloading_order_cost and balance_limit_cost (hard, 1), used_container_cost and
+    unloading_order_cost, balance_limit_cost and segregation_cost (hard, 1), used_container_cost and
     optional_item_cost (soft, 1), used_length_cost and
     load_balance_cost (soft, 0: opt-in, default_enabled False), group_split_cost
     (soft, 1, global), incomplete_group_cost and single_container_cost (hard, 1, global);

@@ -18,15 +18,15 @@ namespace cl {
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
-// The thirteen container-loading constraints, one small component each on the
+// The fourteen container-loading constraints, one small component each on the
 // engine's DecomposedObjective. This assembly is also the default path: a
 // solve without a selection scores with defaultConstraints() (there is no
 // hand-written incremental calculator beside it; ScoreCalculator is the full
 // recompute the assembly is checked against).
 //
 // Unit choice: with the sequence shape the calculator's unit is one list,
-// i.e. one container; members are its items IN LOADING ORDER. Ten of the
-// thirteen costs are sums over the containers and so UnitConstraints.
+// i.e. one container; members are its items IN LOADING ORDER. Eleven of the
+// fourteen costs are sums over the containers and so UnitConstraints.
 // groupSplitCost, incompleteGroupCost and singleContainerCost span containers
 // and are GlobalConstraints; the last two read the shared decodes too
 // (PlacedGroupConstraint below).

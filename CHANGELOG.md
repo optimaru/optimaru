@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Container loading: allowed containers and segregation.** Container `tags` and item
+  `allowed_containers` (ids or tags; [] = any, the decoder's: an item finds no place elsewhere),
+  and item `segregation_class` with the problem's `segregation_rules` (`{"a", "b", "distance"}`:
+  not in one container, or at least `distance` apart in the floor plane), scored by the new hard
+  constraint `segregation_cost`. The decoder steers away from places closer than a distance; the
+  construction tries only the allowed containers.
 - **Container loading: priorities, optional items and group rules.** New inputs, off by default:
   item `priority` (1 to 1,000,000, default 1: an unplaced item counts its priority in
   `unplaced_item_cost`), item `optional` (left out at a soft cost, the new `optional_item_cost`,

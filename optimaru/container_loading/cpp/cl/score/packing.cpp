@@ -440,6 +440,28 @@ bool breaksStacking(const ContainerLoadingProblem& problem, const Packing& packi
     return false;
 }
 
+// How far apart two footprints are in the floor plane: the larger of the gaps
+// along x and along y (0 where they overlap in both).
+int floorGap(int ax, int al, int ay, int aw, int bx, int bl, int by, int bw) {
+    const int gapX = std::max({0, bx - (ax + al), ax - (bx + bl)});
+    const int gapY = std::max({0, by - (ay + aw), ay - (by + bw)});
+    return std::max(gapX, gapY);
+}
+
+// Whether item `item` at `point` in orientation `o` would stand closer to a
+// placed item than a segregation rule's distance allows.
+bool tooClose(const ContainerLoadingProblem& problem, const Packing& packing, int item,
+              const Point& point, const Orientation& o) {
+    for (const Box& box : packing.boxes) {
+        if (problem.segregationOf[static_cast<std::size_t>(box.item)] < 0) continue;
+        const int keep = problem.separation(item, box.item);
+        if (keep > 0 && floorGap(point.x, o.length, point.y, o.width, box.x, box.length, box.y,
+                                 box.width) < keep)
+            return true;
+    }
+    return false;
+}
+
 void addPoint(Packing& packing, const Container& container, int x, int y, int z, int position) {
     if (x >= container.length || y >= container.width || z >= container.fillHeight) return;
     const bool inside = anyInRange(packing, x, x + 1, [&](const Box& box) {
@@ -620,7 +642,8 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     for (int position = keep; position < count; ++position) {
         const int item = members[static_cast<std::size_t>(position)];
         const Item& box = problem.items[static_cast<std::size_t>(item)];
-        if (weighed && box.optional && placedWeight + box.weight > *space.maxWeight) {
+        if ((weighed && box.optional && placedWeight + box.weight > *space.maxWeight) ||
+            !problem.allowed(item, container)) {
             out.boxOf[static_cast<std::size_t>(position)] = -1;
             continue;
         }
@@ -628,13 +651,18 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
         const int first = problem.orientationStart[static_cast<std::size_t>(item)];
         const int last = problem.orientationStart[static_cast<std::size_t>(item) + 1];
         // What a place may break: 0 nothing, 1 an unloading order, 2 a load
-        // limit, a stacking rule or a layer limit. Per class, the first point
-        // that takes the item in an orientation of that class, and of those orientations the one
-        // that divides the free room best (the earliest of equals). The search stops at the first
-        // point of class 0; without orders and limits every place is of class 0.
+        // limit, a stacking rule, a layer limit or a segregation distance. Per class, the first
+        // point that takes the item in an orientation of that class, and of those orientations the
+        // one that divides the free room best (the earliest of equals). The search stops at the
+        // first point of class 0; without orders and limits every place is of class 0.
         const bool ordered = problem.anyUnloadOrder && box.unloadOrder.has_value();
         const bool limited = problem.anyLoadLimit && box.weight > 0;
         const bool stacked = problem.anyStackRule || problem.anyLayerLimit;
+        const int itemClass = problem.anyApartDistance
+                                      ? problem.segregationOf[static_cast<std::size_t>(item)]
+                                      : -1;
+        const bool spaced =
+                itemClass >= 0 && problem.keepsDistance[static_cast<std::size_t>(itemClass)];
         const double weight = static_cast<double>(box.weight);
         // The highest base it can have: on the floor when bottomOnly.
         const int topBase = box.bottomOnly ? 0 : space.fillHeight - smallest;
@@ -659,7 +687,8 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
                 int kind = 0;
                 if ((limited &&
                      overloads(problem, out, weight, point, orientation, supports, added)) ||
-                    (stacked && breaksStacking(problem, out, item, point, orientation, reach)))
+                    (stacked && breaksStacking(problem, out, item, point, orientation, reach)) ||
+                    (spaced && tooClose(problem, out, item, point, orientation)))
                     kind = 2;
                 else if (ordered &&
                          blocks(problem, out.boxes, *box.unloadOrder, point, orientation))
@@ -713,6 +742,7 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     out.stackingViolations = -1;
     out.balanceExcess = -1;
     out.unplacedCost = -1;
+    out.segregationPairs = -1;
 }
 
 void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,
@@ -872,6 +902,29 @@ std::int64_t unplacedOptionalWeight(const ContainerLoadingProblem& problem,
     return packing.optionalWeight;
 }
 
+std::int64_t segregationPairs(const ContainerLoadingProblem& problem, const Packing& packing) {
+    if (packing.segregationPairs >= 0) return packing.segregationPairs;
+    packing.segregationPairs = 0;
+    if (!problem.anySegregation) return 0;
+    std::vector<const Box*> classed;
+    for (const Box& box : packing.boxes) {
+        if (problem.segregationOf[static_cast<std::size_t>(box.item)] >= 0) classed.push_back(&box);
+    }
+    std::int64_t pairs = 0;
+    for (std::size_t i = 0; i < classed.size(); ++i) {
+        for (std::size_t j = i + 1; j < classed.size(); ++j) {
+            const Box& a = *classed[i];
+            const Box& b = *classed[j];
+            const int keep = problem.separation(a.item, b.item);
+            if (keep == -1 || (keep > 0 && floorGap(a.x, a.length, a.y, a.width, b.x, b.length, b.y,
+                                                    b.width) < keep))
+                ++pairs;
+        }
+    }
+    packing.segregationPairs = pairs;
+    return pairs;
+}
+
 std::int64_t stackingViolations(const ContainerLoadingProblem& problem, const Packing& packing) {
     if (packing.stackingViolations >= 0) return packing.stackingViolations;
     packing.stackingViolations = 0;
@@ -1016,6 +1069,11 @@ std::uint64_t factsOf(const ContainerLoadingProblem& problem) {
     if (problem.anyStackRule) {
         for (int group : problem.stackGroupOf) hash.add(group);
         for (char rule : problem.forbidden) hash.add(static_cast<int>(rule));
+    }
+    for (char allowed : problem.allowedIn) hash.add(static_cast<int>(allowed));
+    if (problem.anySegregation) {
+        for (int segregation : problem.segregationOf) hash.add(segregation);
+        for (int keep : problem.apart) hash.add(keep);
     }
     return hash.value;
 }

@@ -358,6 +358,23 @@ def test_a_single_container_group_takes_the_dearer_container_that_holds_it():
     assert {whole.items[i].container for i in range(3)} == {2}
 
 
+def test_segregated_classes_are_kept_apart_and_items_go_where_allowed():
+    """Two vans: chemicals and food may not share one, and the chilled goods may go only in the
+    van tagged "reefer"."""
+    items = (
+        _cubes(2, segregation_class="chem", group="chem")
+        + _cubes(2, segregation_class="food", group="food")
+        + _cubes(1, allowed_containers=["reefer"], group="chilled")
+    )
+    containers = [cl.Container("van-1", 16, 4, 4), cl.Container("van-2", 16, 4, 4, tags=["reefer"])]
+    problem = cl.ContainerLoadingProblem(containers, items, segregation_rules=[("chem", "food", None)])
+    cl.solve(problem, time_limit_seconds=1.0, random_seed=1)
+    assert problem.score.hard == 0
+    where = {item.id: item.container for item in problem.items}
+    assert where["chilled-0"] == 1
+    assert {where["chem-0"], where["chem-1"]}.isdisjoint({where["food-0"], where["food-1"]})
+
+
 def test_the_constraints_path_scores_with_the_picks():
     """used_length_cost at a weight: the soft score carries the loading length, and the
     search packs towards the closed end."""

@@ -56,6 +56,14 @@ std::vector<GroupRule> toGroupRules(const std::vector<GroupRuleTuple>& rules) {
     return out;
 }
 
+using SegregationTuple = std::tuple<std::string, std::string, std::optional<int>>;
+
+std::vector<SegregationRule> toSegregationRules(const std::vector<SegregationTuple>& rules) {
+    std::vector<SegregationRule> out;
+    for (const auto& [a, b, distance] : rules) out.push_back({a, b, distance});
+    return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -73,7 +81,9 @@ PYBIND11_MODULE(_core, m) {
                              Rotation rotations, std::optional<std::int64_t> maxLoadOnTop,
                              std::optional<int> unloadOrder, std::optional<std::string> group,
                              bool bottomOnly, std::optional<int> maxStackLayers,
-                             std::optional<std::string> stackGroup, int priority, bool optional) {
+                             std::optional<std::string> stackGroup, int priority, bool optional,
+                             std::vector<std::string> allowedContainers,
+                             std::optional<std::string> segregationClass) {
                      Item item;
                      item.id = std::move(id);
                      item.length = length;
@@ -89,6 +99,8 @@ PYBIND11_MODULE(_core, m) {
                      item.stackGroup = std::move(stackGroup);
                      item.priority = priority;
                      item.optional = optional;
+                     item.allowedContainers = std::move(allowedContainers);
+                     item.segregationClass = std::move(segregationClass);
                      return item;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
@@ -96,7 +108,9 @@ PYBIND11_MODULE(_core, m) {
                  py::arg("max_load_on_top") = py::none(), py::arg("unload_order") = py::none(),
                  py::arg("group") = py::none(), py::arg("bottom_only") = false,
                  py::arg("max_stack_layers") = py::none(), py::arg("stack_group") = py::none(),
-                 py::arg("priority") = 1, py::arg("optional") = false)
+                 py::arg("priority") = 1, py::arg("optional") = false,
+                 py::arg("allowed_containers") = std::vector<std::string>{},
+                 py::arg("segregation_class") = py::none())
             .def_readwrite("id", &Item::id)
             .def_readwrite("length", &Item::length)
             .def_readwrite("width", &Item::width)
@@ -111,6 +125,8 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("stack_group", &Item::stackGroup)
             .def_readwrite("priority", &Item::priority)
             .def_readwrite("optional", &Item::optional)
+            .def_readwrite("allowed_containers", &Item::allowedContainers)
+            .def_readwrite("segregation_class", &Item::segregationClass)
             // Derived (refreshed by calculate_score / solve): the container
             // index (-1 = not placed), the place among its placed items, the
             // corner nearest the origin and the size after rotation.
@@ -130,7 +146,7 @@ PYBIND11_MODULE(_core, m) {
                              std::optional<std::int64_t> maxWeight, double cost,
                              std::vector<int> items, std::optional<int> maxStackHeight,
                              std::optional<double> maxOffsetLength,
-                             std::optional<double> maxOffsetWidth) {
+                             std::optional<double> maxOffsetWidth, std::vector<std::string> tags) {
                      Container container;
                      container.id = std::move(id);
                      container.length = length;
@@ -142,13 +158,15 @@ PYBIND11_MODULE(_core, m) {
                      container.maxStackHeight = maxStackHeight;
                      container.maxOffsetLength = maxOffsetLength;
                      container.maxOffsetWidth = maxOffsetWidth;
+                     container.tags = std::move(tags);
                      return container;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
                  py::arg("max_weight") = py::none(), py::arg("cost") = 1.0,
                  py::arg("items") = std::vector<int>{}, py::arg("max_stack_height") = py::none(),
                  py::arg("max_offset_length") = py::none(),
-                 py::arg("max_offset_width") = py::none())
+                 py::arg("max_offset_width") = py::none(),
+                 py::arg("tags") = std::vector<std::string>{})
             .def_readwrite("id", &Container::id)
             .def_readwrite("length", &Container::length)
             .def_readwrite("width", &Container::width)
@@ -158,6 +176,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("max_stack_height", &Container::maxStackHeight)
             .def_readwrite("max_offset_length", &Container::maxOffsetLength)
             .def_readwrite("max_offset_width", &Container::maxOffsetWidth)
+            .def_readwrite("tags", &Container::tags)
             // The decision: the item indices in loading order.
             .def_readwrite("items", &Container::items)
             // Derived (refreshed by calculate_score / solve).
@@ -173,19 +192,22 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init([](std::vector<Container> containers, std::vector<Item> items,
                              double minSupportRatio,
                              const std::vector<std::pair<std::string, std::string>>& rules,
-                             const std::vector<GroupRuleTuple>& groupRules) {
+                             const std::vector<GroupRuleTuple>& groupRules,
+                             const std::vector<SegregationTuple>& segregationRules) {
                      ContainerLoadingProblem problem;
                      problem.containers = std::move(containers);
                      problem.items = std::move(items);
                      problem.minSupportRatio = minSupportRatio;
                      problem.stackingRules = toRules(rules);
                      problem.groupRules = toGroupRules(groupRules);
+                     problem.segregationRules = toSegregationRules(segregationRules);
                      ScoreCalculator::prepare(problem);  // refuses a bad problem here
                      return problem;
                  }),
                  py::arg("containers"), py::arg("items"), py::arg("min_support_ratio") = 0.8,
                  py::arg("stacking_rules") = std::vector<std::pair<std::string, std::string>>{},
-                 py::arg("group_rules") = std::vector<GroupRuleTuple>{})
+                 py::arg("group_rules") = std::vector<GroupRuleTuple>{},
+                 py::arg("segregation_rules") = std::vector<SegregationTuple>{})
             // NOTE: element access returns copies (a write to
             // problem.containers[i].items is lost); use set_loading for the
             // loading orders, or assign a whole list back.
@@ -225,6 +247,20 @@ PYBIND11_MODULE(_core, m) {
                     },
                     [](ContainerLoadingProblem& problem, const std::vector<GroupRuleTuple>& rules) {
                         problem.groupRules = toGroupRules(rules);
+                    })
+            // (a, b, distance): items of classes a and b in different containers
+            // (distance None) or at least `distance` apart.
+            .def_property(
+                    "segregation_rules",
+                    [](const ContainerLoadingProblem& problem) {
+                        std::vector<SegregationTuple> rules;
+                        for (const SegregationRule& rule : problem.segregationRules)
+                            rules.emplace_back(rule.a, rule.b, rule.minDistance);
+                        return rules;
+                    },
+                    [](ContainerLoadingProblem& problem,
+                       const std::vector<SegregationTuple>& rules) {
+                        problem.segregationRules = toSegregationRules(rules);
                     })
             .def_readonly("score", &ContainerLoadingProblem::score)
             // The decision: per container, the item indices in loading order.

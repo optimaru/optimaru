@@ -54,7 +54,10 @@ def loading_faults(model) -> list[str]:
             faults.append(f"{container.id}: sequences are not 0..n-1")
         listed.update(container.items)
         listed.update(container.unplaced_items)
+        names = {container.id, *container.tags}
         for box in boxes:
+            if box.allowed_containers and not names & set(box.allowed_containers):
+                faults.append(f"{box.id}: in {container.id}, which its allowed_containers leave out")
             size = (box.placed_length, box.placed_width, box.placed_height)
             if size not in _allowed_sizes(box):
                 faults.append(f"{box.id}: placed as {size}, which rotations={box.rotations} does not allow")
@@ -191,6 +194,24 @@ def _balance_excess(container, boxes) -> int:
     return excess
 
 
+def _segregation_pairs(model, boxes) -> int:
+    """Pairs kept out of one container by a rule, plus pairs closer than a rule's distance (the
+    larger of the gaps between their footprints along x and along y)."""
+    keep = {}
+    for rule in model.segregation_rules:
+        wanted = -1 if rule.distance is None else rule.distance
+        for pair in ((rule.a, rule.b), (rule.b, rule.a)):
+            old = keep.get(pair, 0)
+            keep[pair] = -1 if -1 in (old, wanted) else max(old, wanted)
+    pairs = 0
+    for a, b in itertools.combinations(boxes, 2):
+        need = keep.get((a.segregation_class, b.segregation_class), 0)
+        gap_x = max(0, b.x - (a.x + a.placed_length), a.x - (b.x + b.placed_length))
+        gap_y = max(0, b.y - (a.y + a.placed_width), a.y - (b.y + b.placed_width))
+        pairs += need == -1 or (need > 0 and max(gap_x, gap_y) < need)
+    return pairs
+
+
 def _balance(container, boxes) -> int:
     weight = sum(box.weight for box in boxes)
     if weight == 0:
@@ -218,6 +239,7 @@ def raw_costs(model) -> dict[str, list[float]]:
             "stacking_rule_cost",
             "unloading_order_cost",
             "balance_limit_cost",
+            "segregation_cost",
             "used_container_cost",
             "optional_item_cost",
             "used_length_cost",
@@ -239,6 +261,7 @@ def raw_costs(model) -> dict[str, list[float]]:
         costs["stacking_rule_cost"].append(_stacking_violations(model, boxes))
         costs["unloading_order_cost"].append(_unloading_blocks(boxes))
         costs["balance_limit_cost"].append(_balance_excess(container, boxes))
+        costs["segregation_cost"].append(_segregation_pairs(model, boxes))
         costs["used_container_cost"].append(container.cost if boxes else 0.0)
         costs["used_length_cost"].append(max((box.x + box.placed_length for box in boxes), default=0))
         costs["load_balance_cost"].append(_balance(container, boxes))

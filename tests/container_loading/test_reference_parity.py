@@ -25,7 +25,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def random_problem(seed: int) -> cl.ContainerLoadingProblem:
     """Boxes with sides of 1 to 6 for a few spaces of two sizes, with every optional field in use
     (stacking rules, layer limits, bottom_only, stack heights, balance limits, priorities,
-    optional items and group rules included)."""
+    optional items, group rules, allowed containers and segregation included)."""
     rng = random.Random(seed)
     containers = [
         cl.Container(
@@ -38,6 +38,7 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             max_stack_height=rng.choice([None, None, 7]),
             max_offset_length=rng.choice([None, None, 0.1, 0.3]),
             max_offset_width=rng.choice([None, None, 0.2]),
+            tags=rng.choice([[], ["reefer"]]),
         )
         for c in range(rng.randint(2, 5))
     ]
@@ -57,10 +58,15 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             stack_group=rng.choice([None, "food", "chem"]),
             priority=rng.choice([1, 1, 2, 5]),
             optional=rng.random() < 0.25,
+            allowed_containers=["reefer"] if rng.random() < 0.1 else [],
+            segregation_class=rng.choice([None, None, "hazmat", "food"]),
         )
         for i in range(rng.randint(8, 40))
     ]
     rules = rng.choice([[], [("chem", "food")], [("chem", "food"), ("food", "food")]])
+    if not any("reefer" in container.tags for container in containers):
+        containers[0].tags = ["reefer"]
+    segregation = rng.choice([[], [("hazmat", "food", None)], [("hazmat", "food", 3), ("hazmat", "hazmat", None)]])
     groups = sorted({item.group for item in items if item.group is not None})
     group_rules = [(group, rng.random() < 0.5, rng.random() < 0.5) for group in groups if rng.random() < 0.7]
     return cl.ContainerLoadingProblem(
@@ -69,6 +75,7 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
         min_support_ratio=rng.choice([0.5, 0.8, 1.0]),
         stacking_rules=rules,
         group_rules=group_rules,
+        segregation_rules=segregation,
     )
 
 

@@ -90,6 +90,11 @@ struct Item {
     // also leaves it out where its weight would put the items placed so far
     // above that limit.
     bool optional = false;
+    // The containers it may be loaded in, by id or by one of their tags;
+    // empty = any. In another container's list it finds no place.
+    std::vector<std::string> allowedContainers;
+    // The class the segregation rules name (ContainerLoadingProblem::segregationRules).
+    std::optional<std::string> segregationClass;
 
     // --- derived by ScoreCalculator::updateDerived (calculate_score, solve) ---
     int container = -1;  // index into containers; -1 = not placed
@@ -128,6 +133,9 @@ struct Container {
     // the width (along y). Unset = no limit.
     std::optional<double> maxOffsetLength;
     std::optional<double> maxOffsetWidth;
+    // What items' allowedContainers may name besides the id (a reefer, a
+    // vehicle type).
+    std::vector<std::string> tags;
     std::vector<int> items;  // loading order (indices into ContainerLoadingProblem::items)
 
     // --- derived by ScoreCalculator::updateDerived (calculate_score, solve) ---
@@ -156,6 +164,15 @@ struct GroupRule {
     bool singleContainer = false;
 };
 
+// One segregation rule: items of classes `a` and `b` (the same class when
+// a == b) may not share a container (minDistance unset), or must stand at
+// least minDistance apart in the floor plane.
+struct SegregationRule {
+    std::string a;
+    std::string b;
+    std::optional<int> minDistance;
+};
+
 // One stacking rule: items whose stackGroup is `top` may not stand on items
 // whose stackGroup is `bottom` (rest on them, base on top). Anything not
 // forbidden is allowed.
@@ -175,6 +192,7 @@ struct ContainerLoadingProblem {
     double minSupportRatio = 0.8;
     std::vector<StackingRule> stackingRules;
     std::vector<GroupRule> groupRules;
+    std::vector<SegregationRule> segregationRules;
 
     Score score;
 
@@ -204,6 +222,35 @@ struct ContainerLoadingProblem {
     std::vector<char> groupSingleContainer;
     bool anyAllOrNone = false;
     bool anySingleContainer = false;
+    // Per item and container: whether the item may go in it,
+    // allowedIn[item * containers + container]; empty when every item may go
+    // anywhere.
+    std::vector<char> allowedIn;
+    // Per item: its segregation class numbered densely among the classes the
+    // rules name (-1 = none); per pair of classes, the distance they must
+    // keep: 0 = none, -1 = not in one container, else the distance:
+    // apart[a * segregationClassCount + b].
+    std::vector<int> segregationOf;
+    int segregationClassCount = 0;
+    std::vector<int> apart;
+    bool anySegregation = false;      // some item has a class a rule names
+    bool anyApartDistance = false;    // some rule keeps a distance
+    std::vector<char> keepsDistance;  // per segregation class: some rule gives it a distance
+
+    bool allowed(int item, int container) const {
+        return allowedIn.empty() || allowedIn[static_cast<std::size_t>(item) * containers.size() +
+                                              static_cast<std::size_t>(container)] != 0;
+    }
+    // What items a and b must keep: 0 nothing, -1 another container, d > 0 a
+    // distance of d.
+    int separation(int a, int b) const {
+        const int ca = segregationOf[static_cast<std::size_t>(a)];
+        const int cb = segregationOf[static_cast<std::size_t>(b)];
+        if (ca < 0 || cb < 0) return 0;
+        return apart[static_cast<std::size_t>(ca) *
+                             static_cast<std::size_t>(segregationClassCount) +
+                     static_cast<std::size_t>(cb)];
+    }
 
     // Whether item `top` standing on item `bottom` breaks a stacking rule.
     bool forbids(int top, int bottom) const {

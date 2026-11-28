@@ -13,6 +13,7 @@ Score, at the default weights (1 each; the two opt-in costs at 0):
            + stacking rules and layer limits broken     # stacking_rule_cost
            + items blocking one that leaves earlier     # unloading_order_cost
            + centre of gravity beyond its limits        # balance_limit_cost
+           + pairs a segregation rule keeps apart       # segregation_cost
            + all-or-none groups loaded in part          # incomplete_group_cost
            + one-container groups in several)           # single_container_cost
   (an unplaced item counts its priority, an optional one in optional_item_cost)
@@ -132,7 +133,7 @@ def solve(
 
     ``constraints`` picks the cost function directly (see
     `optimaru.container_loading.constraints`). Only the listed constraints are scored, a
-    name picked several times once per pick; None uses all thirteen default constraints at
+    name picked several times once per pick; None uses all fourteen default constraints at
     their default weights. With constraints the solve is single-start
     (``parallel_solver_count`` is ignored)::
 
