@@ -10,9 +10,9 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
-#include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/model/element_index.hpp"
+#include "optimaru/solution/solution_traits.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
+#include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/search/operators.hpp"

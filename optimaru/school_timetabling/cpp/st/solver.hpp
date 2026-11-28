@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "st/model/domain.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/solver_config.hpp"
 
 namespace st {

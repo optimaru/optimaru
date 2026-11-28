@@ -15,15 +15,15 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/objective.hpp"
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/element_index.hpp"
-#include "optimaru/model/snapshot.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/element_index.hpp"
+#include "optimaru/solution/snapshot.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/construct/construction.hpp"
-#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
 #include "optimaru/accept/acceptors.hpp"
 #include "optimaru/accept/history_stages.hpp"
 #include "optimaru/search/moves/move_mix.hpp"

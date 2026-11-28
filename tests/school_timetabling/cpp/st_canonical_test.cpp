@@ -24,7 +24,7 @@
 #include "st/score/canonical_incremental_calculator.hpp"
 #include "st/score/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace st::canon;

@@ -58,7 +58,7 @@
 #include "bp/search/moves/moves.hpp"
 #include "bp/score/score_calculator.hpp"
 #include "bp/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace bp;

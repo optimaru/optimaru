@@ -6,10 +6,10 @@
 
 #include <random>
 
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/element_index.hpp"
-#include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/element_index.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/search/moves/change.hpp"

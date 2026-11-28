@@ -24,14 +24,14 @@ from `cost`, which a use case reads itself (`stop` is of type `Limits` there).
 | Step | Where | To add one |
 | --- | --- | --- |
 | [1. Construction](#1-construction) | `construct/construction.hpp` | [Construction instead of search](extending.md#construction-instead-of-search) |
-| [2. Current and best](#2-current-and-best) | `solver.hpp`, `model/snapshot.hpp` | |
+| [2. Current and best](#2-current-and-best) | `solver.hpp`, `solution/snapshot.hpp` | |
 | [3. Stop condition](#3-stop-condition) | `stop/stop_condition.hpp` | `Solver::add_stop_criterion` |
 | [4. Search stalled?](#4-search-stalled) | `solver.hpp`, `accept/history_stages.hpp` | |
 | [5. Ruin and recreate kick](#5-ruin-and-recreate-kick) | `search/ruin_recreate/` | [A ruin instead of a move](extending.md#a-ruin-instead-of-a-move) |
 | [6. Built-in strategy](#6-built-in-strategy) | `search/strategies.hpp`, `search/moves/` | an engine change |
 | [7. Use-case moves](#7-use-case-moves) | `search/operators.hpp`, `select/` | [Adding a move](extending.md#adding-a-move) |
 | [8. Move mix](#8-move-mix) | `search/moves/move_mix.hpp` | an engine change |
-| [9. Incremental score](#9-incremental-score) | `model/editor.hpp`, `score/` | [Adding a cost](extending.md#adding-a-cost) |
+| [9. Incremental score](#9-incremental-score) | `solution/editor.hpp`, `score/` | [Adding a cost](extending.md#adding-a-cost) |
 | [10. Acceptor](#10-acceptor) | `accept/` | `Solver::set_acceptor_factory`, or an engine change |
 | [11. New best](#11-new-best) | `solver.hpp` | |
 
@@ -66,7 +66,7 @@ when the solve ends.
 
 - Code: the start of `Solver::run` in
   [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp), and `SolutionSnapshot` in
-  [`core/optimaru/model/snapshot.hpp`](../core/optimaru/model/snapshot.hpp).
+  [`core/optimaru/solution/snapshot.hpp`](../core/optimaru/solution/snapshot.hpp).
 - Settings: `config.run.on_new_best` hears every new best.
 
 ## Each step, until a stop condition holds
@@ -194,7 +194,7 @@ applied at all (a preview), and applied only if the acceptor takes it. With
 `config.run.full_assert` every incremental score is compared with a full
 recompute.
 
-- Code: `Editor` in [`core/optimaru/model/editor.hpp`](../core/optimaru/model/editor.hpp)
+- Code: `Editor` in [`core/optimaru/solution/editor.hpp`](../core/optimaru/solution/editor.hpp)
   (the only way a move changes the solution), the `Objective` contract in
   [`core/optimaru/score/objective.hpp`](../core/optimaru/score/objective.hpp), and
   `DecomposedObjective` with its per-unit and global constraints in

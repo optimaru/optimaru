@@ -36,7 +36,7 @@
 #include "fl/model/domain.hpp"
 #include "fl/score/score_calculator.hpp"
 #include "fl/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace fl;

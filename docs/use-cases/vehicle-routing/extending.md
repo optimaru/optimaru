@@ -369,7 +369,7 @@ components that answer from pieces, `compared == 6`, now 7.
 **Keep `on_reset()` light.** `on_reset()` runs whenever the objective is rebuilt,
 and on routes that is not once per solve: a rejected ruin and repair, route
 elimination or iterated local search step puts the routes back from a snapshot and
-rebuilds (`SolutionSnapshot::restore` in the engine's `model/snapshot.hpp`). Every
+rebuilds (`SolutionSnapshot::restore` in the engine's `solution/snapshot.hpp`). Every
 constraint is costed on every route there, the ones at weight 0 included. The
 count above gave 2,836 calls of `on_reset()` in 30,000 steps, so a table over
 visits and vehicles built there is paid for every eleven steps. The constraints here do at

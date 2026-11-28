@@ -40,7 +40,7 @@
 #include "ba/model/domain.hpp"
 #include "ba/score/score_calculator.hpp"
 #include "ba/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace ba;

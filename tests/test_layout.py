@@ -62,7 +62,7 @@ def test_cpp_draws_are_portable():
 
 def test_the_engine_top_level_holds_the_solver_and_folders():
     """core/optimaru/ keeps the solver, its settings and its config at the top; everything
-    else is in a folder by role (model/, score/, construct/, stop/, search/, accept/,
+    else is in a folder by role (solution/, score/, construct/, stop/, search/, accept/,
     select/, utils/, python/, testing/), as the README's engine tree shows."""
     tracked = subprocess.run(["git", "ls-files", "core/optimaru"], cwd=ROOT, capture_output=True, text=True)
     if tracked.returncode != 0:
@@ -79,7 +79,8 @@ def test_a_use_case_keeps_only_its_sources_under_cpp():
 
     Inside cpp/<ns>/ every use case files by role, under the names the engine uses in
     core/optimaru/: the entry points (solver, constraints.hpp) at the top, model/ (the
-    domain and its data), score/ (the monolithic calculators), constraints/ (one component per
+    domain and its data: the use case's own folder, read by the engine through
+    SolutionTraits in its solution/), score/ (the monolithic calculators), constraints/ (one component per
     file), and, where the use case has its own, construct/, search/ (its moves/, as in the
     engine's search/) and accept/."""
     tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)

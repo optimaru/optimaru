@@ -31,8 +31,8 @@
 #include "ks/score/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
 #include "optimaru/search/operators.hpp"
 
 using namespace ks;

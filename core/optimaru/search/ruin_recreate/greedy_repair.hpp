@@ -13,12 +13,12 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/construct/first_fit.hpp"
-#include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/model/element_index.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
+#include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/moves/preview_evaluation.hpp"
 #include "optimaru/utils/random.hpp"
 

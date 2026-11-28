@@ -323,7 +323,7 @@ with a weight needs the written-out list, and all four constraints here do. `ful
 **Compute what you can once per rebuild.** `on_reset()` runs when the objective is
 rebuilt. A sequence-shaped objective is also rebuilt when a compound move is rejected
 and the lists are put back from a snapshot (`SolutionSnapshot::restore` in the
-engine's `model/snapshot.hpp`). The moves that do that (route elimination, ruin and
+engine's `solution/snapshot.hpp`). The moves that do that (route elimination, ruin and
 recreate as a move, the iterated local search) are not used here: `Solver::Config` of
 this use case has no switch for them, and the counter saw 3 calls of `on_reset()` in 3
 million steps. A table built in `on_reset()` is paid once per solve. Sequence-shaped

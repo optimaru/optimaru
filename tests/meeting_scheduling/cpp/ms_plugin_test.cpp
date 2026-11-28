@@ -38,7 +38,7 @@
 #include "ms/model/domain.hpp"
 #include "ms/score/score_calculator.hpp"
 #include "ms/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace ms;

@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
 namespace fab {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Breaking (C++): the engine's `model/` is `solution/`.** `core/optimaru/model/` held how the
+  engine reads and writes a use case's solution (`SolutionTraits`, `Editor`, `ElementIndex`,
+  `SolutionSnapshot`, `Neighborhoods`), not a problem model, so it is
+  `core/optimaru/solution/` now: `#include "optimaru/solution/editor.hpp"` and so on, with
+  `OPTIMARU_SOLUTION_*` include guards. A use case's own `model/` (its domain and demo data)
+  keeps its name. Nothing changes in the Python package or in what the solvers do.
 - **Source layout: one file per stop criterion; a use case's own.** `stop/` holds each
   built-in criterion in a file of its own: `max_runtime.hpp` (`MaxRuntime`),
   `no_improvement_time.hpp`, `max_steps.hpp`, `no_improvement_steps.hpp`, `target_score.hpp`

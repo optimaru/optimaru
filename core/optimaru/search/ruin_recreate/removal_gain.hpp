@@ -4,7 +4,7 @@
 #ifndef OPTIMARU_SEARCH_RUIN_RECREATE_REMOVAL_GAIN_HPP
 #define OPTIMARU_SEARCH_RUIN_RECREATE_REMOVAL_GAIN_HPP
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/search/operators.hpp"
 

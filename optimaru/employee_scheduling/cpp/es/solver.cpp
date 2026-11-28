@@ -16,7 +16,7 @@
 
 #include "es/score/incremental_calculator.hpp"
 #include "es/score/score_calculator.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/utils/random.hpp"
 

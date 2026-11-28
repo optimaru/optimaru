@@ -28,7 +28,7 @@
 #include "alb/score/score_calculator.hpp"
 #include "alb/solver.hpp"
 #include "alb_fixtures.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 
 using namespace alb;
 using namespace alb_test;
