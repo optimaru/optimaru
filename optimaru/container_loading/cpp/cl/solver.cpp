@@ -64,6 +64,7 @@ void runEngine(const Solver::Config& config, ContainerLoadingProblem& problem,
         // Close = the same stop, then the stops next to it; among equals,
         // the closest in volume. An item without an order is far from every
         // item with one (it has no block to keep).
+        // The engine lives in this function, so the problem outlives it.
         const ContainerLoadingProblem* facts = &problem;
         engineConfig.selection.nearby.distance = [facts](int a, int b) {
             const Item& x = facts->items[static_cast<std::size_t>(a)];

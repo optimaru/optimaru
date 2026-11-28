@@ -266,7 +266,7 @@ class SolverConfig:
         split over several. Used only when the containers differ; it is how a load
         reaches a cheaper carton."""
         stop_order: bool
-        """Enable StopOrderMove (registered only when some item sets an
+        """Enable StopOrderMove (registered only when at least two items set an
         unload_order, also for a single container): a container's loading order is
         put back in stop blocks, the latest stop first (items without an order keep
         their places), with one change inside one stop's block: an item moved or two

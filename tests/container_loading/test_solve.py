@@ -124,7 +124,8 @@ def test_a_truck_with_many_stops_comes_out_in_stop_order():
 
 def test_nearby_selection_by_stop_can_be_switched_off():
     """The setting reaches the engine: 0 turns nearby selection off, and the same seeded solve then
-    takes another path through the same truck (other improvements, at other steps)."""
+    takes another path through the same truck (other improvements, at other steps). On a load
+    that is mostly without orders it is not used."""
     import random
 
     rng = random.Random(7)
@@ -135,20 +136,34 @@ def test_nearby_selection_by_stop_can_be_switched_off():
     ]
     truck = [cl.Container("truck", 3000, 1500, 1500)]
     picks = replace_default(get_constraints(), "used_length_cost", UsedLengthCost(weight=1.0))
-    paths = []
-    for nearby in (0.8, 0.0):
+
+    def path(load: list, nearby: float) -> list:
         config = cl.SolverConfig(stop={"step_limit": 3000}, run={"random_seed": 3})
         config.selection.nearby_probability = nearby
         assert config.selection.nearby_probability == nearby
-        path = []
+        steps = []
         cl.solve(
-            cl.ContainerLoadingProblem(truck, items),
+            cl.ContainerLoadingProblem(truck, load),
             config=config,
             constraints=picks,
-            on_new_best=lambda step, score, path=path: path.append((step, score.hard, score.soft)),
+            on_new_best=lambda step, score: steps.append((step, score.hard, score.soft)),
         )
-        paths.append(path)
-    assert paths[0] != paths[1]
+        return steps
+
+    assert path(items, 0.8) != path(items, 0.0)
+    # Where fewer than half the items have an order, the setting is not used at all.
+    mostly_free = [
+        cl.Item(
+            item.id,
+            item.length,
+            item.width,
+            item.height,
+            rotations=cl.Rotation.UPRIGHT,
+            unload_order=item.unload_order if i < 10 else None,
+        )
+        for i, item in enumerate(items)
+    ]
+    assert path(mostly_free, 0.8) == path(mostly_free, 0.0)
 
 
 def test_the_cheapest_cartons_that_hold_an_order_are_chosen():

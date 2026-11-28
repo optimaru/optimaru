@@ -2,9 +2,10 @@
 //   (a) the decoder by hand: the (x, z, y) order of the points, the support
 //       rule, the rotations, which orientation is taken, an item that finds
 //       no place
-//   (b) the decoder on random lists: every decode is a valid loading (inside
-//       the container, no overlap, enough support), and a decode resumed from
-//       any shared prefix equals a decode from scratch
+//   (b) the decoder on random lists, short and long: every decode is a valid
+//       loading (inside the container, no overlap, enough support), a decode
+//       resumed from any shared prefix equals a decode from scratch, and the
+//       room every free point keeps equals the room measured afresh
 //   (c) the costs of one decoded container by hand: stacking load (passed
 //       down, shared by contact area, exact at loads of 5.6e10), unloading
 //       order (in front, on top),
@@ -112,6 +113,20 @@ std::vector<std::vector<int>> freePoints(const Packing& packing) {
         if (point.died == Point::kOpen) points.push_back({point.x, point.y, point.z});
     }
     return points;
+}
+
+// The free points whose kept room (Point::room, once measured) differs from
+// the room measured afresh: 0 when the decoder's cache is current.
+int staleRooms(const ContainerLoadingProblem& p, int container, const Packing& packing) {
+    int stale = 0;
+    for (const Point& point : packing.points) {
+        if (point.died != Point::kOpen || point.room[0] < 0) continue;
+        int room[3];
+        measureRoom(p, container, packing, point, room);
+        if (room[0] != point.room[0] || room[1] != point.room[1] || room[2] != point.room[2])
+            ++stale;
+    }
+    return stale;
 }
 
 int overlap(int a, int la, int b, int lb) {
@@ -364,11 +379,22 @@ void verifyDecoderProperties() {
     std::mt19937_64 rng(11);
     int invalid = 0;
     int resumeMismatches = 0;
+    int staleRoomCount = 0;
     int placed = 0;
     int unplaced = 0;
-    const int rounds = 300;
+    // 300 short lists, then 40 long ones in a longer space (100 to 300 items,
+    // so the decode files the boxes in 6 to 18 cells and boxes span several).
+    const int rounds = 340;
     for (int round = 0; round < rounds; ++round) {
-        ContainerLoadingProblem p = randomProblem(rng, 1, 5 + static_cast<int>(rng() % 30));
+        const bool longList = round >= 300;
+        ContainerLoadingProblem p = randomProblem(
+                rng, 1,
+                longList ? 100 + static_cast<int>(rng() % 201) : 5 + static_cast<int>(rng() % 30));
+        if (longList) {
+            p.containers[0].length = 60;
+            p.containers[0].width = 10;
+            p.containers[0].height = 12;
+        }
         p.minSupportRatio = round % 3 == 0 ? 1.0 : round % 3 == 1 ? 0.8 : 0.5;
         std::vector<int> list(p.items.size());
         for (std::size_t i = 0; i < list.size(); ++i) list[i] = static_cast<int>(i);
@@ -376,6 +402,7 @@ void verifyDecoderProperties() {
         Packing base;
         decode(p, 0, list, base);
         if (!validLoading(p, 0, base)) ++invalid;
+        staleRoomCount += staleRooms(p, 0, base);
         placed += static_cast<int>(base.boxes.size());
         unplaced += base.unplaced();
 
@@ -385,6 +412,10 @@ void verifyDecoderProperties() {
         const std::size_t cut = rng() % (list.size() + 1);
         std::shuffle(other.begin() + static_cast<std::ptrdiff_t>(cut), other.end(), rng);
         if (rng() % 2 == 0 && other.size() > cut) other.pop_back();
+        // Now and then one item fewer than a multiple of 16, so the cells are
+        // filed again between the two decodes.
+        if (longList && round % 4 == 0 && other.size() % 16 == 0 && other.size() > cut)
+            other.pop_back();
         std::size_t common = 0;
         while (common < other.size() && common < list.size() && other[common] == list[common])
             ++common;
@@ -396,6 +427,7 @@ void verifyDecoderProperties() {
             decode(p, 0, other, resumed, static_cast<int>(keep));
             if (!sameBoxes(resumed, fresh) || freePoints(resumed) != freePoints(fresh))
                 ++resumeMismatches;
+            staleRoomCount += staleRooms(p, 0, resumed);
         }
     }
     std::printf("    %d items placed, %d unplaced\n", placed, unplaced);
@@ -405,6 +437,8 @@ void verifyDecoderProperties() {
     check(placed > 1000 && unplaced > 100, "the lists exercise placed and unplaced items");
     check(resumeMismatches == 0,
           "a decode resumed from a shared prefix equals the decode from scratch");
+    check(staleRoomCount == 0,
+          "every free point's kept room equals the room measured afresh, resumed or not");
     std::printf("\n");
 }
 

@@ -552,6 +552,11 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     out.balancePerMille = -1;
 }
 
+void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,
+                 const Point& point, int room[3]) {
+    freeRoom(problem.containers[static_cast<std::size_t>(container)], packing, point, room);
+}
+
 std::int64_t stackingExcess(const ContainerLoadingProblem& problem, const Packing& packing) {
     if (packing.stackingExcess >= 0) return packing.stackingExcess;
     packing.stackingExcess = 0;

@@ -11,8 +11,8 @@
     that, to the first feasible point, as before. An item with an `unload_order` takes the
     shallowest orientation along the length first, so a stop builds a thin wall. Without orders
     and load limits the decoder places every item where it did.
-  - A new move, `StopOrderMove` (`custom_moves.stop_order`, on by default when an item sets
-    `unload_order`, also for a single container): a loading order put back in stop blocks, latest
+  - A new move, `StopOrderMove` (`custom_moves.stop_order`, on by default when at least two
+    items set `unload_order`, also for a single container): a loading order put back in stop blocks, latest
     stop first, with one change inside one stop's block.
   - Nearby selection by stop (`selection.nearby_probability`, 0.8, and `selection.nearby_size`,
     20, only when at least half the items have an unloading order): the move mix moves an item next to items of its own and the
@@ -25,11 +25,11 @@
   On generated trucks of 10 to 25 stops and 110 to 300 boxes (one thread, three seeds per row,
   `container-loading-vehicle-loads`), the trucks that met every order and limit after 30 s went
   from none of 24 to 8 of 24, at the default weights and at the weights a warehouse system sends,
-  and the pairs left at the default weights from 150 to 1,730 per truck to 0 to 255. Loads without
-  unloading orders or stacking limits are decoded exactly as before (the benchmarks give the same
-  results), at about the same speed, and twice as fast with hundreds of items in one container.
-  With stacking limits the decode now also keeps weight off them where it can. The guide's "How good,
-  how fast" has the numbers.
+  and the pairs left at the default weights (the mean of three seeds per kind of truck) from 151
+  to 1,729 to 0 to 255. Loads without unloading orders or stacking limits are decoded exactly as
+  before (the benchmarks give the same results), at about the same speed, and twice as fast with
+  hundreds of items in one container. With stacking limits the decode now also keeps weight off
+  them where it can. The guide's "How good, how fast" has the numbers.
 
 ## 0.9.0
 

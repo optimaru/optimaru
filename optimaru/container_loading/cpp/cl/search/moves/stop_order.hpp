@@ -50,8 +50,12 @@ class StopOrderMove final : public optimaru::MoveOperator<ContainerLoadingProble
 public:
     const char* name() const override { return "stopOrder"; }
 
-    // Registered only when some item sets an unloadOrder.
-    static bool applies(const ContainerLoadingProblem& problem) { return problem.anyUnloadOrder; }
+    // Registered only when at least two items set an unloadOrder.
+    static bool applies(const ContainerLoadingProblem& problem) {
+        int ordered = 0;
+        for (const Item& item : problem.items) ordered += item.unloadOrder ? 1 : 0;
+        return ordered >= 2;
+    }
 
     bool apply(optimaru::OperatorContext<ContainerLoadingProblem>& ctx, std::mt19937_64& rng,
                std::vector<int>& entities) override {

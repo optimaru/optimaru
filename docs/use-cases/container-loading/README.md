@@ -375,8 +375,8 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   order, over several opened cheapest first while together they cost no more than the one
   that is left. It is how a load reaches a cheaper carton, or two small ones in place of
   a large one.
-- **`StopOrderMove`** (`custom_moves.stop_order`; used only when some item sets an
-  `unload_order`, also for a single container). A vehicle load is one container with
+- **`StopOrderMove`** (`custom_moves.stop_order`; used only when at least two items set
+  an `unload_order`, also for a single container). A vehicle load is one container with
   items for many stops, and the engine's sequence moves know nothing of stops: a relocate
   or a swap mixes the stop blocks, and once mixed a load is rarely put back in order one
   item at a time. This move takes a container whose list holds items with an order, puts

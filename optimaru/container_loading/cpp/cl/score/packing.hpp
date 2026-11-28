@@ -143,6 +143,12 @@ struct Packing {
 void decode(const ContainerLoadingProblem& problem, int container, const std::vector<int>& members,
             Packing& out, int keep = 0);
 
+// How far the room reaches from `point` along x, y and z in a decode of
+// container `container`, measured afresh: what Point::room holds for a free
+// point once the decode has looked at it. For the tests of that cache.
+void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,
+                 const Point& point, int room[3]);
+
 // --- costs of one decoded container -----------------------------------------
 // Each is the raw cost of the constraint of the same name
 // (cl/constraints/<name>.hpp), written once here: the components and

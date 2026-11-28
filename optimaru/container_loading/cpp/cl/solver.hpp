@@ -77,8 +77,8 @@ public:
 
         // StopOrderMove: one container's loading order put back in stop
         // blocks (latest stop first), with one change inside one stop's
-        // block (cl/search/moves/stop_order.hpp). Registered only when some
-        // item sets an unloadOrder, also for a single container.
+        // block (cl/search/moves/stop_order.hpp). Registered only when at
+        // least two items set an unloadOrder, also for a single container.
         bool stop_order_moves = true;
 
         // Nearby selection, only when at least half the items set an
