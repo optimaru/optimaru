@@ -39,10 +39,8 @@ class WarehouseLocation:
     these; whether it is inside the grid is checked where the warehouse is known
     (`OrderPickingSolution`, `Solver.solve`).
 
-    In a warehouse of named locations: one of them, from `Warehouse.location(id)`. It is that
-    warehouse's index of the location and belongs to it: given to a solution of another
-    warehouse of named locations, it is read as that one's location of the same index (or
-    refused when it has none)."""
+    In a warehouse of named locations: one of them, from `Warehouse.location(id)`. It belongs
+    to that warehouse: a solution of another warehouse refuses it (ValueError)."""
 
     def __init__(self, column: int, shelving_row: int, side: Side, row: int) -> None: ...
     @property

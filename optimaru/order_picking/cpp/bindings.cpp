@@ -104,7 +104,7 @@ PYBIND11_MODULE(_core, m) {
                         const auto found = w.locations->indexOf.find(id);
                         if (found == w.locations->indexOf.end())
                             throw py::value_error("unknown location '" + id + "'");
-                        return WarehouseLocation::named(found->second);
+                        return WarehouseLocation::named(found->second, &w);
                     },
                     py::arg("id"), "The named location with this id.")
             .def(

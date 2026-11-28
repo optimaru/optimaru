@@ -507,8 +507,19 @@ def test_the_compiled_warehouse_of_named_locations_checks_its_table():
     with pytest.raises(ValueError, match="trolley '1': a named location in a grid warehouse"):
         op.OrderPickingSolution([op.Order("o")], [op.Trolley("1", 1, 10, a)], [op.PickTask("p", 0, 1, grid_place)])
     other = op.Warehouse.from_distances(["a"], [[0]])
-    with pytest.raises(ValueError, match="pick task 'p'"):
-        op.OrderPickingSolution([op.Order("o")], [op.Trolley("1", 1, 10, a)], [op.PickTask("p", 0, 1, b)], other)
+    with pytest.raises(ValueError, match="pick task 'p': its location is not one of the warehouse's 1 named"):
+        op.OrderPickingSolution(
+            [op.Order("o")], [op.Trolley("1", 1, 10, other.location("a"))], [op.PickTask("p", 0, 1, b)], other
+        )
+    # A location belongs to the warehouse that made it, also where the other one has its index.
+    twin = op.Warehouse.from_distances(["a", "b"], [[0, 60], [20, 0]])
+    with pytest.raises(ValueError, match="trolley '1': its location is a named location of another warehouse"):
+        op.OrderPickingSolution([op.Order("o")], [op.Trolley("1", 1, 10, a)], [op.PickTask("p", 0, 1, b)], twin)
+    with pytest.raises(ValueError, match="start: its location is a named location of another warehouse"):
+        op.calculate_distance(a, twin.location("b"), twin)
+    assert op.calculate_distance(twin.location("a"), twin.location("b"), twin) == 60
+    with pytest.raises(ValueError, match="from 'a' to 'b' must be 0..1000000, not 3000000000"):
+        op.Warehouse.from_distances(["a", "b"], [[0, 3_000_000_000], [1, 0]])
 
     # The compiled solve on named locations, checked step by step.
     solution = op.OrderPickingSolution(

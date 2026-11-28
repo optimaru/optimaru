@@ -1,5 +1,6 @@
 #include "op/model/layout.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -53,6 +54,10 @@ void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location
                                         " named locations (a warehouse of named locations takes "
                                         "Warehouse.location(id))");
         }
+        if (location.tag != 0 && location.tag != warehouse.locations->tag) {
+            throw std::invalid_argument(owner +
+                                        ": its location is a named location of another warehouse");
+        }
         return;
     }
     // While a solve's table is set, a grid location carries its node in it
@@ -96,7 +101,8 @@ Warehouse makeGridWarehouse(int columnCount, int shelvingRowCount, int shelvingW
 }
 
 Warehouse makeNamedWarehouse(std::vector<std::string> ids,
-                             const std::vector<std::vector<int>>& meters) {
+                             const std::vector<std::vector<std::int64_t>>& meters) {
+    static std::atomic<int> tables{0};
     if (ids.empty()) throw std::invalid_argument("warehouse: no locations");
     const std::size_t size = ids.size();
     if (size > static_cast<std::size_t>(Warehouse::MAX_LOCATIONS)) {
@@ -124,7 +130,7 @@ Warehouse makeNamedWarehouse(std::vector<std::string> ids,
                                         std::to_string(meters[from].size()));
         }
         for (std::size_t to = 0; to < size; ++to) {
-            const int distance = meters[from][to];
+            const std::int64_t distance = meters[from][to];
             if (distance < 0 || distance > Warehouse::MAX_DISTANCE) {
                 throw std::invalid_argument("warehouse: the distance from '" + ids[from] +
                                             "' to '" + ids[to] + "' must be 0.." +
@@ -135,10 +141,11 @@ Warehouse makeNamedWarehouse(std::vector<std::string> ids,
                 throw std::invalid_argument("warehouse: the distance from '" + ids[from] +
                                             "' to itself must be 0");
             }
-            table->meters.push_back(distance);
+            table->meters.push_back(static_cast<int>(distance));
         }
     }
     table->ids = std::move(ids);
+    table->tag = ++tables;
     Warehouse warehouse;
     warehouse.locations = std::move(table);
     return warehouse;

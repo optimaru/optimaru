@@ -84,8 +84,7 @@ print(op.distance_to_travel(solution, 0))   # 40: there and back
   location that is not 0 from itself. `warehouse.location(id)` is the location to give a trolley or a
   pick task (`location.index` is its position in `warehouse.location_ids`, -1 for a grid location),
   and `warehouse.location_id(location)` names it again. A named location belongs to the warehouse
-  that made it: it is an index, so another warehouse of named locations reads it as its own location
-  of that index.
+  that made it: a solution of another warehouse refuses it (`ValueError`).
 - One solution, one kind: a grid location in a warehouse of named locations, or the reverse, is a
   `ValueError`.
 - `calculate_distance(start, end, warehouse=None)` measures in the default grid without a warehouse.

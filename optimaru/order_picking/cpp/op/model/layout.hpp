@@ -1,6 +1,7 @@
 #ifndef OP_LAYOUT_HPP
 #define OP_LAYOUT_HPP
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,11 +27,12 @@ Warehouse makeGridWarehouse(int columnCount = Warehouse::DEFAULT_COLUMN_COUNT,
 // repeats, a distance is negative or above Warehouse::MAX_DISTANCE, or a
 // location is not 0 meters from itself.
 Warehouse makeNamedWarehouse(std::vector<std::string> ids,
-                             const std::vector<std::vector<int>>& meters);
+                             const std::vector<std::vector<std::int64_t>>& meters);
 
 // Whether `location` is one of `warehouse`: inside the grid, or one of the
-// named locations. Throws std::invalid_argument, which starts with `owner`
-// (who is there), when it is not.
+// named locations (and, when it says which warehouse made it, of this one).
+// Throws std::invalid_argument, which starts with `owner` (who is there),
+// when it is not.
 void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location,
                    const std::string& owner);
 

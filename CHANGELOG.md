@@ -12,7 +12,8 @@
   - Named locations with a walking-distance table, for a building that is no such grid:
     `locations` (ids) and `distances` (`{from: {to: meters}}`) on the request, where the
     `location` of a trolley or an order item is then an id; `op.Warehouse.from_distances(ids,
-    table)` and `warehouse.location(id)` on the compiled side. The table may be asymmetric, a pair
+    table)` and `warehouse.location(id)` on the compiled side (a location belongs to the
+    warehouse that made it: a solution of another one refuses it). The table may be asymmetric, a pair
     given one way only is as long the other way, and a pair given neither way is refused. At
     most 2048 locations in a request, 4096 in a compiled `Warehouse`.
   - One request uses one kind; mixing them is refused. `OrderPickingSolution` takes a fourth

@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -67,6 +68,9 @@ struct DistanceTable {
     std::vector<int> meters;                       // size * size; meters[from * size + to]
     std::vector<std::string> ids;                  // named layout: one per location
     std::unordered_map<std::string, int> indexOf;  // named layout: id -> index
+    // Named layout: a number no other table of this process has (from 1), by
+    // which a location says which warehouse made it (WarehouseLocation::tag).
+    int tag = 0;
 
     int at(int from, int to) const { return meters[static_cast<std::size_t>(from) * size + to]; }
     bool holds(int node) const { return node >= 0 && node < size; }
@@ -121,6 +125,19 @@ struct Warehouse {
     }
 };
 
+// A walk's legs are added as int in places (the cheapest insertion of the
+// order moves adds three): the longest distance of either kind of layout
+// leaves room for that.
+static_assert(3LL * Warehouse::MAX_DISTANCE < std::numeric_limits<int>::max(),
+              "three table distances must fit an int");
+static_assert(3LL * (static_cast<long long>(Warehouse::MAX_COLUMN_COUNT) * 2 *
+                             Warehouse::MAX_SHELVING_SIZE +
+                     static_cast<long long>(Warehouse::MAX_SHELVING_ROW_COUNT) * 2 *
+                             Warehouse::MAX_SHELVING_SIZE +
+                     2LL * Warehouse::MAX_SHELVING_SIZE) <
+                      std::numeric_limits<int>::max(),
+              "three grid distances must fit an int");
+
 // The letters of a grid column as spreadsheets write them: 0 == "A",
 // 25 == "Z", 26 == "AA", ...
 inline std::string columnLetters(int column) {
@@ -143,19 +160,25 @@ struct WarehouseLocation {
     Side side = Side::LEFT;
     int row = 0;  // row within the shelving side, 0..shelvingHeight
 
-    // Named layout: the index of the location. An index says nothing of the
-    // warehouse it was taken from: a location belongs to the warehouse that
-    // made it, and one that is given to a solution of another warehouse is
-    // read in that one's table when the index exists there. Grid: -1; the
-    // solver numbers the locations in use here while it runs
-    // (Warehouse::active) and puts -1 back, so nothing outside a solve reads
-    // it.
+    // Named layout: the index of the location. Grid: -1; the solver numbers
+    // the locations in use here while it runs (Warehouse::active) and puts -1
+    // back, so nothing outside a solve reads it.
     int node = -1;
 
-    // A named location, by its index in Warehouse::locations.
-    static WarehouseLocation named(int index) {
+    // Named layout: the DistanceTable::tag of the warehouse the location was
+    // made for, or 0 for none. An index alone says nothing of its warehouse:
+    // a location with a tag is refused by a solution of another warehouse
+    // (checkLocation), one without is read in that one's table when the
+    // index exists there.
+    int tag = 0;
+
+    // A named location, by its index in Warehouse::locations: of `warehouse`
+    // when one is given (the tag), of whichever it is used in otherwise.
+    static WarehouseLocation named(int index, const Warehouse* warehouse = nullptr) {
         WarehouseLocation location;
         location.node = index;
+        if (warehouse != nullptr && warehouse->locations != nullptr)
+            location.tag = warehouse->locations->tag;
         return location;
     }
 

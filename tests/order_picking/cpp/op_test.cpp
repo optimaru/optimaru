@@ -663,6 +663,19 @@ void verifyLayouts() {
                   checkLayout(bad);
               }),
               "a location index beyond the table is refused");
+        {
+            // A location made for a warehouse carries its tag: the twin
+            // warehouse, with the same ids, refuses it.
+            const Warehouse twin = namedSolution().warehouse;
+            OrderPickingSolution tagged = s;
+            tagged.pickTasks[0].location = WarehouseLocation::named(1, &w);
+            checkLayout(tagged);
+            check(w.locations->tag != twin.locations->tag && w.locations->tag > 0 && refused([&] {
+                      tagged.pickTasks[0].location = WarehouseLocation::named(1, &twin);
+                      checkLayout(tagged);
+                  }),
+                  "a named location of another warehouse is refused");
+        }
         check(refused([&] {
                   calculateDistance(w, WarehouseLocation::named(9), s.trolleys[0].location);
               }),
@@ -675,7 +688,7 @@ void verifyLayouts() {
         // walks one lap of 56 m.
         const int stops = 7;
         std::vector<std::string> ids;
-        std::vector<std::vector<int>> lap(stops, std::vector<int>(stops, 0));
+        std::vector<std::vector<std::int64_t>> lap(stops, std::vector<std::int64_t>(stops, 0));
         for (int from = 0; from < stops; ++from) {
             ids.push_back("stop" + std::to_string(from));
             for (int to = 0; to < stops; ++to) lap[from][to] = 8 * ((to - from + stops) % stops);

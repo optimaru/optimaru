@@ -406,6 +406,8 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     // Config::distance_nearby). The meter reads a snapshot of the layout and
     // of the pick locations — a pure lookup.
     if (config.distance_nearby) {
+        // The copy of the layout shares the solve's table (Warehouse::active),
+        // which so lives as long as these settings: the engine of one solve.
         auto warehouse = std::make_shared<const Warehouse>(solution.warehouse);
         auto locations = std::make_shared<std::vector<WarehouseLocation>>();
         locations->reserve(solution.pickTasks.size());
@@ -452,7 +454,10 @@ void Solver::solve(OrderPickingSolution& solution) {
     if (config_.parallel_solver_count > 1) {
         {
             // One table for every start: the candidates are copies of the
-            // solution, which share it.
+            // solution, which share it. A candidate so arrives at its start's
+            // solve with the table set and, on a grid, its locations numbered:
+            // checkLayout takes that for what it is (checkLocation), because
+            // this solution was checked above, before it was numbered.
             const ActiveDistances distances(solution);
             optimaru::solve_parallel_starts(
                     config_, solution,
