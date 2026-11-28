@@ -52,7 +52,10 @@ bool feasible(const ContainerLoadingProblem& problem, const Container& container
     // items do not overlap, so the areas add up without counting any twice.
     const double base = static_cast<double>(o.length) * static_cast<double>(o.width);
     const double needed = problem.minSupportRatio * base;
-    const double enough = needed - 1e-9 * std::max(1.0, needed);
+    // The tolerance absorbs the rounding of ratio * base; capped at half an
+    // area unit, since `supported` is a sum of whole areas, so the decoder
+    // never accepts a base a whole unit short (the evaluators check at 1e-6).
+    const double enough = needed - std::min(0.5, 1e-9 * std::max(1.0, needed));
     double supported = 0.0;
     for (const Box& box : boxes) {
         if (box.z + box.height != point.z) continue;

@@ -166,7 +166,8 @@ class ContainerLoadingProblem:
 def calculate_score(problem: ContainerLoadingProblem) -> Score:
     """Decode every container, write where each item stands and recompute the score at the
     default weights (also stores problem.score). ValueError for a problem the engine
-    refuses (see ContainerLoadingProblem)."""
+    refuses (see ContainerLoadingProblem). An item in no container's list is reported by
+    `unplaced_items()` but costs nothing (solve lists every item before it scores)."""
 
 def update_placements(problem: ContainerLoadingProblem) -> None:
     """Decode every container and write where each item stands (the derived fields of the
