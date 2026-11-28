@@ -55,7 +55,7 @@ namespace optimaru {
 // plus the nearby-neighbour precomputation, custom operator registration and
 // multi-start solving.
 //
-// docs/how-it-solves.md follows run() step by step, with where each part is
+// docs/how-it-solves.md follows solve() and run() step by step, with where each part is
 // and how to add one; the steps are marked below as "How it solves, <n>".
 //
 // The loop is the solver's own and holds no move: every part it draws on is

@@ -65,7 +65,7 @@ body:
     id: why
     attributes:
       label: Why the built-ins do not cover it
-      description: For a move, whether reweighting the move mix (config.moves) or a built-in strategy (config.strategies) gets there. For a constraint, which existing one comes closest.
+      description: For a move, whether reweighting the move mix (`config.moves`) or a built-in strategy (`config.strategies`) gets there. For a constraint, which existing one comes closest.
   - type: checkboxes
     id: pr
     attributes:

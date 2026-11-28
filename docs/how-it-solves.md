@@ -11,7 +11,7 @@ The loop itself is `Solver::run` in
 [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp). It holds no move: every
 part it draws on is a plugin under [`core/optimaru/search/`](../core/optimaru/search/),
 and the built-in ones use the same interfaces a use case registers its own with.
-Each step below is marked in `Solver::run` with a comment that names it
+Each step below is marked in `Solver::solve` (step 1) and `Solver::run` (the rest) with a comment that names it
 (`// How it solves, 3: ...`), so you can find it there by its number.
 
 Paths are relative to the repository root. Settings are named as Python reads
@@ -84,8 +84,8 @@ one move cannot run far past the time limit.
 
 The search has stalled when no new best has come for as many steps as it usually
 takes between new bests (eight times their moving average), and at least for the
-configured trigger. Each kick that finds nothing doubles the wait, up to 4096
-times the trigger; a new best resets it. Where late acceptance runs in stages of growing history, a stall can
+configured trigger. Every kick doubles the wait, up to 4096 times the trigger, and a new
+best resets it, so the wait grows only while kicks find nothing. Where late acceptance runs in stages of growing history, a stall can
 start the next stage instead of a kick.
 
 - Code: the `patience` and `stalled` lines of `Solver::run`, and `HistoryStages`
@@ -98,7 +98,9 @@ start the next stage instead of a kick.
 ### 5. Ruin and recreate kick
 
 An adaptive selector picks a ruin operator; it removes part of the solution (10 to
-30% by default), a greedy insertion (or regret-k) rebuilds it, and a short hill
+30% by default), a greedy insertion rebuilds it (regret-k with k = 3 by default:
+the element that would lose most by waiting goes in first; plain cheapest insertion
+with `regret_k` below 2), and a short hill
 climb with the move mix polishes the seams. The result becomes the current
 solution whatever it scores; how it scored only teaches the selector which ruins
 pay off.
@@ -215,7 +217,10 @@ is taken again) and the stall counters start over. Then the next step begins.
 
 The best snapshot is put back into the solution and its score returned. With
 `config.run.parallel_solver_count` above 1, `Solver::solve_multistart` runs that
-many solves from different seeds on threads and keeps the best.
+many solves from different seeds on threads and keeps the best. A use case that
+registers moves of its own on each start goes through `solve_parallel_starts` in
+[`core/optimaru/solver_config.hpp`](../core/optimaru/solver_config.hpp) instead, which
+does the same around the use case's own solve.
 
 ## Where to start
 

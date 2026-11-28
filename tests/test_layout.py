@@ -102,7 +102,7 @@ def test_the_idea_issue_template_offers_every_use_case():
     text = (ROOT / ".github" / "ISSUE_TEMPLATE" / "move-or-constraint.yml").read_text()
     block = re.search(r"id: use-case\n.*?options:\n(.*?)\n    validations:", text, re.S)
     assert block, "move-or-constraint.yml: no use-case dropdown"
-    options = {line.strip()[2:] for line in block.group(1).splitlines()}
+    options = {m.group(1) for m in re.finditer(r"^\s*- (\S+)$", block.group(1), re.M)}
     options -= {"several", "the engine"}
     assert options == USE_CASES, f"move-or-constraint.yml: differs in {sorted(options ^ USE_CASES)}"
 
