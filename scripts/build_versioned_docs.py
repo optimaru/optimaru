@@ -19,13 +19,14 @@ Run it with the docs requirements, from a clone that has the release tags
         python scripts/build_versioned_docs.py --out site \\
         --site-url https://optimaru.github.io/optimaru/
 
-Every version is built with the MkDocs of this environment: the requirements
+It needs Python 3.12 or later (``tarfile``'s extraction filter). Every version is built with the MkDocs of this environment: the requirements
 have been the same pins since 0.4. Release builds are not strict (their
 warnings cannot be fixed any more); ``--strict`` applies to ``dev``. A release
-is built from ``git archive`` of its tag, where two things are adjusted for the
-selector: its links to repository files and its edit links name the tag instead
-of ``main``, and the theme gets the version banner (overrides/main.html) when
-the tag predates it.
+is built from ``git archive`` of its tag, where two things are adjusted: its
+links to repository files name the tag instead of ``main``, and the theme gets
+the version banner (overrides/main.html) when the tag predates it. An older
+release that fails to build is left out of the menu with a warning; dev or the
+newest release failing fails the run.
 """
 
 from __future__ import annotations
@@ -44,8 +45,8 @@ from io import BytesIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# The first release with mkdocs.yml. Each minor adds about 20 MB to the site (GitHub Pages
-# allows 1 GB): raise this when the old ones are no longer worth keeping.
+# The first release with mkdocs.yml. Each minor adds about 20 MB to the site, and latest/ repeats
+# the newest (GitHub Pages allows 1 GB): raise this when the old ones are no longer worth keeping.
 FIRST_MINOR = (0, 4)
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 WRAPPER = ".mkdocs-versioned.yml"
@@ -54,10 +55,15 @@ DEV = "dev"
 
 
 def release_tags() -> list[tuple[str, str]]:
-    """(folder, tag) for the newest patch of every minor, newest minor first."""
+    """(folder, tag) for the newest patch of every minor of this repository, newest minor first."""
     out = subprocess.run(["git", "tag", "--list", "v*"], cwd=ROOT, check=True, capture_output=True, text=True)
+    return pick_releases(out.stdout.split())
+
+
+def pick_releases(tags: list[str]) -> list[tuple[str, str]]:
+    """(folder, tag) for the newest patch of every minor since FIRST_MINOR, newest minor first."""
     newest: dict[tuple[int, int], tuple[int, str]] = {}
-    for tag in out.stdout.split():
+    for tag in tags:
         m = TAG.match(tag)
         if not m:
             continue
@@ -102,7 +108,6 @@ def build(tree: Path, out: Path, site_url: str, ref: str, strict: bool) -> None:
                 "site_url": site_url,
                 # 0.4 and 0.5 had no custom_dir: without it they would not read the banner template.
                 "theme": {"custom_dir": "overrides"},
-                "edit_uri": f"edit/{ref}/docs/" if ref == "main" else f"blob/{ref}/docs/",
                 "extra": {"version": {"provider": "mike", "default": LATEST, "alias": True}},
             }
         )
@@ -132,19 +137,20 @@ REDIRECT = """<!doctype html>
 """
 
 
-def write_redirects(out: Path, site_url: str, newest: str) -> int:
+def write_redirects(out: Path, site_url: str, newest: str, versions: set[str]) -> int:
     """A page at every address of latest/ without the version, sending it to latest/.
 
-    Its canonical link names the newest release's own folder, as the pages of latest/ do.
+    Its canonical link names the newest release's own folder, as the pages of latest/ do. ``versions``
+    are the folders next to latest/ (dev and the releases), which no page may shadow.
     """
     latest = out / LATEST
-    folders = {path.name for path in out.iterdir() if path.is_dir()}
     count = 0
     for page in latest.rglob("index.html"):
         rel = page.parent.relative_to(latest).as_posix()
         rel = "" if rel == "." else f"{rel}/"
-        if rel and rel.split("/")[0] in folders - {path.name for path in latest.iterdir()}:
-            sys.exit(f"the page {rel} would shadow the version folder {rel.split('/')[0]}/")
+        top = rel.split("/")[0]
+        if top in versions | {LATEST}:
+            raise SystemExit(f"the page {rel} would shadow the version folder {top}/")
         depth = rel.count("/")
         href = "../" * depth + f"{LATEST}/{rel}"
         target = out / rel / "index.html"
@@ -160,9 +166,10 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True, help="output directory (emptied first)")
     parser.add_argument("--site-url", required=True, help="where <out> is served, ending in /")
     parser.add_argument("--strict", action="store_true", help="build dev with mkdocs --strict")
-    parser.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1), help="builds at a time")
+    parser.add_argument("--jobs", type=int, default=4, help="builds at a time")
     parser.add_argument("--no-releases", action="store_true", help="build dev only (quick local check)")
     args = parser.parse_args()
+    jobs_at_once = max(1, min(args.jobs, os.cpu_count() or 1))
     site_url = args.site_url if args.site_url.endswith("/") else f"{args.site_url}/"
     out = args.out.resolve()
 
@@ -180,26 +187,29 @@ def main() -> None:
         build(tree, out / folder, f"{site_url}{folder}/", tag, strict=False)
 
     # Each build is one MkDocs process; they share nothing but the output directory.
-    with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        jobs = {pool.submit(build, ROOT, out / DEV, f"{site_url}{DEV}/", "main", args.strict): f"{DEV} (main)"}
-        jobs.update({pool.submit(build_release, folder, tag, tmp): f"{folder} ({tag})" for folder, tag in releases})
-        failed = set()
+    with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=jobs_at_once) as pool:
+        # Keyed by folder: dev, or a release minor.
+        jobs = {pool.submit(build, ROOT, out / DEV, f"{site_url}{DEV}/", "main", args.strict): DEV}
+        jobs.update({pool.submit(build_release, folder, tag, tmp): folder for folder, tag in releases})
+        failed: set[str] = set()
         for job in as_completed(jobs):
             try:
                 job.result()
                 print(f"built {jobs[job]}", flush=True)
-            except subprocess.CalledProcessError:
+            except Exception as error:  # a failed build, or a tag tree that would not extract
+                print(f"error: {jobs[job]}: {error}", file=sys.stderr)
                 failed.add(jobs[job])
-    if f"{DEV} (main)" in failed:
+    if DEV in failed:
         sys.exit("build failed: dev (main)")
-    if releases and f"{releases[0][0]} ({releases[0][1]})" in failed:
+    if releases and releases[0][0] in failed:
         sys.exit(f"build failed: the newest release, {releases[0][1]}")
     # An older release that no longer builds (say, after a change to docs/requirements.txt) is left
     # out of the menu rather than holding back the rest; the warning shows in the log.
-    for folder, tag in [r for r in releases if f"{r[0]} ({r[1]})" in failed]:
-        print(f"warning: {tag} did not build and is left out of the version menu", file=sys.stderr)
-        shutil.rmtree(out / folder, ignore_errors=True)
-    releases = [r for r in releases if f"{r[0]} ({r[1]})" not in failed]
+    for folder, tag in releases:
+        if folder in failed:
+            print(f"warning: {tag} did not build and is left out of the version menu", file=sys.stderr)
+            shutil.rmtree(out / folder, ignore_errors=True)
+    releases = [(folder, tag) for folder, tag in releases if folder not in failed]
     versions = [{"version": DEV, "title": "dev (main)", "aliases": []}]
     versions += [
         {"version": folder, "title": tag.removeprefix("v"), "aliases": [LATEST] if i == 0 else []}
@@ -208,7 +218,8 @@ def main() -> None:
     if releases:
         # The newest release again under latest/ (its canonical links keep naming its own folder).
         shutil.copytree(out / releases[0][0], out / LATEST)
-        print(f"{write_redirects(out, site_url, releases[0][0])} redirect pages to {LATEST}/", flush=True)
+        folders = {DEV, *(folder for folder, _ in releases)}
+        print(f"{write_redirects(out, site_url, releases[0][0], folders)} redirect pages to {LATEST}/", flush=True)
         # GitHub Pages answers every unknown address with the root 404.html (its links are absolute).
         shutil.copyfile(out / LATEST / "404.html", out / "404.html")
     else:

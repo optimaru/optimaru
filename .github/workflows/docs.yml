@@ -52,8 +52,12 @@ env:
 
 jobs:
   build:
-    # After wheels.yml only when it published (it also runs, and fails, on other pushes).
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # After wheels.yml only when a push to main ran it to the end (it runs whenever pyproject.toml
+    # changes, also on PRs, and publishes only when the version's tag is missing; a run that did not
+    # publish just redeploys the same site).
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
