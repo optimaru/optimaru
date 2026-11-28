@@ -40,6 +40,12 @@ std::string containerRepr(const Container& container) {
            ", items=" + std::to_string(container.items.size()) + ")";
 }
 
+std::vector<StackingRule> toRules(const std::vector<std::pair<std::string, std::string>>& rules) {
+    std::vector<StackingRule> out;
+    for (const auto& [top, bottom] : rules) out.push_back({top, bottom});
+    return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -55,7 +61,9 @@ PYBIND11_MODULE(_core, m) {
     py::class_<Item>(m, "Item", py::module_local())
             .def(py::init([](std::string id, int length, int width, int height, std::int64_t weight,
                              Rotation rotations, std::optional<std::int64_t> maxLoadOnTop,
-                             std::optional<int> unloadOrder, std::optional<std::string> group) {
+                             std::optional<int> unloadOrder, std::optional<std::string> group,
+                             bool bottomOnly, std::optional<int> maxStackLayers,
+                             std::optional<std::string> stackGroup) {
                      Item item;
                      item.id = std::move(id);
                      item.length = length;
@@ -66,12 +74,16 @@ PYBIND11_MODULE(_core, m) {
                      item.maxLoadOnTop = maxLoadOnTop;
                      item.unloadOrder = unloadOrder;
                      item.group = std::move(group);
+                     item.bottomOnly = bottomOnly;
+                     item.maxStackLayers = maxStackLayers;
+                     item.stackGroup = std::move(stackGroup);
                      return item;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
                  py::arg("weight") = 0, py::arg("rotations") = Rotation::All,
                  py::arg("max_load_on_top") = py::none(), py::arg("unload_order") = py::none(),
-                 py::arg("group") = py::none())
+                 py::arg("group") = py::none(), py::arg("bottom_only") = false,
+                 py::arg("max_stack_layers") = py::none(), py::arg("stack_group") = py::none())
             .def_readwrite("id", &Item::id)
             .def_readwrite("length", &Item::length)
             .def_readwrite("width", &Item::width)
@@ -81,6 +93,9 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("max_load_on_top", &Item::maxLoadOnTop)
             .def_readwrite("unload_order", &Item::unloadOrder)
             .def_readwrite("group", &Item::group)
+            .def_readwrite("bottom_only", &Item::bottomOnly)
+            .def_readwrite("max_stack_layers", &Item::maxStackLayers)
+            .def_readwrite("stack_group", &Item::stackGroup)
             // Derived (refreshed by calculate_score / solve): the container
             // index (-1 = not placed), the place among its placed items, the
             // corner nearest the origin and the size after rotation.
@@ -98,7 +113,9 @@ PYBIND11_MODULE(_core, m) {
     py::class_<Container>(m, "Container", py::module_local())
             .def(py::init([](std::string id, int length, int width, int height,
                              std::optional<std::int64_t> maxWeight, double cost,
-                             std::vector<int> items) {
+                             std::vector<int> items, std::optional<int> maxStackHeight,
+                             std::optional<double> maxOffsetLength,
+                             std::optional<double> maxOffsetWidth) {
                      Container container;
                      container.id = std::move(id);
                      container.length = length;
@@ -107,17 +124,25 @@ PYBIND11_MODULE(_core, m) {
                      container.maxWeight = maxWeight;
                      container.cost = cost;
                      container.items = std::move(items);
+                     container.maxStackHeight = maxStackHeight;
+                     container.maxOffsetLength = maxOffsetLength;
+                     container.maxOffsetWidth = maxOffsetWidth;
                      return container;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
                  py::arg("max_weight") = py::none(), py::arg("cost") = 1.0,
-                 py::arg("items") = std::vector<int>{})
+                 py::arg("items") = std::vector<int>{}, py::arg("max_stack_height") = py::none(),
+                 py::arg("max_offset_length") = py::none(),
+                 py::arg("max_offset_width") = py::none())
             .def_readwrite("id", &Container::id)
             .def_readwrite("length", &Container::length)
             .def_readwrite("width", &Container::width)
             .def_readwrite("height", &Container::height)
             .def_readwrite("max_weight", &Container::maxWeight)
             .def_readwrite("cost", &Container::cost)
+            .def_readwrite("max_stack_height", &Container::maxStackHeight)
+            .def_readwrite("max_offset_length", &Container::maxOffsetLength)
+            .def_readwrite("max_offset_width", &Container::maxOffsetWidth)
             // The decision: the item indices in loading order.
             .def_readwrite("items", &Container::items)
             // Derived (refreshed by calculate_score / solve).
@@ -131,15 +156,18 @@ PYBIND11_MODULE(_core, m) {
 
     py::class_<ContainerLoadingProblem>(m, "ContainerLoadingProblem", py::module_local())
             .def(py::init([](std::vector<Container> containers, std::vector<Item> items,
-                             double minSupportRatio) {
+                             double minSupportRatio,
+                             const std::vector<std::pair<std::string, std::string>>& rules) {
                      ContainerLoadingProblem problem;
                      problem.containers = std::move(containers);
                      problem.items = std::move(items);
                      problem.minSupportRatio = minSupportRatio;
+                     problem.stackingRules = toRules(rules);
                      ScoreCalculator::prepare(problem);  // refuses a bad problem here
                      return problem;
                  }),
-                 py::arg("containers"), py::arg("items"), py::arg("min_support_ratio") = 0.8)
+                 py::arg("containers"), py::arg("items"), py::arg("min_support_ratio") = 0.8,
+                 py::arg("stacking_rules") = std::vector<std::pair<std::string, std::string>>{})
             // NOTE: element access returns copies (a write to
             // problem.containers[i].items is lost); use set_loading for the
             // loading orders, or assign a whole list back.
@@ -155,6 +183,19 @@ PYBIND11_MODULE(_core, m) {
                         problem.items = std::move(items);
                     })
             .def_readwrite("min_support_ratio", &ContainerLoadingProblem::minSupportRatio)
+            // (top, bottom): items of stack group `top` may not stand on items of `bottom`.
+            .def_property(
+                    "stacking_rules",
+                    [](const ContainerLoadingProblem& problem) {
+                        std::vector<std::pair<std::string, std::string>> rules;
+                        for (const StackingRule& rule : problem.stackingRules)
+                            rules.emplace_back(rule.top, rule.bottom);
+                        return rules;
+                    },
+                    [](ContainerLoadingProblem& problem,
+                       const std::vector<std::pair<std::string, std::string>>& rules) {
+                        problem.stackingRules = toRules(rules);
+                    })
             .def_readonly("score", &ContainerLoadingProblem::score)
             // The decision: per container, the item indices in loading order.
             .def("loading",

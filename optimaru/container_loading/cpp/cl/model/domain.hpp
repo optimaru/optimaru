@@ -2,6 +2,7 @@
 #define CL_DOMAIN_HPP
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -16,8 +17,10 @@ namespace cl {
 // Score
 // ---------------------------------------------------------------------------
 // Two levels. hard = items that found no place, weight above a container's
-// limit, weight resting on an item above what it carries, and items that
-// block one that leaves earlier. soft = the cost of the containers in use and
+// limit, weight resting on an item above what it carries, items standing on
+// each other against a stacking rule or above a layer limit, items that block
+// one that leaves earlier, and a load's centre of gravity beyond its limit.
+// soft = the cost of the containers in use and
 // the groups spread over more than one container (plus the opt-in loading
 // length and load balance). The engine's optimaru::Score(int64 hard, double
 // soft).
@@ -31,6 +34,8 @@ using Score = optimaru::Score;
 // are taken in double where the moves and the construction compare them.
 constexpr int kMaxLength = 1'000'000;
 constexpr std::int64_t kMaxWeight = 1'000'000'000;
+// The largest Item::maxStackLayers (the JSON model's bound).
+constexpr int kMaxLayers = 1'000'000'000;
 
 // Which of an item's orientations the decoder may use.
 //   All      the six axis-parallel orientations
@@ -65,6 +70,14 @@ struct Item {
     std::optional<int> unloadOrder;
     // Items of one group belong in one container (the items of an order).
     std::optional<std::string> group;
+    // Only on the floor (z = 0); other items may stand on it.
+    bool bottomOnly = false;
+    // At most this many items in a column through this item, itself included:
+    // the items under it down to the floor and those on top of it. Unset = no
+    // limit.
+    std::optional<int> maxStackLayers;
+    // The group the stacking rules name (ContainerLoadingProblem::stackingRules).
+    std::optional<std::string> stackGroup;
 
     // --- derived by ScoreCalculator::updateDerived (calculate_score, solve) ---
     int container = -1;  // index into containers; -1 = not placed
@@ -94,7 +107,15 @@ struct Container {
     int width = 0;
     int height = 0;
     std::optional<std::int64_t> maxWeight;
-    double cost = 1.0;       // what using this container costs
+    double cost = 1.0;  // what using this container costs
+    // How high the load may reach (a hand's height), below `height`. Unset =
+    // up to `height`.
+    std::optional<int> maxStackHeight;
+    // How far the placed items' centre of gravity may lie from the
+    // container's centre, as a share of half the length (along x) and of half
+    // the width (along y). Unset = no limit.
+    std::optional<double> maxOffsetLength;
+    std::optional<double> maxOffsetWidth;
     std::vector<int> items;  // loading order (indices into ContainerLoadingProblem::items)
 
     // --- derived by ScoreCalculator::updateDerived (calculate_score, solve) ---
@@ -104,12 +125,23 @@ struct Container {
     std::int64_t loadedVolume = 0;   // volume of the placed items
     int usedLength = 0;              // largest x + placed length; 0 when empty
 
+    // --- derived by ScoreCalculator::prepare ---
+    int fillHeight = 0;  // what the decoder fills up to: maxStackHeight, at most height
+
     std::int64_t volume() const {
         return static_cast<std::int64_t>(length) * width * static_cast<std::int64_t>(height);
     }
     double fillRatio() const {
         return static_cast<double>(loadedVolume) / static_cast<double>(volume());
     }
+};
+
+// One stacking rule: items whose stackGroup is `top` may not stand on items
+// whose stackGroup is `bottom` (rest on them, base on top). Anything not
+// forbidden is allowed.
+struct StackingRule {
+    std::string top;
+    std::string bottom;
 };
 
 // ---------------------------------------------------------------------------
@@ -121,6 +153,7 @@ struct ContainerLoadingProblem {
     // The share of an item's base that must rest on the floor or on other
     // items, in (0, 1].
     double minSupportRatio = 0.8;
+    std::vector<StackingRule> stackingRules;
 
     Score score;
 
@@ -134,6 +167,25 @@ struct ContainerLoadingProblem {
     int groupCount = 0;
     bool anyLoadLimit = false;    // some item sets maxLoadOnTop
     bool anyUnloadOrder = false;  // some item sets unloadOrder
+    bool anyLayerLimit = false;   // some item sets maxStackLayers
+    // Per item: its stackGroup numbered densely among the groups the rules
+    // name (-1 = none, or one no rule names), and whether items of group t may
+    // stand on items of group b: forbidden[t * stackGroupCount + b].
+    std::vector<int> stackGroupOf;
+    int stackGroupCount = 0;
+    std::vector<char> forbidden;
+    bool anyStackRule = false;  // some rule names the groups of two items
+
+    // Whether item `top` standing on item `bottom` breaks a stacking rule.
+    bool forbids(int top, int bottom) const {
+        const int t = stackGroupOf[static_cast<std::size_t>(top)];
+        const int b = stackGroupOf[static_cast<std::size_t>(bottom)];
+        return t >= 0 && b >= 0 &&
+               forbidden[static_cast<std::size_t>(t) * static_cast<std::size_t>(stackGroupCount) +
+                         static_cast<std::size_t>(b)];
+    }
+    // Whether the decode keeps what every box stands on.
+    bool trackSupports() const { return anyLoadLimit || anyLayerLimit; }
 
     int containersUsed() const {
         int used = 0;

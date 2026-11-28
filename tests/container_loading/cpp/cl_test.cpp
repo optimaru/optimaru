@@ -1,15 +1,18 @@
 // Container-loading tests, engine test/ style: check() + a non-zero exit on any failure.
 //   (a) the decoder by hand: the (x, z, y) order of the points, the support
 //       rule, the rotations, which orientation is taken, an item that finds
-//       no place
-//   (b) the decoder on random lists, short and long: every decode is a valid
-//       loading (inside the container, no overlap, enough support), a decode
+//       no place, bottomOnly, maxStackHeight, stacking rules and layer limits
+//   (b) the decoder on random lists, short and long, a third of them with
+//       stacking rules, layer limits, bottomOnly items and a stack height:
+//       every decode is a valid loading (inside the container and below its
+//       stack height, no overlap, enough support, bottomOnly on the floor), a decode
 //       resumed from any shared prefix equals a decode from scratch, and the
 //       room every free point keeps equals the room measured afresh
 //   (c) the costs of one decoded container by hand: stacking load (passed
 //       down, shared by contact area, exact at loads of 5.6e10), unloading
 //       order (in front, on top),
-//       used length, load balance
+//       used length, load balance, stacking rules and layer limits, the
+//       balance limit
 //   (d) PackingCache: what it returns is decode()'s result, a repeated list
 //       is a hit, changed facts drop the decodes
 //   (e) ScoreCalculator: prepare's refusals, the derived fields, the totals
@@ -133,15 +136,19 @@ int overlap(int a, int la, int b, int lb) {
     return std::max(0, std::min(a + la, b + lb) - std::max(a, b));
 }
 
-// A loading checked without the decoder: inside the walls, no two items
-// overlapping, every base supported by at least the problem's ratio.
+// A loading checked without the decoder: inside the walls and below the
+// stack height, no two items overlapping, every base supported by at least
+// the problem's ratio, every bottomOnly item on the floor.
 bool validLoading(const ContainerLoadingProblem& p, int container, const Packing& packing) {
     const Container& space = p.containers[static_cast<std::size_t>(container)];
+    const int top =
+            space.maxStackHeight ? std::min(space.height, *space.maxStackHeight) : space.height;
     for (std::size_t i = 0; i < packing.boxes.size(); ++i) {
         const Box& box = packing.boxes[i];
         if (box.x < 0 || box.y < 0 || box.z < 0 || box.x + box.length > space.length ||
-            box.y + box.width > space.width || box.z + box.height > space.height)
+            box.y + box.width > space.width || box.z + box.height > top)
             return false;
+        if (p.items[static_cast<std::size_t>(box.item)].bottomOnly && box.z > 0) return false;
         double supported = 0.0;
         for (std::size_t j = 0; j < packing.boxes.size(); ++j) {
             if (i == j) continue;
@@ -187,6 +194,22 @@ ContainerLoadingProblem randomProblem(std::mt19937_64& rng, int containers, int 
     }
     ScoreCalculator::prepare(p);
     return p;
+}
+
+// Stacking facts on a random problem, drawn from their own generator:
+// bottomOnly items, layer limits, stack groups with two rules among them, and
+// now and then a stack height.
+void addStacking(ContainerLoadingProblem& p, std::mt19937_64& rng) {
+    for (Item& item : p.items) {
+        item.bottomOnly = rng() % 8 == 0;
+        if (rng() % 4 == 0) item.maxStackLayers = 1 + static_cast<int>(rng() % 3);
+        if (rng() % 2 == 0) item.stackGroup = "s" + std::to_string(rng() % 3);
+    }
+    p.stackingRules = {{"s0", "s1"}, {"s2", "s2"}};
+    for (Container& container : p.containers) {
+        if (rng() % 3 == 0) container.maxStackHeight = container.height - 2;
+    }
+    ScoreCalculator::prepare(p);
 }
 
 // -------------------------------------------------------------------------
@@ -368,6 +391,82 @@ void verifyDecoderByHand() {
                       ScoreCalculator::calculateTotals(q).stackingLoadCost == 0,
               "a load passed down through another box counts against the limit below");
     }
+    {
+        // bottomOnly: the second box would go on the first; bottomOnly sends
+        // it to the floor beside it, and leaves it out when there is none.
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 4, 8);
+        addItem(p, 4, 4, 4);
+        const int floor = addItem(p, 4, 4, 4);
+        p.items[static_cast<std::size_t>(floor)].bottomOnly = true;
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 4, 0, 0), "bottomOnly: on the floor beside, not on top");
+        p.containers[0].length = 4;
+        ScoreCalculator::score(p);
+        check(!p.items[1].isPlaced(), "bottomOnly: no floor left, no place");
+        // maxStackHeight: two cubes of 4 in a space 10 high, up to 6.
+        ContainerLoadingProblem q;
+        addContainer(q, 4, 4, 10);
+        addItem(q, 4, 4, 4);
+        addItem(q, 4, 4, 4);
+        loadAll(q);
+        ScoreCalculator::score(q);
+        check(at(q.items[1], 0, 0, 4), "without a stack height the second cube goes on top");
+        q.containers[0].maxStackHeight = 6;
+        ScoreCalculator::score(q);
+        check(!q.items[1].isPlaced() && q.containers[0].fillHeight == 6,
+              "maxStackHeight 6: no room for a second layer of 4");
+    }
+    {
+        // Stacking rules: "chem" may not stand on "food". The chem box goes
+        // beside the food box; with no room beside it, on it, and the cost
+        // counts the pair.
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 4, 8);
+        const int food = addItem(p, 4, 4, 4);
+        const int chem = addItem(p, 4, 4, 4);
+        p.items[static_cast<std::size_t>(food)].stackGroup = "food";
+        p.items[static_cast<std::size_t>(chem)].stackGroup = "chem";
+        p.stackingRules = {{"chem", "food"}};
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 4, 0, 0) && ScoreCalculator::calculateTotals(p).stackingRuleCost == 0,
+              "stacking rules: the forbidden box goes beside, not on top");
+        p.stackingRules = {{"food", "chem"}};
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 0, 0, 4), "a rule the other way round does not hold it back");
+        p.stackingRules = {{"chem", "food"}};
+        p.containers[0].length = 4;
+        ScoreCalculator::score(p);
+        check(at(p.items[1], 0, 0, 4) && ScoreCalculator::calculateTotals(p).stackingRuleCost == 1,
+              "no other place: on top all the same, and one pair counted");
+        // Layer limits: the bottom box allows 2 layers, so the third box goes
+        // to the floor beside the column; in a space without a floor left,
+        // on top, one layer too many.
+        ContainerLoadingProblem q;
+        addContainer(q, 8, 4, 12);
+        const int base = addItem(q, 4, 4, 4);
+        addItem(q, 4, 4, 4);
+        addItem(q, 4, 4, 4);
+        q.items[static_cast<std::size_t>(base)].maxStackLayers = 2;
+        loadAll(q);
+        ScoreCalculator::score(q);
+        check(at(q.items[1], 0, 0, 4) && at(q.items[2], 4, 0, 0) &&
+                      ScoreCalculator::calculateTotals(q).stackingRuleCost == 0,
+              "layer limits: the third box starts a column of its own");
+        q.containers[0].length = 4;
+        ScoreCalculator::score(q);
+        check(at(q.items[2], 0, 0, 8) && ScoreCalculator::calculateTotals(q).stackingRuleCost == 1,
+              "no other place: a third layer, one too many");
+        // The new box's own limit: it allows 1 layer, so not on top of another.
+        q.containers[0].length = 8;
+        q.items[static_cast<std::size_t>(base)].maxStackLayers.reset();
+        q.items[1].maxStackLayers = 1;
+        ScoreCalculator::score(q);
+        check(at(q.items[1], 4, 0, 0) && at(q.items[2], 0, 0, 4),
+              "a box that allows one layer stays on the floor, and nothing on it");
+    }
     std::printf("\n");
 }
 
@@ -377,6 +476,7 @@ void verifyDecoderByHand() {
 void verifyDecoderProperties() {
     std::printf("== (b) Random decodes: valid loadings, resumable from any prefix ==\n");
     std::mt19937_64 rng(11);
+    std::mt19937_64 stackRng(12);
     int invalid = 0;
     int resumeMismatches = 0;
     int staleRoomCount = 0;
@@ -396,6 +496,7 @@ void verifyDecoderProperties() {
             p.containers[0].height = 12;
         }
         p.minSupportRatio = round % 3 == 0 ? 1.0 : round % 3 == 1 ? 0.8 : 0.5;
+        if (round % 3 == 2) addStacking(p, stackRng);
         std::vector<int> list(p.items.size());
         for (std::size_t i = 0; i < list.size(); ++i) list[i] = static_cast<int>(i);
         std::shuffle(list.begin(), list.end(), rng);
@@ -425,7 +526,8 @@ void verifyDecoderProperties() {
              {common, common / 2, static_cast<std::size_t>(rng() % (common + 1)), std::size_t{0}}) {
             Packing resumed = base;
             decode(p, 0, other, resumed, static_cast<int>(keep));
-            if (!sameBoxes(resumed, fresh) || freePoints(resumed) != freePoints(fresh))
+            if (!sameBoxes(resumed, fresh) || freePoints(resumed) != freePoints(fresh) ||
+                resumed.level != fresh.level || resumed.above != fresh.above)
                 ++resumeMismatches;
             staleRoomCount += staleRooms(p, 0, resumed);
         }
@@ -561,6 +663,78 @@ void verifyCostsByHand() {
         check(ScoreCalculator::calculateTotals(p).loadBalanceCost == 0,
               "balance: a load that weighs nothing costs 0");
     }
+    {
+        // A column food, chem, chem: "chem" may not stand on "food" (one
+        // pair); with chem on chem forbidden too, two.
+        ContainerLoadingProblem p;
+        addContainer(p, 4, 4, 12);
+        addItem(p, 4, 4, 4);
+        addItem(p, 4, 4, 4);
+        addItem(p, 4, 4, 4);
+        p.items[0].stackGroup = "food";
+        p.items[1].stackGroup = p.items[2].stackGroup = "chem";
+        p.stackingRules = {{"chem", "food"}};
+        loadAll(p);
+        check(ScoreCalculator::calculateTotals(p).stackingRuleCost == 1,
+              "stacking rules: one forbidden pair in the column (chem above chem is allowed)");
+        p.stackingRules.push_back({"chem", "chem"});
+        check(ScoreCalculator::calculateTotals(p).stackingRuleCost == 2,
+              "stacking rules: a group may be forbidden on itself");
+        p.stackingRules = {{"food", "chem"}};
+        check(ScoreCalculator::calculateTotals(p).stackingRuleCost == 0,
+              "stacking rules: only the direction named counts");
+        // Layers: the column is 3 high. A limit of 2 on the bottom box and
+        // on the middle one: one layer too many each.
+        p.stackingRules.clear();
+        p.items[0].maxStackLayers = 2;
+        p.items[1].maxStackLayers = 2;
+        check(ScoreCalculator::calculateTotals(p).stackingRuleCost == 2,
+              "layers: a column of 3 through two boxes that allow 2");
+        p.items[0].maxStackLayers = 1;
+        p.items[1].maxStackLayers.reset();
+        p.items[2].maxStackLayers = 3;
+        check(ScoreCalculator::calculateTotals(p).stackingRuleCost == 2,
+              "layers: a box that allows 1 under two more: two too many; 3 at the top holds");
+    }
+    {
+        // Two bases side by side under one box across both: each base is in
+        // a column of 2, and a limit of 1 on both counts 1 each.
+        ContainerLoadingProblem p;
+        addContainer(p, 4, 4, 6);
+        addItem(p, 4, 2, 4);
+        addItem(p, 4, 2, 4);
+        addItem(p, 4, 4, 2);
+        p.items[0].maxStackLayers = p.items[1].maxStackLayers = 1;
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(at(p.items[2], 0, 0, 4) && ScoreCalculator::calculateTotals(p).stackingRuleCost == 2,
+              "layers: a box across two bases tops both columns");
+    }
+    {
+        // The balance limit. One item of 4 x 4 in the corner of an 8 x 8
+        // floor: its centre (2, 2) is half of the half size off along both
+        // axes. Limits 0.2 along and 0.5 across: 30 percent over.
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 8, 8);
+        addItem(p, 4, 4, 4, Rotation::Fixed, 7);
+        loadAll(p);
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 0,
+              "balance limit: none set, none counted");
+        p.containers[0].maxOffsetLength = 0.2;
+        p.containers[0].maxOffsetWidth = 0.5;
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 30,
+              "balance limit: 0.5 off along x against 0.2 is 30; 0.5 across at 0.5 holds");
+        p.containers[0].maxOffsetWidth = 0.25;
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 55,
+              "balance limit: both axes add up (30 + 25)");
+        p.containers[0].maxOffsetLength = 0.4999;
+        p.containers[0].maxOffsetWidth.reset();
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 1,
+              "balance limit: a hundredth of a percent over counts 1");
+        p.items[0].weight = 0;
+        check(ScoreCalculator::calculateTotals(p).balanceLimitCost == 0,
+              "balance limit: a load that weighs nothing costs 0");
+    }
     std::printf("\n");
 }
 
@@ -637,6 +811,24 @@ void verifyCache() {
         check(pinning.hits() == hits + 1 && pinning.decodes() == decodes,
               "a pinned list stays in its slot, also when another list was decoded first");
     }
+    for (const auto& change : std::vector<std::function<void(ContainerLoadingProblem&)>>{
+                 [](ContainerLoadingProblem& q) { q.containers[0].maxStackHeight = 7; },
+                 [](ContainerLoadingProblem& q) { q.items[1].bottomOnly = true; },
+                 [](ContainerLoadingProblem& q) { q.items[1].maxStackLayers = 2; },
+                 [](ContainerLoadingProblem& q) {
+                     q.items[1].stackGroup = "a";
+                     q.stackingRules = {{"a", "a"}};
+                 },
+                 [](ContainerLoadingProblem& q) { q.containers[1].maxOffsetWidth = 0.1; }}) {
+        PackingCache kept;
+        kept.reset(p);
+        kept.packing(p, 0, list);
+        ContainerLoadingProblem changed = p;
+        change(changed);
+        ScoreCalculator::prepare(changed);
+        kept.reset(changed);
+        check(kept.decodes() == 0, "a changed stacking fact drops the decodes");
+    }
     p.items[0].length += 1;
     ScoreCalculator::prepare(p);
     cache.reset(p);
@@ -683,6 +875,21 @@ void verifyScoreCalculator() {
           "an item listed twice or out of range is refused");
     check(broken([](ContainerLoadingProblem& p) { p.containers.clear(); }),
           "items without a container are refused");
+    check(broken([](ContainerLoadingProblem& p) {
+              p.items[0].maxStackLayers = 0;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].maxStackHeight = 0;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].maxStackHeight = kMaxLength + 1;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].maxOffsetLength = 1.5;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].maxOffsetWidth = -0.1;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].maxOffsetWidth = std::nan("");
+          }) && broken([](ContainerLoadingProblem& p) { p.stackingRules = {{"", "food"}}; }),
+          "a layer limit below 1, a stack height outside 1..1'000'000, an offset limit outside "
+          "0..1 and a rule without a group are refused");
 
     // Two pallets, hand-built: weight above the limit, a group over both, a
     // container cost.

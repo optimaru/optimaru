@@ -7,6 +7,9 @@
 //       driven through the engine's Editor protocol
 //   (c) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint, read through constraint_costs()
+//   (a), (b), (g) and (h) run on problems with every input in use: stacking
+//       rules, layer limits, bottomOnly, a stack height and balance limits
+//       too
 //   (d) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the level and weight guards
 //   (e) weight / level overrides, only() and drop(), the opt-in costs picked
@@ -92,7 +95,8 @@ Score scoreWith(DecomposedCalculator& calculator, ContainerLoadingProblem& p) {
 
 // A problem every constraint has something to say about: weight limits,
 // stacking limits, unloading orders, groups, containers of two sizes and
-// costs.
+// costs; and, drawn from a generator of their own, stacking rules, layer
+// limits, bottomOnly items, a stack height and balance limits.
 ContainerLoadingProblem busyProblem(std::uint64_t seed, int containers = 4, int items = 36) {
     std::mt19937_64 rng(seed);
     ContainerLoadingProblem p;
@@ -110,6 +114,16 @@ ContainerLoadingProblem busyProblem(std::uint64_t seed, int containers = 4, int 
         if (rng() % 2 == 0) itemOf(p, index).unloadOrder = static_cast<int>(rng() % 4);
         if (rng() % 2 == 0) itemOf(p, index).group = "g" + std::to_string(rng() % 6);
     }
+    std::mt19937_64 more(seed + 1000);
+    for (Item& item : p.items) {
+        item.bottomOnly = more() % 10 == 0;
+        if (more() % 4 == 0) item.maxStackLayers = 1 + static_cast<int>(more() % 3);
+        if (more() % 2 == 0) item.stackGroup = "s" + std::to_string(more() % 3);
+    }
+    p.stackingRules = {{"s0", "s1"}, {"s1", "s1"}};
+    p.containers[0].maxStackHeight = 7;
+    p.containers[1].maxOffsetLength = 0.2;
+    p.containers[2].maxOffsetWidth = 0.3;
     ScoreCalculator::prepare(p);
     return p;
 }
@@ -309,6 +323,40 @@ void verifyRawCostsByHand() {
               "unloadingOrderCost: 0 loaded last stop first");
     }
     {
+        // stackingRuleCost: "b" may not stand on "a"; a layer limit of 2 on
+        // the bottom of a column of 3.
+        ContainerLoadingProblem p;
+        addContainer(p, 4, 4, 12);
+        addContainer(p, 4, 4, 12);
+        p.containers[0].items = {addItem(p, 4, 4, 4), addItem(p, 4, 4, 4)};
+        p.containers[1].items = {addItem(p, 4, 4, 4), addItem(p, 4, 4, 4), addItem(p, 4, 4, 4)};
+        itemOf(p, 0).stackGroup = "a";
+        itemOf(p, 1).stackGroup = "b";
+        itemOf(p, 2).maxStackLayers = 2;
+        p.stackingRules = {{"b", "a"}};
+        check(rawCosts(p, "stackingRuleCost") == std::vector<double>({1.0, 1.0}),
+              "stackingRuleCost: one forbidden pair; one layer too many");
+        p.stackingRules = {{"a", "b"}};
+        itemOf(p, 2).maxStackLayers = 3;
+        check(rawCosts(p, "stackingRuleCost") == std::vector<double>({0.0, 0.0}),
+              "stackingRuleCost: 0 with the rule the other way round and room for 3 layers");
+    }
+    {
+        // balanceLimitCost: a 4 x 4 item in the corner of an 8 x 8 floor is
+        // half of the half length off; a limit of 0.1 along x: 40.
+        ContainerLoadingProblem p;
+        addContainer(p, 8, 8, 8);
+        addContainer(p, 8, 8, 8);
+        p.containers[0].maxOffsetLength = 0.1;
+        p.containers[0].items = {addItem(p, 4, 4, 4, 5)};
+        p.containers[1].items = {addItem(p, 4, 4, 4, 5)};
+        check(rawCosts(p, "balanceLimitCost") == std::vector<double>({40.0, 0.0}),
+              "balanceLimitCost: 40 percent over; a container without a limit costs 0");
+        p.containers[0].maxOffsetLength = 0.5;
+        check(rawCosts(p, "balanceLimitCost") == std::vector<double>({0.0, 0.0}),
+              "balanceLimitCost: 0 at the limit");
+    }
+    {
         // usedContainerCost: the container's cost when something stands in it.
         ContainerLoadingProblem p;
         addContainer(p, 4, 4, 4);
@@ -387,17 +435,19 @@ void verifyCatalog() {
     const auto rows = defaultConstraints().info();
     const optimaru::Level hard = optimaru::Level::Hard;
     const optimaru::Level soft = optimaru::Level::Soft;
-    check(rows.size() == 8 &&
+    check(rows.size() == 10 &&
                   rowIs<UnplacedItemCost>(rows[0], "unplacedItemCost", hard, 1.0, false) &&
                   rowIs<ContainerWeightCost>(rows[1], "containerWeightCost", hard, 1.0, false) &&
                   rowIs<StackingLoadCost>(rows[2], "stackingLoadCost", hard, 1.0, false) &&
-                  rowIs<UnloadingOrderCost>(rows[3], "unloadingOrderCost", hard, 1.0, false),
-          "info(): four hard constraints at weight 1");
-    check(rows.size() == 8 &&
-                  rowIs<UsedContainerCost>(rows[4], "usedContainerCost", soft, 1.0, false) &&
-                  rowIs<UsedLengthCost>(rows[5], "usedLengthCost", soft, 0.0, false) &&
-                  rowIs<LoadBalanceCost>(rows[6], "loadBalanceCost", soft, 0.0, false) &&
-                  rowIs<GroupSplitCost>(rows[7], "groupSplitCost", soft, 1.0, true),
+                  rowIs<StackingRuleCost>(rows[3], "stackingRuleCost", hard, 1.0, false) &&
+                  rowIs<UnloadingOrderCost>(rows[4], "unloadingOrderCost", hard, 1.0, false) &&
+                  rowIs<BalanceLimitCost>(rows[5], "balanceLimitCost", hard, 1.0, false),
+          "info(): six hard constraints at weight 1");
+    check(rows.size() == 10 &&
+                  rowIs<UsedContainerCost>(rows[6], "usedContainerCost", soft, 1.0, false) &&
+                  rowIs<UsedLengthCost>(rows[7], "usedLengthCost", soft, 0.0, false) &&
+                  rowIs<LoadBalanceCost>(rows[8], "loadBalanceCost", soft, 0.0, false) &&
+                  rowIs<GroupSplitCost>(rows[9], "groupSplitCost", soft, 1.0, true),
           "info(): four soft ones, two of them opt-in at weight 0, the global one last");
     check(!throwsInvalid([] { defaultConstraints().soft("unplacedItemCost"); }) &&
                   !throwsInvalid([] { defaultConstraints().hard("groupSplitCost"); }),
@@ -496,7 +546,7 @@ void verifyConstraintTotals() {
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
                   std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraint_totals().size() == 8, "one total per assembled component");
+    check(calculator.constraint_totals().size() == 10, "one total per assembled component");
     std::printf("\n");
 }
 
@@ -524,6 +574,15 @@ ConstraintAssembly weightedAssembly() {
     assembly.add_instances(std::move(copyOf("groupSplitCost")
                                              .weight("groupSplitCost", 2.0)
                                              .exponent("groupSplitCost", 2.0)));
+    assembly.add_instances(std::move(copyOf("balanceLimitCost")
+                                             .soft("balanceLimitCost")
+                                             .weight("balanceLimitCost", 0.01)
+                                             .offset("balanceLimitCost", 50.0)
+                                             .clip("balanceLimitCost", false)));
+    assembly.add_instances(std::move(copyOf("stackingRuleCost")
+                                             .soft("stackingRuleCost")
+                                             .weight("stackingRuleCost", 3.0)
+                                             .exponent("stackingRuleCost", 2.0)));
     assembly.add_instances(std::move(copyOf("stackingLoadCost")
                                              .soft("stackingLoadCost")
                                              .weight("stackingLoadCost", 0.5)

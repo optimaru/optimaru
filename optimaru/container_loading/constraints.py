@@ -1,6 +1,6 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`cl.solve(problem)`) scores all eight constraints at their default
+The default path (`cl.solve(problem)`) scores all ten constraints at their default
 weights, two of them opt-in at weight 0. This module is how a call changes that: pick
 constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
@@ -64,6 +64,7 @@ search is the same one, the domain's moves included.
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
+    "BalanceLimitCost",
     "Constraint",
     "ContainerWeightCost",
     "GroupSplitCost",
@@ -71,16 +72,19 @@ __all__ = [
     "LoadBalanceCost",
     "Score",
     "StackingLoadCost",
+    "StackingRuleCost",
     "UnloadingOrderCost",
     "UnplacedItemCost",
     "UsedContainerCost",
     "UsedLengthCost",
+    "balance_limit_cost",
     "container_weight_cost",
     "get_constraints",
     "group_split_cost",
     "load_balance_cost",
     "score",
     "stacking_load_cost",
+    "stacking_rule_cost",
     "unloading_order_cost",
     "unplaced_item_cost",
     "used_container_cost",
@@ -156,6 +160,32 @@ class StackingLoadCost(Constraint):
     )
 
 
+class StackingRuleCost(Constraint):
+    """Items standing on each other against a stacking rule, and columns above an item's
+    `max_stack_layers`. Default: hard, weight 1.
+
+    An item stands on another when its base rests on the other's top. Each such pair whose
+    `stack_group`s a rule of the problem's `stacking_rules` forbids counts 1, and every layer
+    a column through an item has beyond its `max_stack_layers` counts 1."""
+
+    name = "stacking_rule_cost"
+    label_en = "Stacking rules"
+    label_ko = "적층 규칙"
+    description_en = (
+        "The pairs of items where one stands on the other although a stacking rule forbids "
+        "its stack group on the other's, plus, for every item with max_stack_layers, the layers "
+        "the tallest column through it has beyond that limit (the item, the items under it down "
+        "to the floor and the items on top of it). One unit of cost is one such pair or one "
+        "layer too many; 0 means every stacking rule and layer limit holds."
+    )
+    description_ko = (
+        "적층 규칙이 금지한 적층 그룹의 물품 위에 놓인 물품 쌍을 세고, max_stack_layers가 있는 "
+        "물품마다 그 물품을 지나는 가장 높은 기둥(그 물품, 그 아래 바닥까지의 물품, 그 위의 "
+        "물품)이 한도를 넘는 단 수를 더합니다. 그런 쌍 하나나 넘친 단 하나가 비용 1이며, 0이면 "
+        "모든 적층 규칙과 단수 한도가 지켜졌습니다."
+    )
+
+
 class UnloadingOrderCost(Constraint):
     """Items in the way of one that leaves earlier. Default: hard, weight 1.
 
@@ -176,6 +206,32 @@ class UnloadingOrderCost(Constraint):
         "한 컨테이너 안에서 나중에 내릴 물품이 먼저 내릴 물품을 막고 있는 쌍을 셉니다. 그 물품과 "
         "문 사이에 있거나 그 위에 놓인 경우입니다. 한 쌍이 비용 1이며, 0이면 모든 물품을 자기 "
         "하차 순서에 문 쪽으로 꺼낼 수 있습니다. unload_order가 없는 물품은 세지 않습니다."
+    )
+
+
+class BalanceLimitCost(Constraint):
+    """A load's centre of gravity beyond the container's `max_offset_length` and
+    `max_offset_width`. Default: hard, weight 1.
+
+    Measured from the container's centre, along x as a share of half the length and along y
+    as a share of half the width; what lies beyond a limit counts in whole percent, rounded up.
+    A container without the limits costs nothing."""
+
+    name = "balance_limit_cost"
+    label_en = "Centre of gravity limit"
+    label_ko = "무게중심 한도"
+    description_en = (
+        "For each container with max_offset_length or max_offset_width, how far its load's "
+        "centre of gravity lies from the container's centre beyond those limits: along the "
+        "length in percent of half the length, across in percent of half the width, each "
+        "rounded up. One unit of cost is one percent beyond a limit; 0 means every load's "
+        "centre of gravity is within its limits (or the containers have none)."
+    )
+    description_ko = (
+        "max_offset_length나 max_offset_width가 있는 컨테이너마다 적재물의 무게중심이 "
+        "컨테이너 중심에서 한도를 넘어 떨어진 만큼을 더합니다. 길이 방향은 길이 절반의 백분율, "
+        "폭 방향은 폭 절반의 백분율로 재고 각각 올림합니다. 한도를 넘은 1%가 비용 1이며, "
+        "0이면 모든 적재물의 무게중심이 한도 안에 있습니다(또는 한도가 없습니다)."
     )
 
 
@@ -268,7 +324,9 @@ class GroupSplitCost(Constraint):
 unplaced_item_cost = UnplacedItemCost()
 container_weight_cost = ContainerWeightCost()
 stacking_load_cost = StackingLoadCost()
+stacking_rule_cost = StackingRuleCost()
 unloading_order_cost = UnloadingOrderCost()
+balance_limit_cost = BalanceLimitCost()
 used_container_cost = UsedContainerCost()
 used_length_cost = UsedLengthCost()
 load_balance_cost = LoadBalanceCost()
@@ -279,7 +337,9 @@ _DEFAULTS = (
     unplaced_item_cost,
     container_weight_cost,
     stacking_load_cost,
+    stacking_rule_cost,
     unloading_order_cost,
+    balance_limit_cost,
     used_container_cost,
     used_length_cost,
     load_balance_cost,
@@ -288,7 +348,7 @@ _DEFAULTS = (
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """Return the cost function. Without arguments, all eight default constraints.
+    """Return the cost function. Without arguments, all ten default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored::

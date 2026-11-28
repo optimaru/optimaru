@@ -73,6 +73,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `containers` | list of `ContainerModel`, at least one | the spaces that may be used |
 | `items` | list of `ItemModel` | the boxes |
 | `min_support_ratio` | float in (0, 1], 0.8 | share of an item's base that must rest on the floor or on other items |
+| `stacking_rules` | list of `StackingRuleModel`, [] | pairs of stack groups: `{"top": "chemicals", "bottom": "food"}` = an item whose `stack_group` is `chemicals` may not stand on one whose `stack_group` is `food`; anything not listed may stand on anything |
 | `score_hard`, `score_soft` | output | the score (hard 0 = feasible) |
 | `containers_used` | output, int | containers that hold a placed item |
 | `unplaced_items` | output, list of ids | items that are not placed |
@@ -85,6 +86,8 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `length`, `width`, `height` | int, 1 to 1,000,000 | inner size |
 | `max_weight` | int or None, None | weight it may hold; None = no limit |
 | `cost` | float >= 0, 1.0 | what using this container costs (1 = count containers) |
+| `max_stack_height` | int or None, None | how high the load may reach (a hand's height): the decoder fills up to the lower of it and `height`; None = up to `height` |
+| `max_offset_length`, `max_offset_width` | float in [0, 1] or None, None | how far the placed load's centre of gravity may lie from the container's centre, as a share of half the length (width); None = no limit |
 | `initial_items` | list of item ids, [] | warm start: the loading order to start from |
 | `items` | output, list of ids | the placed items, in loading order |
 | `unplaced_items` | output, list of ids | items the solve gave to this container that found no place in it |
@@ -103,6 +106,9 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `max_load_on_top` | int or None, None | weight this item can carry; 0 = nothing on top; None = no limit |
 | `unload_order` | int or None, None | lower leaves first (a route's stop number); None = no order |
 | `group` | non-empty str or None, None | items of one group belong in one container (the items of an order) |
+| `bottom_only` | bool, false | only on the floor (`z = 0`); other items may still stand on it |
+| `max_stack_layers` | int >= 1 or None, None | at most this many items in a column through this item, itself included (see [Constraints](#constraints)); None = no limit |
+| `stack_group` | non-empty str or None, None | the group the problem's `stacking_rules` name |
 | `container` | output, id or None | the container it stands in; None = not placed |
 | `sequence` | output, int | 0-based place in its container's loading order |
 | `x`, `y`, `z` | output, int | its corner nearest the origin |
@@ -154,6 +160,12 @@ is the whole problem: ten parcels for three stops in one van):
   `unloading_order_cost` then keeps every parcel reachable when its stop comes: nothing
   that leaves later stands between it and the door, or on it. Give `used_length_cost` a
   weight to keep the load at the closed end (loading metres).
+- **Stacking rules and balance.** `bottom_only` keeps a heavy or liquid item on the floor,
+  `max_stack_layers` caps how many items stand in a column through an item (the "stack no
+  more than n high" printed on a carton), `max_stack_height` keeps the load within a hand's
+  reach, and `stacking_rules` forbid one kind of item on another (chemicals on food).
+  `max_offset_length` and `max_offset_width` put a hard limit on how far a load's centre of
+  gravity may lie off the centre, which `load_balance_cost` only prefers.
 - **Cartons from a catalog.** List one container per carton you are willing to use: for a
   catalog of three sizes and an order that may need up to two cartons, six containers,
   each with its carton's `cost`. `used_container_cost` is then the price of the cartons
@@ -180,12 +192,20 @@ is the whole problem: ten parcels for three stops in one van):
 - An item for which no point works is **unplaced**. It stays in its list, changes nothing
   for the items after it, and `unplaced_item_cost` counts it. The search moves it to
   another container or to another place in the order.
-- **Unloading orders and load limits.** When items set an `unload_order` or a
-  `max_load_on_top`, a place is also judged by what it would break. It *blocks* when the
-  item would stand in the way of a placed item that leaves earlier (between it and the
-  door, or above it), or have a placed item that leaves later in its own way; it
-  *overloads* when the item's weight, passed down through what it stands on, would put
-  more on a placed item than its `max_load_on_top`. The item goes to the first point where
+- **Floor and height.** A `bottom_only` item is tried only at points on the floor, and
+  nothing is placed above a container's `max_stack_height`: where there is no such room,
+  the item is unplaced.
+- **Unloading orders, load limits and stacking rules.** When items set an `unload_order`,
+  a `max_load_on_top`, a `max_stack_layers` or a `stack_group` the `stacking_rules` name,
+  a place is also judged by what it would break. It *blocks* when the item would stand in
+  the way of a placed item that leaves earlier (between it and the door, or above it), or
+  have a placed item that leaves later in its own way; it *breaks a stacking limit* when
+  the item's weight, passed down through what it stands on, would put more on a placed
+  item than its `max_load_on_top`, when it would stand on an item (or have one stand on
+  it) against a stacking rule, or when it would make a column taller than its own
+  `max_stack_layers` or that of an item under it (columns as the decode builds them: a
+  box that ends under another's overhang is not seen carrying it, as for the load
+  limits, while the cost counts it). The item goes to the first point where
   an orientation does neither; if there is none, to the first that only blocks; if there
   is none either, to the first feasible point, as without them. So an item is never left
   out for an order or a limit, and a list in stop blocks (what leaves last first) comes
@@ -193,11 +213,12 @@ is the whole problem: ten parcels for three stops in one van):
   `unload_order` also takes, of the orientations feasible at its point, the shallowest
   along x first (then the one that divides the room best), so that a stop builds a thin
   wall across the space and not a long row. This follows the items' facts, whether or not
-  `unloading_order_cost` and `stacking_load_cost` are in the selection; a model that sets
-  `unload_order` or `max_load_on_top` without its cost is refused anyway
+  `unloading_order_cost`, `stacking_load_cost` and `stacking_rule_cost` are in the
+  selection; a model that sets one of their inputs without its cost is refused anyway
   ([Parameters and their costs](#parameters-and-their-costs)).
-- The decode reads the sizes, the rotations, `min_support_ratio`, the unloading orders,
-  the weights and the load limits, and nothing of the containers' weight limits or the
+- The decode reads the sizes, the rotations, `min_support_ratio`, `max_stack_height`,
+  `bottom_only`, the unloading orders, the weights, the load limits, the layer limits and
+  the stacking rules, and nothing of the containers' weight or balance limits or the
   groups. Whatever it does, every constraint is a cost computed on its result. So a hard
   cost of 0 means every one of them holds, and a solve that cannot reach 0 still returns a
   loading, with what is broken counted.
@@ -217,7 +238,9 @@ The score is the engine's `Score` type as it is, with no mapping.
 | `unplaced_item_cost` | `UnplacedItemCost` | hard | 1 | per container: the items of its list the decoder could not place |
 | `container_weight_cost` | `ContainerWeightCost` | hard | 1 | per container: the weight of its list above `max_weight` (0 without a limit) |
 | `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: over its placed items with `max_load_on_top`, the weight resting on the item above that limit, rounded up per item |
+| `stacking_rule_cost` | `StackingRuleCost` | hard | 1 | per container: the pairs (a, b) of placed items where a stands on b and a stacking rule forbids a's `stack_group` on b's, plus, over the placed items with `max_stack_layers`, the layers the tallest column through the item has beyond that limit |
 | `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs (a, b) of placed items with `unload_order(a) < unload_order(b)` where b blocks a |
+| `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: how far the placed items' centre of gravity lies from the container's centre beyond `max_offset_length` (in percent of half the length) plus beyond `max_offset_width` (in percent of half the width), each rounded up to a whole percent |
 | `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |
 | `used_length_cost` | `UsedLengthCost` | soft | 0 (opt-in) | per container: `used_length`, the largest `x + placed_length` |
 | `load_balance_cost` | `LoadBalanceCost` | soft | 0 (opt-in) | per container: the distance of the load's centre of gravity from the container's centre in the x-y plane, in thousandths of the half-diagonal |
@@ -225,7 +248,7 @@ The score is the engine's `Score` type as it is, with no mapping.
 
 Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
 `Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
-is a reward, and six of the eight are scored by default (`default_enabled`):
+is a reward, and eight of the ten are scored by default (`default_enabled`):
 `used_length_cost` and `load_balance_cost` weigh 0 until a selection gives them a weight.
 `container_loading.constraint_info()` reports exactly this table from the C++ components
 (`kDefaultLevel` / `kDefaultWeight`). The unit constraints come first in
@@ -241,6 +264,32 @@ What the raw costs mean exactly:
   a's far end along x, overlapping a across and in height) or above a (at or above a's
   top, overlapping a in the floor plane). Items without `unload_order` are in nobody's
   way and wait for nobody; items of the same stop do not block each other.
+- **Stacking rules.** a *stands on* b when a's base is at b's top and the two overlap in the
+  floor plane, however little. A rule `{"top": "chemicals", "bottom": "food"}` counts every
+  such pair with a chemicals item on a food item, one each; an item on two forbidden items
+  counts two. The direction is the one named: food on chemicals is allowed unless a rule
+  says otherwise, and a group may be forbidden on itself. An item without a `stack_group`,
+  or with one no rule names, breaks no rule.
+- **Layers.** An item's layer is 1 on the floor, else one more than the highest layer of
+  the items it stands on. The column through an item is its layer plus the tallest chain of
+  items standing on it, one on the other: a box at layer 2 with two more stacked on it is
+  in a column of 4. An item with `max_stack_layers` counts the layers of that column beyond
+  its limit: 3 boxes in a column, the bottom one allowing 2, cost 1; the bottom one
+  allowing 1 cost 2. An item across two others tops both columns.
+- **Balance limit.** The centre of gravity is the placed items' weights times their centres
+  in the floor plane, as for `load_balance_cost`. Along x its distance from the
+  container's centre is taken as a share of half the length, across as a share of half the
+  width; what lies beyond `max_offset_length` (`max_offset_width`) counts in percent,
+  rounded up (a millionth of a percent over is not counted, so a limit such as 0.3,
+  which is not exact in binary, holds where it is met exactly). One item of 400 x 400 in
+  the corner of an 800 x 800 floor is 0.5 off along both axes: with `max_offset_length=0.2`
+  it costs 30. The decoder loads from the closed end, so a load that reaches only part of
+  the length sits towards it whatever the order: an even load over the first half of the
+  length is 0.5 off along it. The search can move heavy items further in, not the load
+  as a whole; for a part load, give the limit across only, or let `load_balance_cost`
+  prefer the centre. One percent costs as much as an unplaced item at the default weights;
+  give `BalanceLimitCost` a lower weight where the limit should give way to a box left
+  out.
 - **Container weight** counts the whole list, an unplaced item included: what the solve
   gave to a container belongs to it. `loaded_weight` is the weight of the placed items
   only, so a container whose `loaded_weight` is within `max_weight` can still cost here
@@ -248,8 +297,9 @@ What the raw costs mean exactly:
   adds its weight to the list that holds it.
 - **Used container.** A container whose list holds only unplaced items is not in use.
 - **The hard costs are in different units.** `unplaced_item_cost` counts items,
-  `unloading_order_cost` counts pairs, and `container_weight_cost` and
-  `stacking_load_cost` count weight units (grams in the guide's examples). With the
+  `unloading_order_cost` counts pairs, `stacking_rule_cost` pairs and layers,
+  `balance_limit_cost` percent, and `container_weight_cost` and `stacking_load_cost`
+  count weight units (grams in the guide's examples). With the
   default weights one gram over a limit weighs as much as one unplaced item, and a 10 kg
   box on an item with `max_load_on_top=0` as much as 10,000 unplaced items. A solve that
   cannot reach hard 0 therefore leaves boxes out rather than overload a container or crush
@@ -259,15 +309,18 @@ What the raw costs mean exactly:
 
 ### Parameters and their costs
 
-`max_weight`, `max_load_on_top`, `unload_order` and `group` act only through their cost.
+`max_weight`, `max_load_on_top`, `unload_order`, `group`, `max_stack_layers`,
+`stack_group`, `stacking_rules`, `max_offset_length` and `max_offset_width` act only
+through their cost (a `stack_group` no rule names too: it is refused without
+`stacking_rule_cost` all the same).
 A model that sets one of them while its constraint selection leaves that cost out is
 refused with `ValueError` naming the field and the cost to add; a pick at weight 0
 counts. `models.parameter_uses(model)` lists the fields an input sets, and
 [Parameters and their costs](../README.md#parameters-and-their-costs) has the table for
 every use case. It is checked where the input is the JSON model (`solve_request`,
-`solve(model)`); a compiled problem is solved as given. The sizes, `rotations` and
-`min_support_ratio` are the decoder's and hold under every selection; `cost` is
-`used_container_cost`'s own scale.
+`solve(model)`); a compiled problem is solved as given. The sizes, `rotations`,
+`min_support_ratio`, `bottom_only` and `max_stack_height` are the decoder's and hold under
+every selection; `cost` is `used_container_cost`'s own scale.
 
 ### Scoring and the Python API
 
@@ -289,18 +342,24 @@ every use case. It is checked where the input is the JSON model (`solve_request`
   `custom_moves.repack`, `custom_moves.switch_container`, `on_new_best`, `full_assert`). Zero budget is
   `stop.time_limit_seconds = 0`; a fixed number of steps is `stop.step_limit = N`.
 - **Exponent granularity.** The engine shapes a unit constraint per unit and a global on
-  its total. The units are containers: the seven per-container constraints are shaped per
+  its total. The units are containers: the nine per-container constraints are shaped per
   container (two overloads of 3 and 4 at exponent 2 cost 9 + 16, not 49), and
   `group_split_cost` shapes its one total.
 - **`constraint_costs()` shape.** The standard C++-package dict `{name: {costs, weight,
   exponent, offset, clip, global, level, reward, level_flippable, name, label,
-  default_weight, default_level}}`. The seven per-container constraints list one cost per
+  default_weight, default_level}}`. The nine per-container constraints list one cost per
   container, an empty one included; `group_split_cost` is `[total]`. Hard costs are
-  rounded per container, as the engine does.
+  rounded per container, as the engine does. Two are scoped, and their entries name the
+  containers they evaluate as `units`: `stacking_rule_cost` every container when an item
+  sets `max_stack_layers` or a `stack_group` a rule names, else none, and
+  `balance_limit_cost` the containers with a `max_offset_*`. A problem that uses neither
+  pays nothing for them per move.
 - **Core checks.** Building, scoring or solving a core problem refuses a
   `min_support_ratio` outside (0, 1], a repeated id, a size outside 1..1,000,000, a weight
-  outside 0..1,000,000,000, a negative `max_weight`, `max_load_on_top` or `cost`, an item
-  listed twice and items without a container (`ValueError`; the pydantic model refuses
+  outside 0..1,000,000,000, a negative `max_weight`, `max_load_on_top` or `cost`, a
+  `max_stack_layers` outside 1..1,000,000,000, a `max_stack_height` outside 1..1,000,000, a `max_offset_*`
+  outside 0..1, a stacking rule with an empty group, an item listed twice and items
+  without a container (`ValueError`; the pydantic model refuses
   the same). The bounds keep a volume inside 64 bits.
 - **The lists a problem comes with are the starting point.** A solve keeps them and
   constructs only the items in no list; `time_limit_seconds=0` returns the construction.
@@ -314,12 +373,13 @@ every use case. It is checked where the input is the JSON model (`solve_request`
 
 Every constraint takes the knobs `weight`, `level`, `exponent` and, keyword-only,
 `offset` and `clip`, and may be picked several times. A raw cost `x` (per container for
-the seven unit constraints, the one total for `group_split_cost`) is shaped as
+the nine unit constraints, the one total for `group_split_cost`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every container below the offset, an empty one included); `offset=0` is the plain power
 shaping. `clip=False` with an offset is refused on hard, because hard 0 must mean no
-violation. Each pick is its own instance with its own knobs, its level included, and the
+violation. On `stacking_rule_cost` and `balance_limit_cost`, `clip=False` shifts only the
+containers they evaluate (the `units` of their `constraint_costs()` entries). Each pick is its own instance with its own knobs, its level included, and the
 instances add up:
 
 ```python
@@ -343,12 +403,14 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
 
 - **Construction** (`construction.first_fit_decreasing`,
   `cpp/cl/construct/construction.hpp`). The items no list holds go in this order: with
-  unloading orders, what leaves last first; the items with a `max_load_on_top` after all
-  the others, so that they end up on top; then group by group, the group with the most
+  unloading orders, what leaves last first; the `bottom_only` items before the others, so
+  that they find the floor free; the items with a `max_load_on_top` after all the others,
+  so that they end up on top; then group by group, the group with the most
   volume first; inside a group largest first, by volume, then by base area. Each goes
   into the first container that *takes* it: one whose weight limit holds and whose decode,
   with the new item added, leaves no more items unplaced than before, no more weight on an
-  item than it carries and no more items in the way of an earlier stop.
+  item than it carries, no more items in the way of an earlier stop and no more stacking
+  rules or layer limits broken.
   Containers are tried in this order: those that already hold an item of the item's
   group, the other containers in use, then the empty ones, cheapest per volume first. An
   item no container takes goes to the one with the most free volume. It is
@@ -371,7 +433,8 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   the construction's loading order and decoded; what finds no place goes on to the next
   container. The groups the two shared come out whole wherever they fit, and when
   everything fits the first container the second is empty. It is made only when every
-  load comes out clean (everything placed, no stacking limit or unloading order broken).
+  load comes out clean (everything placed, no stacking limit, stacking rule or unloading
+  order broken).
 - **`SwitchContainerMove`** (`custom_moves.switch_container`; used only when the
   containers differ in size, cost or weight limit). The load of one container goes into
   empty containers of another kind that cost no more: as it is into one, or split, in its
@@ -399,7 +462,7 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   decoded again from the place it changes: item k's place depends on items 0 .. k - 1
   only, so a decode keeps what it needs to go on from any position
   (`cpp/cl/score/packing.hpp`). The constraints share one decode per container and list
-  (`PackingCache`), so six constraints cost one decode, not six.
+  (`PackingCache`), so eight constraints cost one decode, not eight.
 
 ### How good, how fast
 
@@ -543,11 +606,11 @@ read only where a container has no `items` yet.
 - `optimaru/container_loading/cpp/cl/model/domain.hpp`: the domain and the
   `optimaru::SolutionTraits` specialization; `model/demo_data.cpp`: the demo
 - `optimaru/container_loading/cpp/cl/score/packing.hpp`: the decoder (`decode`), the
-  costs of one decoded container (`stackingExcess`, `unloadingBlocks`,
-  `balancePerMille`) and `PackingCache`
+  costs of one decoded container (`stackingExcess`, `stackingViolations`,
+  `unloadingBlocks`, `balancePerMille`, `balanceExcess`) and `PackingCache`
 - `optimaru/container_loading/cpp/cl/score/score_calculator.hpp`: `prepare()` (the fact
-  checks, the orientations in the decoder's order, the groups), `updateDerived()` and the
-  full recompute
+  checks, the orientations in the decoder's order, the groups and the stack groups the
+  rules name), `updateDerived()` and the full recompute
 - `optimaru/container_loading/cpp/cl/constraints/`: one component per constraint
   (+ `common.hpp`, which holds the decode the components share);
   `optimaru/container_loading/cpp/cl/constraints.hpp` assembles the default set
@@ -569,13 +632,15 @@ ctest --test-dir build --output-on-failure   # cl_test + cl_plugin_test
 ```
 
 `cl_test`: the decoder by hand (the order of the points, the support rule, the rotations,
-which orientation is taken, an item without a place) and on random lists (every decode a
-valid loading, checked without the decoder; a decode resumed from any shared prefix equal
-to one from scratch), the costs of a decoded container by hand, `PackingCache`, the fact
+which orientation is taken, an item without a place, `bottomOnly`, the stack height, the
+stacking rules and layer limits) and on random lists, a third of them with the stacking
+facts (every decode a valid loading, checked without the decoder; a decode resumed from
+any shared prefix equal to one from scratch), the costs of a decoded container by hand, `PackingCache`, the fact
 checks and derived fields, the construction, the three moves (applied, undone, repeated)
 and the solver (a `ScoreChecks::Full` solve, a zero budget, parallel starts).
 `cl_plugin_test`: the default assembly against the full recompute on random loadings and
-over random moves, raw costs by hand for all eight constraints, the catalog, overrides and
+over random moves (on problems with every input in use), raw costs by hand for all ten
+constraints, the catalog, overrides and
 partial assemblies, `constraint_totals()`, every move preview against the applied score,
 and `ScoreChecks::Full` solves, with repeated and shifted components too.
 

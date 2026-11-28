@@ -12,11 +12,13 @@
 // Adding a component is a file plus an include here and an `emplace` in
 // defaultConstraints() below.
 
+#include "cl/constraints/balance_limit_cost.hpp"
 #include "cl/constraints/common.hpp"
 #include "cl/constraints/container_weight_cost.hpp"
 #include "cl/constraints/group_split_cost.hpp"
 #include "cl/constraints/load_balance_cost.hpp"
 #include "cl/constraints/stacking_load_cost.hpp"
+#include "cl/constraints/stacking_rule_cost.hpp"
 #include "cl/constraints/unloading_order_cost.hpp"
 #include "cl/constraints/unplaced_item_cost.hpp"
 #include "cl/constraints/used_container_cost.hpp"
@@ -32,7 +34,9 @@ namespace cl {
 //   unplacedItemCost      hard, weight 1
 //   containerWeightCost   hard, weight 1
 //   stackingLoadCost      hard, weight 1
+//   stackingRuleCost      hard, weight 1
 //   unloadingOrderCost    hard, weight 1
+//   balanceLimitCost      hard, weight 1
 //   usedContainerCost     soft, weight 1
 //   usedLengthCost        soft, weight 0 (opt-in)
 //   loadBalanceCost       soft, weight 0 (opt-in)
@@ -61,7 +65,9 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<UnplacedItemCost>();
     assembly.emplace<ContainerWeightCost>();
     assembly.emplace<StackingLoadCost>();
+    assembly.emplace<StackingRuleCost>();
     assembly.emplace<UnloadingOrderCost>();
+    assembly.emplace<BalanceLimitCost>();
     assembly.emplace<UsedContainerCost>();
     assembly.emplace<UsedLengthCost>();
     assembly.emplace<LoadBalanceCost>();

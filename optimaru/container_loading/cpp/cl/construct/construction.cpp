@@ -32,6 +32,7 @@ bool loadsBefore(const ContainerLoadingProblem& problem, int a, int b) {
     const Item& first = problem.items[static_cast<std::size_t>(a)];
     const Item& second = problem.items[static_cast<std::size_t>(b)];
     if (unloadRank(first) != unloadRank(second)) return unloadRank(first) > unloadRank(second);
+    if (first.bottomOnly != second.bottomOnly) return first.bottomOnly;
     if (first.maxLoadOnTop.has_value() != second.maxLoadOnTop.has_value())
         return !first.maxLoadOnTop.has_value();
     if (first.volume() != second.volume()) return first.volume() > second.volume();
@@ -75,6 +76,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
         const Item& first = problem.items[static_cast<std::size_t>(a)];
         const Item& second = problem.items[static_cast<std::size_t>(b)];
         if (unloadRank(first) != unloadRank(second)) return unloadRank(first) > unloadRank(second);
+        if (first.bottomOnly != second.bottomOnly) return first.bottomOnly;
         if (first.maxLoadOnTop.has_value() != second.maxLoadOnTop.has_value())
             return !first.maxLoadOnTop.has_value();
         if (together(a) != together(b)) return together(a) > together(b);
@@ -91,6 +93,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
     std::vector<int> unplaced(containerCount, 0);
     std::vector<std::int64_t> excess(containerCount, 0);  // stacking excess
     std::vector<std::int64_t> blocks(containerCount, 0);  // unloading blocks
+    std::vector<std::int64_t> rules(containerCount, 0);   // stacking rule violations
     for (std::size_t c = 0; c < containerCount; ++c) {
         const Container& container = problem.containers[c];
         for (int item : container.items)
@@ -101,6 +104,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
         volume[c] = packing.loadedVolume;
         excess[c] = stackingExcess(problem, packing);
         blocks[c] = unloadingBlocks(problem, packing);
+        rules[c] = stackingViolations(problem, packing);
     }
     // The empty containers, cheapest per volume first.
     std::vector<int> byPrice(containerCount);
@@ -154,6 +158,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
             // Each kind of violation on its own: no trading one for the other.
             if (stackingExcess(problem, packing) > excess[index]) continue;
             if (unloadingBlocks(problem, packing) > blocks[index]) continue;
+            if (stackingViolations(problem, packing) > rules[index]) continue;
             chosen = c;
             break;
         }
@@ -176,6 +181,7 @@ void constructLoading(ContainerLoadingProblem& problem) {
         unplaced[home] = packing.unplaced();
         excess[home] = stackingExcess(problem, packing);
         blocks[home] = unloadingBlocks(problem, packing);
+        rules[home] = stackingViolations(problem, packing);
     }
 }
 

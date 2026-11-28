@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -58,6 +59,21 @@ void recomputeCarried(const ContainerLoadingProblem& problem, Packing& packing) 
     }
 }
 
+// How many items stand in the tallest column on each box (Packing::above),
+// again from what the boxes stand on: a box's supports come before it, so the
+// boxes from last to first reach every box after everything on it.
+void recomputeAbove(Packing& packing) {
+    const std::size_t count = packing.boxes.size();
+    packing.above.assign(count, 0);
+    for (std::size_t b = count; b-- > 0;) {
+        for (int s = packing.supportStart[b]; s < packing.supportStart[b + 1]; ++s) {
+            int& below = packing.above[static_cast<std::size_t>(
+                    packing.supportBox[static_cast<std::size_t>(s)])];
+            below = std::max(below, packing.above[b] + 1);
+        }
+    }
+}
+
 // Forget everything the decode did from list position `keep` on.
 void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep) {
     std::size_t kept = packing.boxes.size();
@@ -98,12 +114,18 @@ void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep
         if (stale) point.room[0] = -1;
     }
     packing.boxes.resize(kept);
-    if (problem.anyLoadLimit) {
+    if (problem.trackSupports()) {
         packing.supportStart.resize(packing.boxes.size() + 1);
         packing.supportBox.resize(static_cast<std::size_t>(packing.supportStart.back()));
         packing.supportShare.resize(static_cast<std::size_t>(packing.supportStart.back()));
+    }
+    if (problem.anyLoadLimit) {
         packing.bearsLimit.resize(kept);
         recomputeCarried(problem, packing);
+    }
+    if (problem.anyLayerLimit) {
+        packing.level.resize(kept);
+        recomputeAbove(packing);
     }
 }
 
@@ -142,7 +164,7 @@ void eachTopAt(const Packing& packing, int z, Visit&& visit) {
 bool feasible(const ContainerLoadingProblem& problem, const Container& container,
               const Packing& packing, const Point& point, const Orientation& o) {
     if (point.x + o.length > container.length || point.y + o.width > container.width ||
-        point.z + o.height > container.height)
+        point.z + o.height > container.fillHeight)
         return false;
     if (point.z > 0) {
         // The base rests on the tops that end exactly where it starts. Placed
@@ -207,7 +229,7 @@ int slide(const Packing& packing, int x, int y, int z, int axis) {
 void freeRoom(const Container& container, const Packing& packing, const Point& point, int room[3]) {
     int endX = container.length;
     int endY = container.width;
-    int endZ = container.height;
+    int endZ = container.fillHeight;
     // Along y and z only the boxes whose x-range holds the point's x can stop
     // the ray: those of its cell.
     anyInRange(packing, point.x, point.x + 1, [&](const Box& box) {
@@ -335,8 +357,91 @@ bool overloads(const ContainerLoadingProblem& problem, const Packing& packing, d
     return false;
 }
 
+// For every box under box `from`, directly or not, how many layers up `from`
+// is from it at most (the longest chain of supports between them); -1 for the
+// others. `from` itself gets 0.
+void reachDown(const Packing& packing, int from, std::vector<int>& reach) {
+    reach.assign(packing.boxes.size(), -1);
+    reach[static_cast<std::size_t>(from)] = 0;
+    for (int b = from; b >= 0; --b) {
+        const int at = reach[static_cast<std::size_t>(b)];
+        if (at < 0) continue;
+        for (int s = packing.supportStart[static_cast<std::size_t>(b)];
+             s < packing.supportStart[static_cast<std::size_t>(b) + 1]; ++s) {
+            int& below = reach[static_cast<std::size_t>(
+                    packing.supportBox[static_cast<std::size_t>(s)])];
+            below = std::max(below, at + 1);
+        }
+    }
+}
+
+// Whether item `item` at `point` in orientation `o` would stand on an item
+// against a stacking rule, have one stand on it against a rule (an item
+// placed earlier over an overhang), or make a column taller than an item's
+// maxStackLayers: its own, or that of an item under it. The columns are the
+// ones the supports recorded at placement make: a box that ends under an
+// earlier box's overhang is not counted as carrying it here (as for the load
+// limits), while stackingViolations, from the geometry, counts it. This only
+// steers the decoder; the cost counts what is left.
+bool breaksStacking(const ContainerLoadingProblem& problem, const Packing& packing, int item,
+                    const Point& point, const Orientation& o, std::vector<int>& reach) {
+    const auto touches = [&](const Box& box) {
+        return shared(point.x, o.length, box.x, box.length) > 0 &&
+               shared(point.y, o.width, box.y, box.width) > 0;
+    };
+    if (problem.anyStackRule && problem.stackGroupOf[static_cast<std::size_t>(item)] >= 0) {
+        bool broken = false;
+        if (point.z > 0) {
+            eachTopAt(packing, point.z, [&](int, const Box& box) {
+                broken = touches(box) && problem.forbids(item, box.item);
+                return broken;
+            });
+            if (broken) return true;
+        }
+        const int top = point.z + o.height;
+        if (anyInRange(packing, point.x, point.x + o.length, [&](const Box& box) {
+                return box.z == top && touches(box) && problem.forbids(box.item, item);
+            }))
+            return true;
+    }
+    if (!problem.anyLayerLimit) return false;
+    // The layer it would be in, and the boxes it would stand on, right under it.
+    int level = 1;
+    int highest = -1;
+    reach.assign(packing.boxes.size(), -1);
+    if (point.z > 0) {
+        eachTopAt(packing, point.z, [&](int index, const Box& box) {
+            if (!touches(box)) return false;
+            level = std::max(level, packing.level[static_cast<std::size_t>(index)] + 1);
+            reach[static_cast<std::size_t>(index)] = 1;
+            highest = std::max(highest, index);
+            return false;
+        });
+    }
+    const auto& own = problem.items[static_cast<std::size_t>(item)].maxStackLayers;
+    if (own && level > *own) return true;
+    for (int b = highest; b >= 0; --b) {
+        const int at = reach[static_cast<std::size_t>(b)];
+        if (at < 0) continue;
+        const auto& limit = problem.items[static_cast<std::size_t>(
+                                                  packing.boxes[static_cast<std::size_t>(b)].item)]
+                                    .maxStackLayers;
+        if (limit && packing.level[static_cast<std::size_t>(b)] +
+                                     std::max(packing.above[static_cast<std::size_t>(b)], at) >
+                             *limit)
+            return true;
+        for (int s = packing.supportStart[static_cast<std::size_t>(b)];
+             s < packing.supportStart[static_cast<std::size_t>(b) + 1]; ++s) {
+            int& below = reach[static_cast<std::size_t>(
+                    packing.supportBox[static_cast<std::size_t>(s)])];
+            below = std::max(below, at + 1);
+        }
+    }
+    return false;
+}
+
 void addPoint(Packing& packing, const Container& container, int x, int y, int z, int position) {
-    if (x >= container.length || y >= container.width || z >= container.height) return;
+    if (x >= container.length || y >= container.width || z >= container.fillHeight) return;
     const bool inside = anyInRange(packing, x, x + 1, [&](const Box& box) {
         return box.x <= x && x < box.x + box.length && box.y <= y && y < box.y + box.width &&
                box.z <= z && z < box.z + box.height;
@@ -356,22 +461,51 @@ void addPoint(Packing& packing, const Container& container, int x, int y, int z,
     points.insert(at, point);
 }
 
-void place(const ContainerLoadingProblem& problem, Packing& packing, const Container& container,
-           const Point& at, const Orientation& o, int item, int position,
-           std::vector<std::pair<int, double>>& supports) {
+// What a box about to be placed at `at` in orientation `o` stands on, kept in
+// the Packing (Packing::supportStart and what follows), with its layer when
+// some item sets a layer limit; returns whether a load limit is under it. Out
+// of line: only problems with load or layer limits call it, and it stays out
+// of place()'s way for the others.
+[[gnu::noinline]] bool recordSupports(const ContainerLoadingProblem& problem, Packing& packing,
+                                      const Point& at, const Orientation& o, int item,
+                                      std::vector<std::pair<int, double>>& supports) {
+    supportsOf(packing, at, o, supports);
     bool reachesLimit = false;
-    if (problem.anyLoadLimit) {
-        // What it stands on, and whether a limit is under it.
-        supportsOf(packing, at, o, supports);
-        for (const auto& [below, share] : supports) {
-            packing.supportBox.push_back(below);
-            packing.supportShare.push_back(share);
+    int level = 1;
+    for (const auto& [below, share] : supports) {
+        packing.supportBox.push_back(below);
+        packing.supportShare.push_back(share);
+        if (problem.anyLoadLimit)
             reachesLimit = reachesLimit || packing.bearsLimit[static_cast<std::size_t>(below)];
-        }
-        packing.supportStart.push_back(static_cast<int>(packing.supportBox.size()));
+        if (problem.anyLayerLimit)
+            level = std::max(level, packing.level[static_cast<std::size_t>(below)] + 1);
+    }
+    packing.supportStart.push_back(static_cast<int>(packing.supportBox.size()));
+    if (problem.anyLoadLimit) {
         packing.bearsLimit.push_back(
                 reachesLimit || problem.items[static_cast<std::size_t>(item)].maxLoadOnTop ? 1 : 0);
     }
+    if (problem.anyLayerLimit) {
+        packing.level.push_back(level);
+        packing.above.push_back(0);
+    }
+    return reachesLimit;
+}
+
+// The columns under the box just placed (index `placed`) are a layer taller
+// where it tops them.
+[[gnu::noinline]] void raiseColumns(Packing& packing, int placed, std::vector<int>& reach) {
+    reachDown(packing, placed, reach);
+    for (std::size_t b = 0; b < reach.size(); ++b) {
+        if (reach[b] > packing.above[b]) packing.above[b] = reach[b];
+    }
+}
+
+void place(const ContainerLoadingProblem& problem, Packing& packing, const Container& container,
+           const Point& at, const Orientation& o, int item, int position,
+           std::vector<std::pair<int, double>>& supports, std::vector<int>& reach) {
+    const bool reachesLimit =
+            problem.trackSupports() && recordSupports(problem, packing, at, o, item, supports);
     Box box;
     box.item = item;
     box.position = position;
@@ -389,6 +523,7 @@ void place(const ContainerLoadingProblem& problem, Packing& packing, const Conta
     }
     const int index = static_cast<int>(packing.boxes.size());
     packing.boxes.push_back(box);
+    if (problem.anyLayerLimit) raiseColumns(packing, index, reach);
     if (problem.anyLoadLimit) {
         // The loads passed down again, always the same way (recomputeCarried),
         // so that a decode resumed from a prefix has exactly the loads of one
@@ -440,15 +575,17 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
         Point origin;
         origin.room[0] = space.length;
         origin.room[1] = space.width;
-        origin.room[2] = space.height;
+        origin.room[2] = space.fillHeight;
         out.points.push_back(origin);
         for (std::vector<int>& cell : out.cells) cell.clear();
         out.tops.clear();
         out.carried.clear();
-        out.supportStart.assign(problem.anyLoadLimit ? 1 : 0, 0);
+        out.supportStart.assign(problem.trackSupports() ? 1 : 0, 0);
         out.supportBox.clear();
         out.supportShare.clear();
         out.bearsLimit.clear();
+        out.level.clear();
+        out.above.clear();
     } else {
         truncate(problem, out, keep);
     }
@@ -471,6 +608,7 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
 
     std::vector<std::pair<int, double>> supports;
     std::vector<std::pair<int, double>> added;
+    std::vector<int> reach;
     for (int position = keep; position < count; ++position) {
         const int item = members[static_cast<std::size_t>(position)];
         const Item& box = problem.items[static_cast<std::size_t>(item)];
@@ -478,14 +616,16 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
         const int first = problem.orientationStart[static_cast<std::size_t>(item)];
         const int last = problem.orientationStart[static_cast<std::size_t>(item) + 1];
         // What a place may break: 0 nothing, 1 an unloading order, 2 a load
-        // limit. Per class, the first point that takes the item in an
-        // orientation of that class, and of those orientations the one that
-        // divides the free room best (the earliest of equals). The search
-        // stops at the first point of class 0; without orders and limits
-        // every place is of class 0.
+        // limit, a stacking rule or a layer limit. Per class, the first point
+        // that takes the item in an orientation of that class, and of those orientations the one
+        // that divides the free room best (the earliest of equals). The search stops at the first
+        // point of class 0; without orders and limits every place is of class 0.
         const bool ordered = problem.anyUnloadOrder && box.unloadOrder.has_value();
         const bool limited = problem.anyLoadLimit && box.weight > 0;
+        const bool stacked = problem.anyStackRule || problem.anyLayerLimit;
         const double weight = static_cast<double>(box.weight);
+        // The highest base it can have: on the floor when bottomOnly.
+        const int topBase = box.bottomOnly ? 0 : space.fillHeight - smallest;
         int chosenPoint[3] = {-1, -1, -1};
         int chosenOrientation[3] = {-1, -1, -1};
         int chosenFit[3] = {-1, -1, -1};
@@ -494,7 +634,7 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
             Point& point = out.points[static_cast<std::size_t>(k)];
             if (point.died != Point::kOpen) continue;
             if (point.x + smallest > space.length || point.y + smallest > space.width ||
-                point.z + smallest > space.height)
+                point.z > topBase)
                 continue;
             if (point.room[0] < 0) freeRoom(space, out, point, point.room);
             for (int o = first; o < last; ++o) {
@@ -505,7 +645,9 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
                     continue;
                 if (!feasible(problem, space, out, point, orientation)) continue;
                 int kind = 0;
-                if (limited && overloads(problem, out, weight, point, orientation, supports, added))
+                if ((limited &&
+                     overloads(problem, out, weight, point, orientation, supports, added)) ||
+                    (stacked && breaksStacking(problem, out, item, point, orientation, reach)))
                     kind = 2;
                 else if (ordered &&
                          blocks(problem, out.boxes, *box.unloadOrder, point, orientation))
@@ -540,7 +682,7 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
         const Point at = out.points[static_cast<std::size_t>(chosenPoint[kind])];
         place(problem, out, space, at,
               problem.orientations[static_cast<std::size_t>(chosenOrientation[kind])], item,
-              position, supports);
+              position, supports, reach);
     }
 
     out.loadedVolume = 0;
@@ -555,6 +697,8 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     out.stackingExcess = -1;
     out.unloadingBlocks = -1;
     out.balancePerMille = -1;
+    out.stackingViolations = -1;
+    out.balanceExcess = -1;
 }
 
 void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,
@@ -677,6 +821,84 @@ int balancePerMille(const ContainerLoadingProblem& problem, int container, const
     return result;
 }
 
+std::int64_t stackingViolations(const ContainerLoadingProblem& problem, const Packing& packing) {
+    if (packing.stackingViolations >= 0) return packing.stackingViolations;
+    packing.stackingViolations = 0;
+    if (!problem.anyStackRule && !problem.anyLayerLimit) return 0;
+    const std::vector<Box>& boxes = packing.boxes;
+    const std::size_t count = boxes.size();
+    // Bottom up: what an item stands on has a lower base, so its layer is known
+    // by the time the item is reached.
+    std::vector<std::size_t> order(count);
+    for (std::size_t i = 0; i < count; ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(),
+                     [&boxes](std::size_t a, std::size_t b) { return boxes[a].z < boxes[b].z; });
+    std::vector<std::size_t> underStart(count + 1, 0);
+    std::vector<std::size_t> under;  // per box in `order`, the boxes right under it
+    std::vector<int> level(count, 1);
+    std::int64_t violations = 0;
+    for (std::size_t k = 0; k < count; ++k) {
+        const Box& box = boxes[order[k]];
+        for (std::size_t other = 0; other < count && box.z > 0; ++other) {
+            const Box& below = boxes[other];
+            if (below.z + below.height != box.z ||
+                shared(box.x, box.length, below.x, below.length) == 0 ||
+                shared(box.y, box.width, below.y, below.width) == 0)
+                continue;
+            under.push_back(other);
+            level[order[k]] = std::max(level[order[k]], level[other] + 1);
+            if (problem.anyStackRule && problem.forbids(box.item, below.item)) ++violations;
+        }
+        underStart[k + 1] = under.size();
+    }
+    if (problem.anyLayerLimit) {
+        // Top down: everything on an item is reached before it.
+        std::vector<int> above(count, 0);
+        for (std::size_t k = count; k-- > 0;) {
+            for (std::size_t u = underStart[k]; u < underStart[k + 1]; ++u)
+                above[under[u]] = std::max(above[under[u]], above[order[k]] + 1);
+        }
+        for (std::size_t b = 0; b < count; ++b) {
+            const auto& limit =
+                    problem.items[static_cast<std::size_t>(boxes[b].item)].maxStackLayers;
+            if (limit && level[b] + above[b] > *limit) violations += level[b] + above[b] - *limit;
+        }
+    }
+    packing.stackingViolations = violations;
+    return violations;
+}
+
+std::int64_t balanceExcess(const ContainerLoadingProblem& problem, int container,
+                           const Packing& packing) {
+    if (packing.balanceExcess >= 0) return packing.balanceExcess;
+    packing.balanceExcess = 0;
+    const Container& space = problem.containers[static_cast<std::size_t>(container)];
+    if (!space.maxOffsetLength && !space.maxOffsetWidth) return 0;
+    double weight = 0.0;
+    double momentX = 0.0;
+    double momentY = 0.0;
+    for (const Box& box : packing.boxes) {
+        const double w =
+                static_cast<double>(problem.items[static_cast<std::size_t>(box.item)].weight);
+        weight += w;
+        momentX += w * (static_cast<double>(box.x) + 0.5 * static_cast<double>(box.length));
+        momentY += w * (static_cast<double>(box.y) + 0.5 * static_cast<double>(box.width));
+    }
+    if (weight <= 0.0) return 0;
+    std::int64_t excess = 0;
+    // Per axis, the offset beyond the limit in percent of the half size,
+    // rounded up; the tolerance keeps a rounding of the moments from counting.
+    const auto beyond = [&excess](double centre, double half, const std::optional<double>& limit) {
+        if (!limit) return;
+        const double over = 100.0 * (std::fabs(centre - half) / half - *limit);
+        if (over > 1e-6) excess += static_cast<std::int64_t>(std::ceil(over - 1e-6));
+    };
+    beyond(momentX / weight, 0.5 * static_cast<double>(space.length), space.maxOffsetLength);
+    beyond(momentY / weight, 0.5 * static_cast<double>(space.width), space.maxOffsetWidth);
+    packing.balanceExcess = excess;
+    return excess;
+}
+
 // ---------------------------------------------------------------------------
 // PackingCache
 // ---------------------------------------------------------------------------
@@ -714,7 +936,12 @@ std::uint64_t factsOf(const ContainerLoadingProblem& problem) {
     for (const Container& container : problem.containers) {
         hash.add(container.length);
         hash.add(container.width);
-        hash.add(container.height);
+        hash.add(container.fillHeight);  // what the decoder fills up to
+        // The balance limit's cost is kept with a decode too.
+        if (container.maxOffsetLength || container.maxOffsetWidth) {
+            hash.add(container.maxOffsetLength ? *container.maxOffsetLength : -1.0);
+            hash.add(container.maxOffsetWidth ? *container.maxOffsetWidth : -1.0);
+        }
     }
     hash.add(static_cast<std::int64_t>(problem.items.size()));
     for (const Item& item : problem.items) {
@@ -724,8 +951,16 @@ std::uint64_t factsOf(const ContainerLoadingProblem& problem) {
         hash.add(static_cast<int>(item.rotations));
         hash.add(item.weight);
         hash.add(item.maxLoadOnTop ? *item.maxLoadOnTop : std::int64_t{-1});
-        hash.add(item.unloadOrder ? 1 : 0);
+        // Whether it has an unloading order, whether it is bottomOnly and its
+        // layer limit (0 = none) in one word: a reset hashes every item.
+        hash.add(static_cast<std::int64_t>(item.unloadOrder ? 1 : 0) |
+                 static_cast<std::int64_t>(item.bottomOnly ? 2 : 0) |
+                 (static_cast<std::int64_t>(item.maxStackLayers ? *item.maxStackLayers : 0) << 2));
         hash.add(item.unloadOrder ? *item.unloadOrder : 0);
+    }
+    if (problem.anyStackRule) {
+        for (int group : problem.stackGroupOf) hash.add(group);
+        for (char rule : problem.forbidden) hash.add(static_cast<int>(rule));
     }
     return hash.value;
 }

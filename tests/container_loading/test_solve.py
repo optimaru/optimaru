@@ -276,6 +276,34 @@ def test_full_assert_solves_without_a_score_mismatch():
     assert problem.score.hard == 0
 
 
+def test_full_assert_solves_with_every_input_in_use():
+    """Stacking rules, layer limits, bottom_only, stack heights and balance limits, with the
+    load limits, orders and groups: every incremental score and preview against a full recompute."""
+    from .test_reference_parity import random_problem
+
+    for seed in range(4):
+        problem = random_problem(500 + seed)
+        config = cl.SolverConfig(stop={"step_limit": 800}, run={"random_seed": seed})
+        cl.solve(problem, config=config, full_assert=True)
+
+
+def test_stacking_rules_and_layers_are_met_where_there_is_room():
+    """Twelve cubes, a third of them chemicals that may not stand on food, every one allowing two
+    layers, one pallet with room for all on two layers: hard 0, and no chemical on food."""
+    items = [
+        cl.Item(f"{kind}-{i}", 4, 4, 4, weight=1, stack_group=kind, max_stack_layers=2)
+        for i, kind in enumerate(["food", "food", "chem"] * 4)
+    ]
+    problem = cl.ContainerLoadingProblem([cl.Container("pallet", 12, 8, 12)], items, stacking_rules=[("chem", "food")])
+    cl.solve(problem, time_limit_seconds=1.0, random_seed=1)
+    assert problem.score.hard == 0 and not problem.unplaced_items()
+    assert max(item.z for item in problem.items) == 4
+    by_place = {(item.x, item.y, item.z): item for item in problem.items}
+    for item in problem.items:
+        below = by_place.get((item.x, item.y, item.z - 4))
+        assert not (item.stack_group == "chem" and below is not None and below.stack_group == "food")
+
+
 def test_the_constraints_path_scores_with_the_picks():
     """used_length_cost at a weight: the soft score carries the loading length, and the
     search packs towards the closed end."""

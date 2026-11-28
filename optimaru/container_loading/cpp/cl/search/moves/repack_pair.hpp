@@ -46,7 +46,8 @@ namespace cl {
 // where there is one. Which of the two is filled first is drawn.
 //
 // The move is made only when every load comes out clean: everything placed,
-// no stacking limit and no unloading order broken, the weight limits kept.
+// no stacking limit, stacking rule or unloading order broken, the weight
+// limits kept.
 // Otherwise nothing is changed and one random item is relocated instead
 // (relocateOneItem), so that the move is judged like any other.
 //
@@ -178,7 +179,9 @@ public:
             if (plan_[t].empty()) continue;
             inLoadingOrder(problem, plan_[t]);
             const Packing& packing = cache_.packing(problem, target[t], plan_[t]);
-            if (stackingExcess(problem, packing) + unloadingBlocks(problem, packing) > 0)
+            if (stackingExcess(problem, packing) + unloadingBlocks(problem, packing) +
+                        stackingViolations(problem, packing) >
+                0)
                 return relocateOneItem(ctx, rng, entities, saved_);
             if (packing.unplaced() == 0) continue;
             if (t + 1 == targets) return relocateOneItem(ctx, rng, entities, saved_);
