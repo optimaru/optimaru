@@ -101,6 +101,14 @@ public:
         acceptor_factory_ = std::move(factory);
     }
 
+    // Replace the built-in construction (construct/construction.hpp) with the
+    // use case's own; called once per solve, before the search, with the
+    // solve's editor. It places what the caller left unplaced, as the
+    // built-in one does: a warm start keeps what it placed.
+    void set_construction(ConstructionFn<Solution> construction) {
+        construction_ = std::move(construction);
+    }
+
     // Cooperatively stops a running solve() (checked once per step); the
     // solve returns its best-found solution as usual. Thread-safe. The flag
     // is sticky and solve() never clears it (a request_stop() racing a
@@ -116,7 +124,11 @@ public:
         StopCondition stop(config_.stop, stop_requested_.get(), run_stop_.get());
         build_nearby(solution);
         // How it solves, 1: construction (docs/how-it-solves.md).
-        Construction<Solution>::run(editor, config_.construction);
+        if (construction_) {
+            construction_(editor, config_.construction);
+        } else {
+            Construction<Solution>::run(editor, config_.construction);
+        }
         return run(editor, stop);
     }
 
@@ -184,6 +196,7 @@ public:
                         Solver thread_solver(std::move(thread_config));
                         if (acceptor_factory_)
                             thread_solver.set_acceptor_factory(acceptor_factory_);
+                        if (construction_) thread_solver.set_construction(construction_);
                         thread_solver.share_stop_flag(stop_requested_);
                         thread_solver.run_stop_ = stop;
                         scores[i] = thread_solver.solve(copies[i], *objectives[i]);
@@ -212,6 +225,7 @@ private:
     std::vector<std::unique_ptr<MoveOperator<Solution>>> move_operators_;
     std::vector<std::unique_ptr<RuinOperator<Solution>>> ruin_operators_;
     std::function<std::unique_ptr<Acceptor>(const Score&)> acceptor_factory_;
+    ConstructionFn<Solution> construction_;
     // shared_ptr so the solver object stays movable.
     std::shared_ptr<std::atomic<bool>> stop_requested_ = std::make_shared<std::atomic<bool>>(false);
     // Run-scoped stop of one multi-start start (null outside solve_multistart).

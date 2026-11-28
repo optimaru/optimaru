@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Source layout: one file per construction heuristic; a use case's own construction.**
+  `construct/first_fit.hpp` (assignment shape: first fit, first fit decreasing with a
+  difficulty order) and `construct/cheapest_insertion.hpp` (sequence shape) hold the two
+  heuristics, `construct/initialization_order.hpp` the order they share, and
+  `construct/construction.hpp` keeps `Construction<Solution>::run`, which picks by shape, and
+  `nothing_placed`. `Solver::set_construction` registers a construction in place of the
+  built-in one, for every start of a multi-start run. The built-in construction is unchanged:
+  every seeded solve gives the same result. **Breaking (C++):** `Construction<Solution>::
+  place_best_value`, `place_cheapest_insertion_full_scan` and `initialization_order` are free
+  functions (`optimaru::place_best_value`, ...).
 - **The random draws are the same on every platform; every seeded result changes once.** The
   engine and the use cases drew through the `std::` distributions and `std::shuffle`, which
   libstdc++ (the Linux wheels, the API) and libc++ (the macOS wheels) implement differently, so

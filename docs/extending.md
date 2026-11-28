@@ -282,6 +282,13 @@ To change how the initial solution is built:
    `Solver` before calling the engine. The engine keeps what is assigned and
    fills in only the rest. Pickup-delivery's pair construction places each pickup
    together with its drop-off this way.
+3. **In place of the engine's.** Register it on the engine's solver:
+   `solver.set_construction([](optimaru::Editor<Solution>& editor, const optimaru::ConstructionSettings& settings) { ... })`.
+   It runs once per solve, before the search, and in every start of a multi-start
+   run, through the editor (so the score stays current). It should place only what
+   the caller left unplaced, as the built-in one does, so a warm start keeps its
+   placements; `first_fit` and `cheapest_insertion`
+   (`core/optimaru/construct/`) can finish what it leaves.
 
 ## Adding a cost
 

@@ -1183,6 +1183,46 @@ void testNothingPlaced() {
     check(!optimaru::nothing_placed(tour), "one element in a list: something is placed");
 }
 
+// Solver::set_construction: a use case's own construction runs in place of the
+// built-in one, once per solve, before the search, and every start of a
+// multi-start run uses it.
+void testCustomConstruction(const Score& optimum) {
+    std::printf("== construction: a use case's own ==\n");
+    std::atomic<int> calls{0};
+    const auto mine = [&](optimaru::Editor<TaskAssignment>& editor,
+                          const optimaru::ConstructionSettings&) {
+        ++calls;
+        TaskAssignment& s = editor.solution();
+        for (int t = 0; t < static_cast<int>(s.assignment.size()); ++t) editor.assign(t, 0);
+    };
+    {
+        optimaru::Settings config;
+        config.stop.step_limit = 1;
+        TaskAssignment s = buildTaskInstance();
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.set_construction(mine);
+        TaskAssignmentCalculator calculator;
+        solver.solve(s, calculator);
+        check(calls == 1, "it runs once per solve");
+        int moved = 0;
+        for (int v : s.assignment) moved += v != 0 ? 1 : 0;
+        check(moved <= 2, "the search starts from what it built (one step moves at most two)");
+    }
+    {
+        calls = 0;
+        optimaru::Settings config;
+        config.stop.step_limit = 2000;
+        config.run.parallel_starts = 3;
+        TaskAssignment s = buildTaskInstance();
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.set_construction(mine);
+        const Score result = solver.solve_multistart(
+                s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        check(calls == 3, "every start of a multi-start run uses it");
+        check(result <= optimum, "and the search goes on from it");
+    }
+}
+
 void testNearbyAndLnsOnRandomTsp() {
     std::printf("== sequence: nearby selection + LNS on random TSP (100 cities) ==\n");
 
@@ -2887,6 +2927,7 @@ int main() {
     testHistoryGrowthOnAWarmStart(optimum);
     testPortableDraws();
     testNothingPlaced();
+    testCustomConstruction(optimum);
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();
     testCustomMoveShareInLaterStages();
