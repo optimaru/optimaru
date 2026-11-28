@@ -44,8 +44,8 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // Runs one solve:
 //   1. construction: everything unassigned gets its best placement (first
-//      fit / first fit decreasing / cheapest insertion), see
-//      construct/construction.hpp;
+//      fit / first fit decreasing / cheapest insertion, see
+//      construct/construction.hpp), or the use case's own (set_construction);
 //   2. the search (run() below): one candidate move per step, judged by an
 //      Acceptor, until the StopCondition fires. A step's move is a built-in
 //      strategy (search/strategies.hpp), one of the caller's operators or a
@@ -101,6 +101,29 @@ public:
         acceptor_factory_ = std::move(factory);
     }
 
+    // Replace the built-in construction (construct/construction.hpp) with the
+    // use case's own; called once per solve, before the search, with the
+    // solve's editor. It places what the caller left unplaced, as the
+    // built-in one does: a warm start keeps what it placed. `seed` is the
+    // solve's run.seed (each start of a multi-start run has its own): a
+    // construction that draws seeds a std::mt19937_64 with it and draws
+    // through utils/random.hpp. solve_multistart runs it on every start's
+    // thread at once, each with its own copy of the callable: what it refers
+    // to by reference or pointer must be safe to use concurrently. It runs
+    // before the stop condition is first asked, so keep it bounded.
+    void set_construction(ConstructionFn<Solution> construction) {
+        construction_ = std::move(construction);
+    }
+
+    // Add a stop rule of the use case's own to the built-in limits
+    // (stop/stop_condition.hpp), asked after them; the factory makes a fresh
+    // one for every solve, and for every start of a multi-start run, on that
+    // start's thread: it must be safe to call concurrently. A criterion that
+    // fires ends its own start only; the others go on to their own limits.
+    void add_stop_criterion(std::function<std::unique_ptr<StopCriterion>()> factory) {
+        stop_criterion_factories_.push_back(std::move(factory));
+    }
+
     // Cooperatively stops a running solve() (checked once per step); the
     // solve returns its best-found solution as usual. Thread-safe. The flag
     // is sticky and solve() never clears it (a request_stop() racing a
@@ -113,10 +136,17 @@ public:
     Score solve(Solution& solution, Objective<Solution>& objective) {
         require_pinned_values<Traits>(solution);
         Editor<Solution> editor(solution, objective, config_.run.score_checks);
-        StopCondition stop(config_.stop, stop_requested_.get(), run_stop_.get());
+        std::vector<std::unique_ptr<StopCriterion>> custom_stops;
+        for (const auto& make : stop_criterion_factories_) custom_stops.push_back(make());
+        StopCondition stop(config_.stop, stop_requested_.get(), run_stop_.get(),
+                           std::move(custom_stops));
         build_nearby(solution);
         // How it solves, 1: construction (docs/how-it-solves.md).
-        Construction<Solution>::run(editor, config_.construction);
+        if (construction_) {
+            construction_(editor, config_.construction, config_.run.seed);
+        } else {
+            Construction<Solution>::run(editor, config_.construction);
+        }
         return run(editor, stop);
     }
 
@@ -149,7 +179,12 @@ public:
     // Note: registered custom operators are per-Solver (possibly stateful), so
     // multi-start threads run with the built-ins only. The acceptor factory
     // (set_acceptor_factory) IS shared: every start calls it for an acceptor
-    // of its own, so it must be safe to call concurrently.
+    // of its own, so it must be safe to call concurrently. So is the
+    // construction (set_construction): every start runs its own copy at the
+    // same time, on its own copy of the solution, so what it refers to by
+    // reference or pointer is used by every start at once.
+    // The stop criterion factories (add_stop_criterion) are called the same
+    // way: on every start's thread at once.
     template <typename ObjectiveFactory>
     Score solve_multistart(Solution& solution, ObjectiveFactory&& make_objective) {
         require_pinned_values<Traits>(solution);
@@ -184,6 +219,9 @@ public:
                         Solver thread_solver(std::move(thread_config));
                         if (acceptor_factory_)
                             thread_solver.set_acceptor_factory(acceptor_factory_);
+                        if (construction_) thread_solver.set_construction(construction_);
+                        for (const auto& make : stop_criterion_factories_)
+                            thread_solver.add_stop_criterion(make);
                         thread_solver.share_stop_flag(stop_requested_);
                         thread_solver.run_stop_ = stop;
                         scores[i] = thread_solver.solve(copies[i], *objectives[i]);
@@ -212,6 +250,8 @@ private:
     std::vector<std::unique_ptr<MoveOperator<Solution>>> move_operators_;
     std::vector<std::unique_ptr<RuinOperator<Solution>>> ruin_operators_;
     std::function<std::unique_ptr<Acceptor>(const Score&)> acceptor_factory_;
+    ConstructionFn<Solution> construction_;
+    std::vector<std::function<std::unique_ptr<StopCriterion>()>> stop_criterion_factories_;
     // shared_ptr so the solver object stays movable.
     std::shared_ptr<std::atomic<bool>> stop_requested_ = std::make_shared<std::atomic<bool>>(false);
     // Run-scoped stop of one multi-start start (null outside solve_multistart).

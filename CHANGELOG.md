@@ -35,6 +35,27 @@
     `ActiveDistances`).
   - The CP-SAT reference (external-solver) knows the default grid only, so the comparison in
     `benchmarks/order-picking` stays on it and another layout is engine-only for now.
+- **Source layout: one file per stop criterion; a use case's own.** `stop/` holds each
+  built-in criterion in a file of its own: `max_runtime.hpp` (`MaxRuntime`),
+  `no_improvement_time.hpp`, `max_steps.hpp`, `no_improvement_steps.hpp`, `target_score.hpp`
+  and `stop_requested.hpp`, all reading the `StopState` of `stop_state.hpp`.
+  `StopCondition` assembles them from `Limits` in the order it always checked, still samples
+  the clock in batches, and takes the time fraction or the step fraction, whichever is
+  further, along with the progress of any added criterion, as the progress of the solve. `Solver::add_stop_criterion` adds a `StopCriterion`
+  (`stop/stop_criterion.hpp`) of the use case's own, asked after the built-in ones, made fresh
+  for every solve and every start of a multi-start run. Every seeded solve gives the same
+  result as before. `StopCondition` can no longer be copied (it may own added criteria).
+- **Source layout: one file per construction heuristic; a use case's own construction.**
+  `construct/first_fit.hpp` (assignment shape: first fit, first fit decreasing with a
+  difficulty order) and `construct/cheapest_insertion.hpp` (sequence shape) hold the two
+  heuristics, `construct/initialization_order.hpp` the order they share, and
+  `construct/construction.hpp` keeps `Construction<Solution>::run`, which picks by shape, and
+  `nothing_placed`. `Solver::set_construction` registers a construction in place of the
+  built-in one, for every start of a multi-start run; it gets the solve's seed (each start's
+  own) to draw with. The built-in construction is unchanged:
+  every seeded solve gives the same result. **Breaking (C++):** `Construction<Solution>::
+  place_best_value`, `place_cheapest_insertion_full_scan` and `initialization_order` are free
+  functions (`optimaru::place_best_value`, ...).
 - **The random draws are the same on every platform; every seeded result changes once.** The
   engine and the use cases drew through the `std::` distributions and `std::shuffle`, which
   libstdc++ (the Linux wheels, the API) and libc++ (the macOS wheels) implement differently, so

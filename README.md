@@ -323,10 +323,17 @@ core/optimaru/
 │   └── constraint_assembly.hpp   default constraint set: weight / level /
 │                                 exponent / offset / clip / drop by name,
 │                                 repeated instances, info() catalog
-├── construct/                    the initial solution: first fit (decreasing),
-│                                 cheapest insertion
-├── stop/                         when a solve ends (StopCondition) and the
-│                                 throttle long-running moves consult it through
+├── construct/                    the initial solution, one file per heuristic:
+│                                 first_fit (decreasing), cheapest_insertion;
+│                                 construction, which picks by shape and is
+│                                 replaced by Solver::set_construction
+├── stop/                         when a solve ends, one file per criterion:
+│                                 max_runtime, no_improvement_time, max_steps,
+│                                 no_improvement_steps, target_score,
+│                                 stop_requested; StopCondition, which assembles
+│                                 them from the settings and any StopCriterion a
+│                                 use case adds; the throttle long-running moves
+│                                 consult it through
 ├── search/                       the operators the solver's step loop
 │   │                             (Solver::run) draws; it holds no loop of its own
 │   ├── operators.hpp             the plugin points for custom operators

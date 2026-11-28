@@ -282,6 +282,49 @@ To change how the initial solution is built:
    `Solver` before calling the engine. The engine keeps what is assigned and
    fills in only the rest. Pickup-delivery's pair construction places each pickup
    together with its drop-off this way.
+3. **In place of the engine's.** Register it on the engine's solver:
+   `solver.set_construction([](optimaru::Editor<Solution>& editor, const optimaru::ConstructionSettings& settings, std::uint64_t seed) { ... })`.
+   It runs once per solve, before the search, and in every start of a multi-start
+   run, through the editor (so the score stays current). It should place only what
+   the caller left unplaced, as the built-in one does, so a warm start keeps its
+   placements; `first_fit` and `cheapest_insertion`
+   (`core/optimaru/construct/`) can finish what it leaves. `seed` is the solve's seed,
+   another for each start of a multi-start run: a construction that draws seeds a
+   `std::mt19937_64` with it and draws through `core/optimaru/utils/random.hpp`. A
+   multi-start run calls it on every start's thread at once, each start with its own
+   copy of the lambda, so what it refers to by reference or pointer must be safe to use
+   concurrently. It runs before the stop condition is first asked: keep it bounded. A use case that solves through `solve_parallel_starts`
+   (`core/optimaru/solver_config.hpp`) makes one engine solver per start in its
+   `solve_one`: register the construction there, on each.
+
+### A stop rule of your own
+
+The stop settings (`config.stop`: time, steps, time or steps without a new best, a
+target score) cover most solves. A rule they cannot express, such as "stop within 1%
+of a known lower bound on the cost", is a `StopCriterion`
+(`core/optimaru/stop/stop_criterion.hpp`):
+
+```cpp
+struct NearBound final : optimaru::StopCriterion {
+    explicit NearBound(double bound) : bound_(bound) {}  // a lower bound on the cost
+    bool reached(const optimaru::StopState& state) override {
+        return state.best_score.hard == 0 && -state.best_score.soft <= 1.01 * bound_;
+    }
+    double bound_;
+};
+solver.add_stop_criterion([] { return std::make_unique<NearBound>(12000.0); });
+```
+
+It is asked once a step, after the built-in limits, with the `StopState` of
+`stop/stop_state.hpp` (step, best score, start, last new best). Its clock, `state.now`,
+is sampled every 64 steps, so a time-based rule fires up to 63 steps late. The factory
+makes one criterion per solve, and in a multi-start run one per start, on that start's
+thread: what it refers to must be safe to use concurrently, and a criterion that fires
+ends only its own start (the other starts go on to their own limits). A criterion that
+overrides `progress()` also sets how far simulated annealing has cooled and when the
+history stages move on, so it should rise steadily from 0 to 1. A use case that solves
+through `solve_parallel_starts`
+registers it on each start's solver, as with its moves.
 
 ## Adding a cost
 
