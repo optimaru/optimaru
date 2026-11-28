@@ -88,7 +88,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `initial_items` | list of item ids, [] | warm start: the loading order to start from |
 | `items` | output, list of ids | the placed items, in loading order |
 | `unplaced_items` | output, list of ids | items the solve gave to this container that found no place in it |
-| `loaded_weight`, `loaded_volume` | output, int | weight and volume of the placed items |
+| `loaded_weight`, `loaded_volume` | output, int | weight and volume of the placed items (`container_weight_cost` counts the unplaced ones too) |
 | `fill_ratio` | output, float | `loaded_volume` / the container's volume |
 | `used_length` | output, int | largest `x + placed_length` of a placed item (0 when empty) |
 
@@ -225,7 +225,9 @@ What the raw costs mean exactly:
   top, overlapping a in the floor plane). Items without `unload_order` are in nobody's
   way and wait for nobody; items of the same stop do not block each other.
 - **Container weight** counts the whole list, an unplaced item included: what the solve
-  gave to a container belongs to it.
+  gave to a container belongs to it. `loaded_weight` is the weight of the placed items
+  only, so a container whose `loaded_weight` is within `max_weight` can still cost here
+  when it has `unplaced_items`.
 - **Used container.** A container whose list holds only unplaced items is not in use.
 - **Group split** counts where the lists put the items, placed or not.
 
@@ -441,8 +443,11 @@ again = cl.solve(with_initial_solution(model, solved), time_limit_seconds=1.0, r
 
 A solved model is itself a starting point: `to_core()` loads the `items` (and
 `unplaced_items`) a solve filled in, so `cl.solve(solved, ...)` goes on from there, and
-`cl.calculate_score(solved.to_core())` is the score it carries. `initial_items` is read
-only where a container has no `items` yet.
+`cl.calculate_score(solved.to_core())` is the score it carries when everything is placed.
+An unplaced item does not keep its place in the order: it is loaded back after the placed
+ones, which stand where they stood, so such a model can only come back with fewer unplaced
+items than the solve reported. `initial_items` is read only where a container has no
+`items` yet.
 
 ## C++
 

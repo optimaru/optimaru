@@ -116,8 +116,11 @@ public:
                             stackingExcess(problem, before) + unloadingBlocks(problem, before);
                 }
                 trial_ = plan_[index];
-                trial_.insert(trial_.begin() + insertPosition(problem, trial_, item), item);
+                const int position = insertPosition(problem, trial_, item);
+                trial_.insert(trial_.begin() + position, item);
                 const Packing& after = cache_.packing(problem, c, trial_);
+                // The item itself has to find a place, and nothing else lose its own.
+                if (after.boxOf[static_cast<std::size_t>(position)] < 0) continue;
                 if (after.unplaced() > unplaced_[index]) continue;
                 const std::int64_t broken =
                         stackingExcess(problem, after) + unloadingBlocks(problem, after);

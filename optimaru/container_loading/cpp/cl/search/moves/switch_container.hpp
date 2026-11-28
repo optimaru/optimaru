@@ -150,6 +150,9 @@ private:
                 placed = true;
                 break;
             }
+            // `next` moves on past a container that is opened here too (the
+            // increment runs once more after `placed` is set), so no container
+            // is opened twice.
             for (; !placed && next < targets_.size(); ++next) {
                 const int target = targets_[next];
                 const Container& to = problem.containers[static_cast<std::size_t>(target)];

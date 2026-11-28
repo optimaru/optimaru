@@ -118,10 +118,15 @@ class ContainerModel(StrictModel):
         default=None,
         description=(
             "Output: items the solve gave to this container that found no place in it. They count "
-            "in the hard score, and a solved model loads them back with `items`."
+            "in the hard score (their weight too, against max_weight), and a solved model loads "
+            "them back after `items`."
         ),
     )
-    loaded_weight: int | None = Field(default=None, ge=0, description="Output: weight of the placed items.")
+    loaded_weight: int | None = Field(
+        default=None,
+        ge=0,
+        description="Output: weight of the placed items (container_weight_cost also counts the unplaced ones).",
+    )
     loaded_volume: int | None = Field(default=None, ge=0, description="Output: volume of the placed items.")
     fill_ratio: float | None = Field(default=None, ge=0, description="Output: loaded_volume / the container's volume.")
     used_length: int | None = Field(
@@ -130,7 +135,12 @@ class ContainerModel(StrictModel):
 
     def loading_order(self) -> list[str]:
         """The loading order this container goes into a solve with: `items` (and the
-        `unplaced_items` after them) when a solve has filled them in, else `initial_items`."""
+        `unplaced_items` after them) when a solve has filled them in, else `initial_items`.
+
+        Where an unplaced item stood in the order is not kept: it is tried again after the
+        placed ones, which stand where they stood. So a solved model in which everything is
+        placed is exactly the solution it was; one with unplaced items can only come back
+        with fewer of them."""
         if self.items is None:
             return list(self.initial_items)
         return [*self.items, *(self.unplaced_items or [])]

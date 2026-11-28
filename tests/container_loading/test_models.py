@@ -153,6 +153,21 @@ def test_a_solved_model_scores_as_solved_and_solves_on():
     ]
 
 
+def test_a_round_trip_never_scores_worse_than_the_solve():
+    """Everything placed: the same score exactly. With unplaced items, which are loaded back
+    after the placed ones, never more of them."""
+    from .test_reference_parity import random_problem
+
+    for seed in range(20):
+        core = random_problem(300 + seed)
+        config = cl.SolverConfig(stop={"time_limit_seconds": 30, "step_limit": 300}, run={"random_seed": seed})
+        solved = cl.solve(ContainerLoadingProblemModel.from_core(core), config=config)
+        back = cl.calculate_score(solved.to_core())
+        if not solved.unplaced_items:
+            assert (back.hard, back.soft) == (solved.score_hard, solved.score_soft)
+        assert back.hard >= solved.score_hard
+
+
 def test_initial_items_are_the_starting_point_and_stay_on_the_result():
     model = small()
     model.containers[1].initial_items = ["i8", "i7"]
