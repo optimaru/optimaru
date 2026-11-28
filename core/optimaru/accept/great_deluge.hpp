@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_SEARCH_ACCEPT_GREAT_DELUGE_HPP
-#define OPTIMARU_SEARCH_ACCEPT_GREAT_DELUGE_HPP
+#ifndef OPTIMARU_ACCEPT_GREAT_DELUGE_HPP
+#define OPTIMARU_ACCEPT_GREAT_DELUGE_HPP
 
 #include <random>
 
-#include "optimaru/search/accept/acceptor.hpp"
+#include "optimaru/accept/acceptor.hpp"
 #include "optimaru/score/score.hpp"
 
 namespace optimaru {
@@ -36,4 +36,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_SEARCH_ACCEPT_GREAT_DELUGE_HPP
+#endif  // OPTIMARU_ACCEPT_GREAT_DELUGE_HPP

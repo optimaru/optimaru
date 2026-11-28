@@ -10,13 +10,13 @@
 //   score/      the score, its levels and the incremental objectives
 //   construct/  the initial solution
 //   stop/       when a solve ends
-//   search/     what the solver's step loop (Solver::run, solver.hpp) draws
-//               on: the plugin points for custom operators, the built-in
-//               strategies, and
+//   search/     the operators the solver's step loop (Solver::run,
+//               solver.hpp) draws: the plugin points for custom operators,
+//               the built-in strategies, and
 //     moves/          every move the step loop can draw
 //     ruin_recreate/  ruin operators + recreate: one destroy-and-repair unit
-//     accept/         acceptance rules
-//     select/         adaptive operator selection
+//   accept/     acceptance rules: whether the step loop keeps a move
+//   select/     adaptive operator selection: which operator it draws next
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"

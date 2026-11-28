@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
-#include "optimaru/search/select/scheme.hpp"
+#include "optimaru/select/scheme.hpp"
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"

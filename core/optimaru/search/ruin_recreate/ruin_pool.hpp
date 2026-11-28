@@ -14,7 +14,7 @@
 #include "optimaru/search/ruin_recreate/route_ruin.hpp"
 #include "optimaru/search/ruin_recreate/sisr_ruin.hpp"
 #include "optimaru/search/ruin_recreate/worst_ruin.hpp"
-#include "optimaru/search/select/schemes.hpp"
+#include "optimaru/select/schemes.hpp"
 #include "optimaru/settings.hpp"
 
 namespace optimaru {

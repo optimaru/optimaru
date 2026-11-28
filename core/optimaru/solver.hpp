@@ -24,14 +24,14 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/construct/construction.hpp"
 #include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/search/accept/acceptors.hpp"
-#include "optimaru/search/accept/history_stages.hpp"
+#include "optimaru/accept/acceptors.hpp"
+#include "optimaru/accept/history_stages.hpp"
 #include "optimaru/search/moves/move_mix.hpp"
 #include "optimaru/search/operators.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/search/ruin_recreate/kick.hpp"
 #include "optimaru/search/ruin_recreate/ruin_pool.hpp"
-#include "optimaru/search/select/schemes.hpp"
+#include "optimaru/select/schemes.hpp"
 #include "optimaru/search/strategies.hpp"
 #include "optimaru/stop/stop_condition.hpp"
 #include "optimaru/worker_threads.hpp"
@@ -50,7 +50,7 @@ namespace optimaru {
 //      strategy (search/strategies.hpp), one of the caller's operators or a
 //      move of the ordinary mix (search/moves/move_mix.hpp); when the search
 //      stalls, a ruin-and-recreate kick (search/ruin_recreate/kick.hpp) or
-//      the next late-acceptance stage (search/accept/history_stages.hpp)
+//      the next late-acceptance stage (accept/history_stages.hpp)
 //      takes the step;
 // plus the nearby-neighbour precomputation, custom operator registration and
 // multi-start solving.
@@ -59,7 +59,7 @@ namespace optimaru {
 // and how to add one; the steps are marked below as "How it solves, <n>".
 //
 // The loop is the solver's own and holds no move: every part it draws on is
-// a plugin under search/ (moves/, ruin_recreate/, accept/, select/), the
+// a plugin under search/ (moves/, ruin_recreate/), accept/ or select/, the
 // built-in ones through the same MoveOperator / RuinOperator / Acceptor
 // interfaces a caller registers its own with.
 //

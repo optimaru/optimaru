@@ -181,7 +181,7 @@ PYBIND11_MODULE(_core, m) {
             // leaves the fuller one fuller (cpp/bp/search/moves/moves.hpp).
             .def_readwrite("trade_moves", &Solver::Config::trade_moves)
             // Steps that keep the score: taken when the bins get no less full,
-            // else one time in eight (cpp/bp/search/accept/fill_late_acceptance.hpp).
+            // else one time in eight (cpp/bp/accept/fill_late_acceptance.hpp).
             .def_readwrite("fill_tie_break", &Solver::Config::fill_tie_break)
             .def_property(
                     "repack_partner_bins",

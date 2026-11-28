@@ -15,7 +15,7 @@ namespace bp {
 // optimaru::Solver<BinPackingProblem> with late acceptance over the built-in
 // change/swap moves, the domain's EmptyBinMove, RepackMove and TradeMove
 // (bp/search/moves/moves.hpp), ties between equal scores decided by how full the bins are
-// (bp/search/accept/fill_late_acceptance.hpp) and the engine's adaptive ruin-and-recreate
+// (bp/accept/fill_late_acceptance.hpp) and the engine's adaptive ruin-and-recreate
 // (ALNS).
 class Solver {
 public:
@@ -86,7 +86,7 @@ public:
 
         // Late acceptance takes a step that keeps the score when it does not
         // lower the sum of the squared bin loads, and otherwise one time in
-        // eight (bp/search/accept/fill_late_acceptance.hpp); false = it takes every such
+        // eight (bp/accept/fill_late_acceptance.hpp); false = it takes every such
         // step, as plain late acceptance does. Runs that end above the
         // capacity bound on Falkenauer's 24 sampled instances, two seeds
         // each, 10 s (benchmarks/bin-packing, 2026-11-12):

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_SEARCH_SELECT_SEGMENTED_ROULETTE_WHEEL_HPP
-#define OPTIMARU_SEARCH_SELECT_SEGMENTED_ROULETTE_WHEEL_HPP
+#ifndef OPTIMARU_SELECT_SEGMENTED_ROULETTE_WHEEL_HPP
+#define OPTIMARU_SELECT_SEGMENTED_ROULETTE_WHEEL_HPP
 
 #include <cstdint>
 #include <random>
 #include <utility>
 #include <vector>
 
-#include "optimaru/search/select/roulette_wheel.hpp"
+#include "optimaru/select/roulette_wheel.hpp"
 
 namespace optimaru {
 
@@ -57,4 +57,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_SEARCH_SELECT_SEGMENTED_ROULETTE_WHEEL_HPP
+#endif  // OPTIMARU_SELECT_SEGMENTED_ROULETTE_WHEEL_HPP

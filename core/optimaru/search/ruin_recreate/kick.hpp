@@ -16,7 +16,7 @@
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"
 #include "optimaru/search/ruin_recreate/ruin_pool.hpp"
-#include "optimaru/search/select/scheme.hpp"
+#include "optimaru/select/scheme.hpp"
 #include "optimaru/settings.hpp"
 
 namespace optimaru {

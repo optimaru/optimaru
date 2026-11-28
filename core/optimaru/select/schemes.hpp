@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_SEARCH_SELECT_SCHEMES_HPP
-#define OPTIMARU_SEARCH_SELECT_SCHEMES_HPP
+#ifndef OPTIMARU_SELECT_SCHEMES_HPP
+#define OPTIMARU_SELECT_SCHEMES_HPP
 
 // ---------------------------------------------------------------------------
 // Adaptive operator selection — umbrella header
@@ -16,11 +16,11 @@
 #include <memory>
 
 #include "optimaru/settings.hpp"
-#include "optimaru/search/select/alpha_ucb.hpp"
-#include "optimaru/search/select/scheme.hpp"
-#include "optimaru/search/select/uniform.hpp"
-#include "optimaru/search/select/roulette_wheel.hpp"
-#include "optimaru/search/select/segmented_roulette_wheel.hpp"
+#include "optimaru/select/alpha_ucb.hpp"
+#include "optimaru/select/scheme.hpp"
+#include "optimaru/select/uniform.hpp"
+#include "optimaru/select/roulette_wheel.hpp"
+#include "optimaru/select/segmented_roulette_wheel.hpp"
 
 namespace optimaru {
 
@@ -53,4 +53,4 @@ inline std::unique_ptr<OperatorSelectionScheme> make_operator_selection_scheme(
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_SEARCH_SELECT_SCHEMES_HPP
+#endif  // OPTIMARU_SELECT_SCHEMES_HPP

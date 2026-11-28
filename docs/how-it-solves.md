@@ -9,8 +9,10 @@ how to add to it. The steps and their names are those of the flowchart on
 
 The loop itself is `Solver::run` in
 [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp). It holds no move: every
-part it draws on is a plugin under [`core/optimaru/search/`](../core/optimaru/search/),
-and the built-in ones use the same interfaces a use case registers its own with.
+operator it draws on is a plugin under [`core/optimaru/search/`](../core/optimaru/search/),
+the acceptance rules are in [`core/optimaru/accept/`](../core/optimaru/accept/) and the
+operator selection in [`core/optimaru/select/`](../core/optimaru/select/). The built-in
+operators and acceptors use the same interfaces a use case registers its own with.
 Each step below is marked in `Solver::solve` (step 1) and `Solver::run` (the rest) with a comment that names it
 (`// How it solves, 3: ...`), so you can find it there by its number.
 
@@ -24,13 +26,13 @@ from `cost`, which a use case reads itself (`stop` is of type `Limits` there).
 | [1. Construction](#1-construction) | `construct/construction.hpp` | [Construction instead of search](extending.md#construction-instead-of-search) |
 | [2. Current and best](#2-current-and-best) | `solver.hpp`, `model/snapshot.hpp` | |
 | [3. Stop condition](#3-stop-condition) | `stop/stop_condition.hpp` | |
-| [4. Search stalled?](#4-search-stalled) | `solver.hpp`, `search/accept/history_stages.hpp` | |
+| [4. Search stalled?](#4-search-stalled) | `solver.hpp`, `accept/history_stages.hpp` | |
 | [5. Ruin and recreate kick](#5-ruin-and-recreate-kick) | `search/ruin_recreate/` | [A ruin instead of a move](extending.md#a-ruin-instead-of-a-move) |
 | [6. Built-in strategy](#6-built-in-strategy) | `search/strategies.hpp`, `search/moves/` | an engine change |
-| [7. Use-case moves](#7-use-case-moves) | `search/operators.hpp`, `search/select/` | [Adding a move](extending.md#adding-a-move) |
+| [7. Use-case moves](#7-use-case-moves) | `search/operators.hpp`, `select/` | [Adding a move](extending.md#adding-a-move) |
 | [8. Move mix](#8-move-mix) | `search/moves/move_mix.hpp` | an engine change |
 | [9. Incremental score](#9-incremental-score) | `model/editor.hpp`, `score/` | [Adding a cost](extending.md#adding-a-cost) |
-| [10. Acceptor](#10-acceptor) | `search/accept/` | `Solver::set_acceptor_factory`, or an engine change |
+| [10. Acceptor](#10-acceptor) | `accept/` | `Solver::set_acceptor_factory`, or an engine change |
 | [11. New best](#11-new-best) | `solver.hpp` | |
 
 All paths in the table are under `core/optimaru/`. A use case adds moves, ruins
@@ -91,7 +93,7 @@ start the next stage instead of a kick.
 
 - Code: the `patience` and `stalled` lines of `Solver::run` in
   [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp), and `HistoryStages`
-  in [`core/optimaru/search/accept/history_stages.hpp`](../core/optimaru/search/accept/history_stages.hpp).
+  in [`core/optimaru/accept/history_stages.hpp`](../core/optimaru/accept/history_stages.hpp).
 - Settings: `config.alns_trigger` (`enabled`, `unimproved_steps`). The stages are
   `AcceptanceSettings::history_growth` in C++, which a use case sets in its
   solver where it measured that they pay (facility location and quadratic
@@ -113,7 +115,7 @@ pay off.
   [`ruin_pool.hpp`](../core/optimaru/search/ruin_recreate/ruin_pool.hpp) (random,
   related, worst, and for sequences SISR and route ruins, one file each beside it);
   the rebuild in [`greedy_repair.hpp`](../core/optimaru/search/ruin_recreate/greedy_repair.hpp);
-  the selection schemes in [`core/optimaru/search/select/`](../core/optimaru/search/select/).
+  the selection schemes in [`core/optimaru/select/`](../core/optimaru/select/).
 - Settings: `config.alns` (`min_ruin_fraction`, `max_ruin_fraction`,
   `max_ruin_count`, `polish_steps`, `selection_type`, `rewards`, ...).
 - To add a ruin for one use case: a `RuinOperator` registered with
@@ -149,7 +151,7 @@ far.
 - Code: `Solver::choose_move` and `Solver::custom_operators_get_a_turn` in
   [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp); the interface,
   `MoveOperator`, in [`core/optimaru/search/operators.hpp`](../core/optimaru/search/operators.hpp);
-  the selection schemes in [`core/optimaru/search/select/`](../core/optimaru/search/select/).
+  the selection schemes in [`core/optimaru/select/`](../core/optimaru/select/).
   A use case's own moves are in `optimaru/<uc>/cpp/<ns>/search/moves/`, registered in
   its `registerMoves()` in `solver.cpp`.
 - Settings: `config.custom_moves` (`share`, and the use case's switches).
@@ -201,7 +203,7 @@ climbing and record-to-record travel. A rejected move is undone (a previewed one
 was never applied).
 
 - Code: one file per rule in
-  [`core/optimaru/search/accept/`](../core/optimaru/search/accept/), the interface
+  [`core/optimaru/accept/`](../core/optimaru/accept/), the interface
   in `acceptor.hpp` and the factory, `make_acceptor`, in `acceptors.hpp`.
 - Settings: `config.acceptance` (`rule`, and each rule's own settings).
 - A use case can set its own acceptor with `Solver::set_acceptor_factory`; a new
