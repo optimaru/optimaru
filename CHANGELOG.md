@@ -8,7 +8,7 @@
   and `stop_requested.hpp`, all reading the `StopState` of `stop_state.hpp`.
   `StopCondition` assembles them from `Limits` in the order it always checked, still samples
   the clock in batches, and takes the time fraction or the step fraction, whichever is
-  further, as the progress of the solve. `Solver::add_stop_criterion` adds a `StopCriterion`
+  further, along with the progress of any added criterion, as the progress of the solve. `Solver::add_stop_criterion` adds a `StopCriterion`
   (`stop/stop_criterion.hpp`) of the use case's own, asked after the built-in ones, made fresh
   for every solve and every start of a multi-start run. Every seeded solve gives the same
   result as before. `StopCondition` can no longer be copied (it may own added criteria).

@@ -13,7 +13,8 @@ namespace optimaru {
 
 // What every stop criterion reads: where the solve stands at the head of a
 // step. StopCondition keeps it current; the clock in `now` is sampled in
-// batches (StopCondition::should_stop), never read by a criterion itself.
+// batches (StopCondition::should_stop); the built-in criteria never read the
+// clock themselves.
 using StopClock = std::chrono::steady_clock;
 
 struct StopState {

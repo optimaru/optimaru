@@ -320,7 +320,10 @@ It is asked once a step, after the built-in limits, with the `StopState` of
 is sampled every 64 steps, so a time-based rule fires up to 63 steps late. The factory
 makes one criterion per solve, and in a multi-start run one per start, on that start's
 thread: what it refers to must be safe to use concurrently, and a criterion that fires
-ends only its own start. A use case that solves through `solve_parallel_starts`
+ends only its own start (the other starts go on to their own limits). A criterion that
+overrides `progress()` also sets how far simulated annealing has cooled and when the
+history stages move on, so it should rise steadily from 0 to 1. A use case that solves
+through `solve_parallel_starts`
 registers it on each start's solver, as with its moves.
 
 ## Adding a cost

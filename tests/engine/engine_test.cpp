@@ -1212,6 +1212,7 @@ void testCustomStopCriterion() {
         });
         starts.solve_multistart(t, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         check(madeByStarts.load() == 3, "every start of a multi-start run makes its own");
+        check(sink[0] > 0 && sink[1] > 0 && sink[2] > 0, "and asks it");
     }
 }
 

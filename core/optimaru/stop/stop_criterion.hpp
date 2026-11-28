@@ -31,7 +31,8 @@ public:
     virtual bool reached(const StopState& state) = 0;
     // How far the solve is towards this criterion, 0 -> 1, if it measures
     // that (simulated annealing cools and the history stages time by the
-    // furthest criterion); 0 for one that does not.
+    // furthest criterion); 0 for one that does not. It should rise steadily:
+    // a jump from 0 to 1 cools the annealing at once.
     virtual double progress(const StopState& state) const {
         (void)state;
         return 0.0;
