@@ -14,6 +14,7 @@
 #include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"
+#include "optimaru/search/ruin_recreate/ruin_count.hpp"
 #include "optimaru/solution/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
 #include "optimaru/utils/random.hpp"
@@ -60,7 +61,7 @@ public:
         // Much smaller than a kick's ruin: it has to be cheap enough to run
         // every few steps, and small enough that the acceptor sees a local
         // change rather than a restart.
-        const int ruin_count = std::clamp(1 + random_index(rng, std::max(1, max_ruin_)), 1, n - 1);
+        const int ruin_count = clamp_ruin_count(1 + random_index(rng, std::max(1, max_ruin_)), n);
 
         drawn_ruin_ = ruin_selector_.select(rng);
         std::vector<int> ruined = ruins_[drawn_ruin_]->select_ruin_set(ctx, ruin_count, rng);

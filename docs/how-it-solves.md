@@ -120,6 +120,8 @@ pay off.
 
 - Code: `StagnationKick::apply` in
   [`core/optimaru/search/ruin_recreate/kick.hpp`](../core/optimaru/search/ruin_recreate/kick.hpp);
+  how many it ruins (shared with the step 6 strategies that ruin) in
+  [`ruin_count.hpp`](../core/optimaru/search/ruin_recreate/ruin_count.hpp);
   the ruin operators and their selection in
   [`ruin_pool.hpp`](../core/optimaru/search/ruin_recreate/ruin_pool.hpp) (random,
   related, worst, and for sequences SISR and route ruins, one file each beside it);
@@ -241,14 +243,10 @@ registers moves of its own on each start goes through `solve_parallel_starts` in
 [`core/optimaru/solver_config.hpp`](../core/optimaru/solver_config.hpp) instead, which
 does the same around the use case's own solve.
 
-## Where to start
+## Where to extend
 
-- Your first contribution is most likely a move (step 7) or a cost (step 9) for one
-  use case: [`CONTRIBUTING.md`](../CONTRIBUTING.md) has the setup and the short
-  recipes, [`extending.md`](extending.md) the full steps with real code.
-- Issues labelled
-  [good first issue](https://github.com/optimaru/optimaru/labels/good%20first%20issue),
-  when there are some, are small and self-contained. Otherwise propose your own with
-  the "Move or constraint idea" issue template.
+- Most extensions are a move (step 7) or a cost (step 9) for one use case:
+  [`CONTRIBUTING.md`](../CONTRIBUTING.md) has the setup and the short recipes,
+  [`extending.md`](extending.md) the full steps with real code.
 - A change to steps 3 to 11 in the engine must keep every use case's seeded results
   and speed: see [Changing the engine](../CONTRIBUTING.md#changing-the-engine).
