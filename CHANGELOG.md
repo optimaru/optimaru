@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **The random draws are the same on every platform; every seeded result changes once.** The
+  engine and the use cases drew through the `std::` distributions and `std::shuffle`, which
+  libstdc++ (the Linux wheels, the API) and libc++ (the macOS wheels) implement differently, so
+  the same seed and step limit could end differently on each, and the API's result could differ
+  from a local solve on a Mac. Every draw now goes through `core/optimaru/utils/random.hpp`
+  (`random_index`, `random_int`, `random_unit`, `random_real`, `random_bool`, `random_normal`,
+  `random_shuffle`), written out by hand; `tests/test_layout.py` keeps the `std::` ones out and
+  the engine test pins their first outputs. Floating-point arithmetic on top of the draws
+  (`std::exp` in simulated annealing, fused multiply-adds) can still differ in the last bit
+  between architectures. `random_index` of an empty range is 0, as `PortableRandom::next_int`'s
+  was, instead of a division by zero.
+  Five calls that drew twice in their arguments, whose order is the compiler's, draw in two
+  statements: the meeting-scheduling room pick, and demo data (vehicle routing, pickup and
+  delivery, employee scheduling, flight crew). The search is the same; its random numbers are
+  not, so a seeded solve gives another (equally good) result than 0.8.0 did, and the vehicle
+  routing and pickup-delivery demo instances are other instances. The engine tests that
+  checked one seed for something about half the seeds reach (LNS from a local optimum, kicks
+  from a warm start) now count over ten seeds, and the vehicle-routing ALNS check over ten.
+- **Breaking (C++):** `movable_entity`, `apply_change` and `apply_swap` take no distribution
+  argument.
 - **Source layout: one file per move.** The ordinary moves of the move mix each have a file in
   `search/moves/`: `change.hpp`, `swap.hpp` (assignment shape), `relocate.hpp`,
   `element_swap.hpp`, `two_opt.hpp`, `or_opt.hpp`, `two_opt_star.hpp` and

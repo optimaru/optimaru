@@ -15,6 +15,7 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace alb {
 
@@ -220,8 +221,7 @@ void runEngine(const Solver::Config& config, AssemblyLineBalancingProblem& probl
         const AssemblyLineBalancingProblem& live = problem;
         const double p = config.value_recommender_probability;
         engineConfig.selection.value_hint = [&live, p](std::mt19937_64& rng, int task) -> int {
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= p) return -1;
+            if (optimaru::random_unit(rng) >= p) return -1;
             const Task& t = live.tasks[task];
             if (t.fixedStation && *t.fixedStation >= 0 && *t.fixedStation < live.stationCount)
                 return *t.fixedStation;

@@ -11,6 +11,7 @@
 
 #include "fl/model/domain.hpp"
 #include "fl/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace fl;
 
@@ -31,9 +32,6 @@ const Location kNorthEast{51.56, -0.01};
 // from a seeded std::mt19937_64.
 FacilityLocationProblem buildDemoProblem() {
     std::mt19937_64 rng(0);
-    std::uniform_real_distribution<double> latitudes(kSouthWest.latitude, kNorthEast.latitude);
-    std::uniform_real_distribution<double> longitudes(kSouthWest.longitude, kNorthEast.longitude);
-    std::normal_distribution<double> gaussian(0.0, 1.0);
 
     FacilityLocationProblem problem;
     problem.southWestCorner = kSouthWest;
@@ -43,16 +41,21 @@ FacilityLocationProblem buildDemoProblem() {
     for (int f = 0; f < kFacilityCount; ++f) {
         Facility facility;
         facility.id = std::to_string(++sequence);
-        facility.location = {latitudes(rng), longitudes(rng)};
+        facility.location = {
+                optimaru::random_real(rng, kSouthWest.latitude, kNorthEast.latitude),
+                optimaru::random_real(rng, kSouthWest.longitude, kNorthEast.longitude)};
         facility.setupCost =
-                kAverageSetupCost + static_cast<std::int64_t>(kSetupCostStdDev * gaussian(rng));
+                kAverageSetupCost +
+                static_cast<std::int64_t>(kSetupCostStdDev * optimaru::random_normal(rng));
         facility.capacity = kTotalCapacity / kFacilityCount;
         problem.facilities.push_back(facility);
     }
     for (int c = 0; c < kConsumerCount; ++c) {
         Consumer consumer;
         consumer.id = std::to_string(++sequence);
-        consumer.location = {latitudes(rng), longitudes(rng)};
+        consumer.location = {
+                optimaru::random_real(rng, kSouthWest.latitude, kNorthEast.latitude),
+                optimaru::random_real(rng, kSouthWest.longitude, kNorthEast.longitude)};
         consumer.demand = kTotalDemand / kConsumerCount;
         problem.consumers.push_back(consumer);
     }

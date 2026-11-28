@@ -23,6 +23,7 @@
 #include "optimaru/search/ruin_recreate/ruin_recreate_move.hpp"
 #include "optimaru/select/schemes.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -110,7 +111,7 @@ public:
     // after it.
     MoveOperator<Solution>* draw(std::mt19937_64& rng) {
         for (const Weighted& s : weighted_) {
-            if (unit_(rng) < s.weight) return s.op;
+            if (random_unit(rng) < s.weight) return s.op;
         }
         return nullptr;
     }
@@ -132,11 +133,6 @@ private:
     std::unique_ptr<OperatorSelectionScheme> ils_ruin_selector_;
     IteratedLocalSearchMove<Solution> iterated_local_search_;
     std::vector<Weighted> weighted_;
-    // The solver and the move mix have one each. A uniform distribution keeps
-    // no state between draws, so three draw exactly as one shared would; a
-    // distribution that keeps state (std::normal_distribution) would have to
-    // be shared for seeded results to stay as they are.
-    std::uniform_real_distribution<double> unit_{0.0, 1.0};
 };
 
 }  // namespace optimaru

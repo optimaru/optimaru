@@ -10,6 +10,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/search/moves/move_draw.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -21,12 +22,9 @@ namespace optimaru {
 // current one when there is a choice. Applies the move.
 //
 // Expects move.entities[0] = e and move.previous[0] = e's value, filled in by
-// MoveMixSampler before it chose this move. `value_pick` is the sampler's own
-// distribution, passed in so the draws stay those of the sampler: a fresh
-// distribution here could draw differently on another standard library.
+// MoveMixSampler before it chose this move.
 template <typename Solution>
-void apply_change(Editor<Solution>& editor, MoveDraw<Solution>& draw,
-                  std::uniform_int_distribution<int>& value_pick, std::mt19937_64& rng,
+void apply_change(Editor<Solution>& editor, MoveDraw<Solution>& draw, std::mt19937_64& rng,
                   SampledMove& move) {
     using Traits = SolutionTraits<Solution>;
     const SelectionSettings& select = draw.config.selection;
@@ -38,7 +36,7 @@ void apply_change(Editor<Solution>& editor, MoveDraw<Solution>& draw,
         if (value_count > 1 && old_value >= 0 && old_value < value_count) {
             v = random_other(value_count, old_value, rng);
         } else {
-            v = value_pick(rng);
+            v = random_index(rng, value_count);
         }
     }
     editor.assign(e, v);

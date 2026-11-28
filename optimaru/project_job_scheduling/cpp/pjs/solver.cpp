@@ -13,6 +13,7 @@
 #include "pjs/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace pjs {
 
@@ -86,10 +87,9 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
                 [working, guidedProbability](std::mt19937_64& rng, int allocationIndex) -> int {
             const int current = working->allocations[allocationIndex].modeDelay;
             if (current < 0) return -1;
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= guidedProbability) return -1;
+            if (optimaru::random_unit(rng) >= guidedProbability) return -1;
             int delay = working->delayOfValue(current);
-            if (unit(rng) >= 0.25) {
+            if (optimaru::random_unit(rng) >= 0.25) {
                 // Geometric magnitude 1..8 (P(k) ~ 2^-k), random sign.
                 int magnitude = 1;
                 while ((rng() & 1u) != 0 && magnitude < 8) ++magnitude;

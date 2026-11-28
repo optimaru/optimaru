@@ -42,8 +42,7 @@ public:
         if (!std::isfinite(total) || total <= 0.0) {
             return random_index(rng, static_cast<int>(weights_.size()));
         }
-        std::uniform_real_distribution<double> pick(0.0, total);
-        double r = pick(rng);
+        double r = random_real(rng, 0.0, total);
         for (std::size_t i = 0; i < weights_.size(); ++i) {
             r -= weights_[i];
             if (r <= 0) return static_cast<int>(i);

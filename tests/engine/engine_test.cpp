@@ -36,6 +36,7 @@
 #include "optimaru/solver_config.hpp"
 #include "optimaru/utils/worker_threads.hpp"
 #include "optimaru/testing/check.hpp"
+#include "optimaru/utils/random.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 
 using optimaru::Score;
@@ -389,7 +390,7 @@ void testHistoryGrowthOnAWarmStart(const Score& optimum) {
         const Score local = optimaru::Solver<TaskAssignment>(config).solve(stuck, calculator);
         check(local < optimum, "late acceptance alone stops below the optimum: the warm start");
     }
-    const auto run = [&stuck](double growth) {
+    const auto run = [&stuck](double growth, std::uint64_t seed) {
         TaskAssignment s = stuck;
         optimaru::Settings config;
         config.stop.time_limit = std::chrono::minutes(10);
@@ -400,17 +401,27 @@ void testHistoryGrowthOnAWarmStart(const Score& optimum) {
         config.alns_trigger.unimproved_step_trigger = 200;
         config.alns.min_ruin_fraction = 0.34;
         config.alns.max_ruin_fraction = 0.67;
-        config.run.seed = 7;
+        config.run.seed = seed;
         TaskAssignmentCalculator calculator;
         const Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         return std::make_pair(result, s.assignment);
     };
-    const auto plain = run(0.0);
-    const auto staged = run(2.0);
-    check(plain.first == optimum, "from the warm start, the kicks reach the optimum");
-    check(staged.first == optimum, "with history growth they still do");
-    check(staged.second == plain.second,
-          "and step for step: the same assignment as without history growth");
+    // Over ten seeds, as in testLnsEscapesLocalOptimum: a single seed reaching
+    // the optimum is a coin toss.
+    int plainReached = 0, stagedReached = 0;
+    bool sameSteps = true;
+    for (std::uint64_t seed = 0; seed < 10; ++seed) {
+        const auto plain = run(0.0, seed);
+        const auto staged = run(2.0, seed);
+        if (plain.first == optimum) ++plainReached;
+        if (staged.first == optimum) ++stagedReached;
+        sameSteps = sameSteps && staged.second == plain.second;
+    }
+    std::printf("    the optimum on %d of 10 seeds, %d with history growth\n", plainReached,
+                stagedReached);
+    check(plainReached >= 3, "from the warm start, the kicks reach the optimum");
+    check(stagedReached >= 3, "with history growth they still do");
+    check(sameSteps, "and step for step: the same assignment as without history growth");
 }
 
 void testTerminations(const Score& optimum) {
@@ -1038,7 +1049,6 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     std::printf("== LNS: ruin & recreate escapes local optima ==\n");
     // Hill climbing alone gets permanently stuck on the conflicted instance
     // (shown in the acceptor tests); with LNS kicks it must reach the optimum.
-    TaskAssignment s = buildTaskInstance();
     optimaru::Settings config;
     // The step limit must be the ONLY binding criterion: with a 10s wall-clock
     // limit next to it, a slow runner stops at whatever step it happens to
@@ -1056,11 +1066,20 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     // just one, too weak to escape the conflict cycle's local optimum).
     config.alns.min_ruin_fraction = 0.34;
     config.alns.max_ruin_fraction = 0.67;
-    config.run.seed = 7;
-    TaskAssignmentCalculator calculator;
-    Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
-    check(result == optimum && fullScore(s) == optimum,
-          "hill climbing + LNS reaches the global optimum");
+    // Over ten seeds, not one: whether a given seed's kicks land on the
+    // optimum within the budget is a coin toss (about half of them do), so a
+    // single seed checks the draws of the day more than the kicks. Hill
+    // climbing alone reaches it on none (the acceptor tests).
+    int reached = 0;
+    for (std::uint64_t seed = 0; seed < 10; ++seed) {
+        TaskAssignment probe = buildTaskInstance();
+        config.run.seed = seed;
+        TaskAssignmentCalculator calculator;
+        const Score result = optimaru::Solver<TaskAssignment>(config).solve(probe, calculator);
+        if (result == optimum && fullScore(probe) == optimum) ++reached;
+    }
+    std::printf("    the optimum on %d of 10 seeds\n", reached);
+    check(reached >= 3, "hill climbing + LNS reaches the global optimum");
 
     // The same under ScoreChecks::Full: ruin (unassign) and greedy recreate must
     // keep the incremental score consistent at every step.
@@ -1126,6 +1145,26 @@ TspSolution buildRandomTsp(int routeCount, int cityCount) {
 
 // nothing_placed: what a use case asks before it sets what only suits a
 // start from the construction.
+// The portable draws give these numbers for seed 42 on every platform: CI runs
+// this on Linux (libstdc++) and macOS (libc++), so a change to a primitive, or
+// a platform that draws differently, fails here before it moves any result.
+void testPortableDraws() {
+    std::printf("== utils/random.hpp: portable draws ==\n");
+    std::mt19937_64 rng(42);
+    std::vector<int> indices;
+    for (int i = 0; i < 4; ++i) indices.push_back(optimaru::random_index(rng, 1000));
+    check(indices == std::vector<int>{406, 824, 450, 662}, "random_index");
+    const double u1 = optimaru::random_unit(rng);
+    const double u2 = optimaru::random_unit(rng);
+    check(u1 == 0.90326896642837828 && u2 == 0.094068311762837031, "random_unit");
+    std::vector<int> shuffled{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    optimaru::random_shuffle(shuffled.begin(), shuffled.end(), rng);
+    check(shuffled == std::vector<int>{7, 4, 5, 0, 2, 1, 3, 8, 9, 6}, "random_shuffle");
+    check(optimaru::random_int(rng, -5, 5) == -3, "random_int");
+    check(!optimaru::random_bool(rng, 0.5), "random_bool");
+    check(optimaru::random_index(rng, 0) == 0, "random_index of an empty range is 0");
+}
+
 void testNothingPlaced() {
     std::printf("== construction: nothing placed ==\n");
     TaskAssignment tasks = buildTaskInstance();
@@ -2846,6 +2885,7 @@ int main() {
     testOperatorPools();
     testHistoryGrowth(separableOptimum);
     testHistoryGrowthOnAWarmStart(optimum);
+    testPortableDraws();
     testNothingPlaced();
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();

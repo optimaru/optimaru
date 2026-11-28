@@ -94,8 +94,7 @@ public:
             // would otherwise sink every attempt into a failing repair and
             // starve the slack-shifting chains that start from routed
             // elements.
-            const bool from_source =
-                    has_source(solution) && std::uniform_int_distribution<int>(0, 1)(rng) == 0;
+            const bool from_source = has_source(solution) && random_index(rng, 2) == 0;
             const bool seeded = from_source ? seed_from_source(editor, rng)
                                             : seed_infeasible_relocate(editor, rng, start);
             if (!seeded) return false;

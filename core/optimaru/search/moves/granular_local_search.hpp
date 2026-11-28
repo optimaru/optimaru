@@ -18,6 +18,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/search/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -104,7 +105,7 @@ public:
             };
             while (any && !exhausted()) {
                 any = false;
-                std::shuffle(order_.begin(), order_.end(), rng);
+                random_shuffle(order_.begin(), order_.end(), rng);
                 for (int u : order_) {
                     if (exhausted()) break;
                     if (!dirty_[static_cast<std::size_t>(u)]) continue;

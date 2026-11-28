@@ -209,10 +209,9 @@ private:
             const int value_count = Traits::value_count(solution);
             if (entity_count < 1 || value_count < 2) return false;
 
-            std::uniform_int_distribution<int> entity_pick(0, entity_count - 1);
             int e1 = entity_hint_ ? entity_hint_(rng) : -1;
-            if (e1 < 0 || e1 >= entity_count) e1 = entity_pick(rng);
-            e1 = movable_entity(solution, e1, entity_pick, rng);
+            if (e1 < 0 || e1 >= entity_count) e1 = random_index(rng, entity_count);
+            e1 = movable_entity(solution, e1, rng);
             // Degenerate all-pinned case: movable_entity hands back the pinned
             // entity it was given rather than corrupting the assignment.
             if (entity_is_pinned<Traits>(solution, e1)) return false;
@@ -225,7 +224,7 @@ private:
                 if (nearby_.enabled() && !nearby_.of(e1).empty()) {
                     e2 = nearby_.of(e1)[rng() % nearby_.of(e1).size()];
                 } else {
-                    e2 = entity_pick(rng);
+                    e2 = random_index(rng, entity_count);
                 }
                 if (e2 == e1 || e2 < 0 || e2 >= entity_count ||
                     entity_is_pinned<Traits>(solution, e2)) {

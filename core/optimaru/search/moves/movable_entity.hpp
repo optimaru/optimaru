@@ -7,6 +7,7 @@
 #include <random>
 
 #include "optimaru/model/solution_traits.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -14,15 +15,14 @@ namespace optimaru {
 // scan) for one. The solver has checked that one exists (Solver::run), so the fallback
 // to `e` is only a guard.
 template <typename Solution>
-int movable_entity(const Solution& sol, int e, std::uniform_int_distribution<int>& pick,
-                   std::mt19937_64& rng) {
+int movable_entity(const Solution& sol, int e, std::mt19937_64& rng) {
     using Traits = SolutionTraits<Solution>;
     if (!entity_is_pinned<Traits>(sol, e)) return e;
+    const int n = Traits::entity_count(sol);
     for (int t = 0; t < 8; ++t) {
-        const int c = pick(rng);
+        const int c = random_index(rng, n);
         if (!entity_is_pinned<Traits>(sol, c)) return c;
     }
-    const int n = Traits::entity_count(sol);
     for (int c = 0; c < n; ++c)
         if (!entity_is_pinned<Traits>(sol, c)) return c;
     return e;

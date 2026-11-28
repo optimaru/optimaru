@@ -287,8 +287,10 @@ void testFullAssert() {
 // -------------------------------------------------------------------------
 void testAlnsBeatsPlainLocalSearch() {
     std::printf("== ALNS vs plain local search ==\n");
+    // Ten seeds: on most of them the two end level, and with three a single
+    // seed's draws decided the check.
     int alnsWins = 0;
-    const int seeds = 3;
+    const int seeds = 10;
     for (int seed = 0; seed < seeds; ++seed) {
         VehicleRoutePlan plain = buildRandomInstance(80, 8, /*seed=*/100 + seed);
         VehicleRoutePlan alns = plain;
@@ -309,7 +311,7 @@ void testAlnsBeatsPlainLocalSearch() {
                     alns.score.str().c_str());
         if (alns.score >= plain.score) ++alnsWins;
     }
-    check(alnsWins >= 2, "ALNS is at least as good on a majority of seeds");
+    check(alnsWins > seeds / 2, "ALNS is at least as good on a majority of seeds");
     std::printf("\n");
 }
 

@@ -14,6 +14,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -37,11 +38,10 @@ public:
         for (int e = 0; e < n; ++e) gains.emplace_back(removal_gain(ctx, e), e);
         std::sort(gains.begin(), gains.end(),
                   [](const auto& a, const auto& b) { return a.first > b.first; });
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
         std::vector<int> set;
         set.reserve(ruin_count);
         while (static_cast<int>(set.size()) < ruin_count && !gains.empty()) {
-            auto idx = static_cast<std::size_t>(std::pow(unit(rng), 3.0) *
+            auto idx = static_cast<std::size_t>(std::pow(random_unit(rng), 3.0) *
                                                 static_cast<double>(gains.size()));
             if (idx >= gains.size()) idx = gains.size() - 1;
             set.push_back(gains[idx].second);

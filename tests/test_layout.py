@@ -28,6 +28,38 @@ def test_every_subpackage_is_a_use_case():
     assert all((ROOT / "tests" / name).is_dir() for name in USE_CASES)
 
 
+def test_cpp_draws_are_portable():
+    """A seeded solve gives the same result on Linux (libstdc++) and macOS (libc++). The std::
+    distributions and std::shuffle are implementation-defined, so the engine and the use cases
+    draw through optimaru/utils/random.hpp (random_index, random_int, random_unit, random_real,
+    random_bool, random_normal, random_shuffle) instead. The C++ tests may draw their own
+    random cases however they like: they check properties, not seeded results."""
+    tracked = subprocess.run(["git", "ls-files", "core", "optimaru"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    banned = re.compile(r"std::(\w+_distribution|shuffle|sample|generate_canonical)\b")
+    hits = []
+    for path in tracked.stdout.splitlines():
+        if not path.endswith((".cpp", ".hpp")) or path == "core/optimaru/utils/random.hpp":
+            continue
+        for number, line in enumerate((ROOT / path).read_text().splitlines(), 1):
+            code = line.split("//", 1)[0]
+            if banned.search(code):
+                hits.append(f"{path}:{number}")
+    assert not hits, f"draw through optimaru/utils/random.hpp instead: {hits}"
+    # Two draws in one call's arguments come in the compiler's order. A rough check, line by
+    # line: two draws on one line of code, which is how such a call usually looks.
+    draw = re.compile(r"\brandom_\w+\(|\.next_\w+\(|\brng\(\)")
+    doubled = []
+    for path in tracked.stdout.splitlines():
+        if not path.endswith((".cpp", ".hpp")) or path == "core/optimaru/utils/random.hpp":
+            continue
+        for number, line in enumerate((ROOT / path).read_text().splitlines(), 1):
+            if len(draw.findall(line.split("//", 1)[0])) >= 2:
+                doubled.append(f"{path}:{number}")
+    assert not doubled, f"two draws on one line: draw them in two statements: {doubled}"
+
+
 def test_the_engine_top_level_holds_the_solver_and_folders():
     """core/optimaru/ keeps the solver, its settings and its config at the top; everything
     else is in a folder by role (model/, score/, construct/, stop/, search/, accept/,

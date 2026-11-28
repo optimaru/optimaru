@@ -10,6 +10,7 @@
 #include "es/score/score_calculator.hpp"
 #include "es/solver.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace es;
 
@@ -190,15 +191,15 @@ EmployeeSchedule buildDemo(int days, int shiftsPerDay, std::uint64_t seed) {
     };
 
     std::mt19937_64 rng(seed);
-    std::uniform_int_distribution<int> skillPick(0, static_cast<int>(skills.size()) - 1);
     int id = 0;
     for (int d = 0; d < days; ++d) {
         for (int k = 0; k < shiftsPerDay; ++k) {
             // Morning (07-15) or evening (15-23) shift.
             Minutes start = dt(d, (k % 2 == 0) ? 7 : 15, 0);
             Minutes end = start + 8 * 60;
-            s.shifts.push_back(
-                    makeShift("Shift " + std::to_string(id++), start, end, skills[skillPick(rng)]));
+            s.shifts.push_back(makeShift(
+                    "Shift " + std::to_string(id++), start, end,
+                    skills[optimaru::random_int(rng, 0, static_cast<int>(skills.size()) - 1)]));
         }
     }
     // Start every shift unassigned.
@@ -252,17 +253,17 @@ void verifyIncremental() {
     optimaru::Editor<EmployeeSchedule> editor(s, calc);
     EmployeeSchedule shadow = s;
     std::mt19937_64 rng(123);
-    std::uniform_int_distribution<int> shiftPick(0, static_cast<int>(s.shifts.size()) - 1);
-    std::uniform_int_distribution<int> empPick(0, employeeCount - 1);
-    std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
     const int steps = 50000;
     for (int step = 0; step < steps; ++step) {
-        if (unit(rng) < 0.75) {
-            editor.assign(shiftPick(rng), empPick(rng));  // ChangeMove
+        if (optimaru::random_unit(rng) < 0.75) {
+            const int shift =
+                    optimaru::random_index(rng, static_cast<int>(s.shifts.size()));  // ChangeMove
+            editor.assign(shift, optimaru::random_index(rng, employeeCount));
         } else {
-            int s1 = shiftPick(rng), s2 = shiftPick(rng);  // SwapMove
+            int s1 = optimaru::random_index(rng, static_cast<int>(s.shifts.size()));  // SwapMove
+            int s2 = optimaru::random_index(rng, static_cast<int>(s.shifts.size()));
             int v1 = s.shifts[s1].employeeIndex, v2 = s.shifts[s2].employeeIndex;
             editor.assign(s1, v2);
             editor.assign(s2, v1);

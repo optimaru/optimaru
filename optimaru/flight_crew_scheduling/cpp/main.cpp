@@ -13,6 +13,7 @@
 #include "fcs/model/domain.hpp"
 #include "fcs/score/score_calculator.hpp"
 #include "fcs/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace fcs;
 
@@ -95,7 +96,7 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed) {
     const Minutes startDateTime = 1;
     std::vector<int> flightDay(COUNT_FLIGHTS);
     for (int f = 0; f < COUNT_FLIGHTS; ++f) flightDay[f] = f % COUNT_DAYS;
-    std::shuffle(flightDay.begin(), flightDay.end(), rng);
+    optimaru::random_shuffle(flightDay.begin(), flightDay.end(), rng);
 
     for (int f = 0; f < COUNT_FLIGHTS; ++f) {
         Flight flight;
@@ -145,8 +146,8 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed) {
     const auto addEmployee = [&](int airport, const char* skill) {
         Employee employee;
         employee.id = std::to_string(++employeeId);
-        employee.name = FIRST_NAMES[rng() % FIRST_NAMES.size()] + " " +
-                        LAST_NAMES[rng() % LAST_NAMES.size()];
+        const std::string& first = FIRST_NAMES[rng() % FIRST_NAMES.size()];
+        employee.name = first + " " + LAST_NAMES[rng() % LAST_NAMES.size()];
         employee.homeAirport = airport;
         employee.skills = {skill};
         schedule.employees.push_back(employee);
@@ -165,7 +166,7 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed) {
     const int employeeCount = static_cast<int>(schedule.employees.size());
     std::vector<int> shuffled(employeeCount);
     for (int e = 0; e < employeeCount; ++e) shuffled[e] = e;
-    std::shuffle(shuffled.begin(), shuffled.end(), rng);
+    optimaru::random_shuffle(shuffled.begin(), shuffled.end(), rng);
     const int oneDay = static_cast<int>(0.28 * employeeCount);
     const int twoDays = static_cast<int>(0.04 * employeeCount);
     for (int k = 0; k < oneDay + twoDays && k < employeeCount; ++k) {

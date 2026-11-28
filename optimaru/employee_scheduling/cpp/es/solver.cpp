@@ -18,6 +18,7 @@
 #include "es/score/score_calculator.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace es {
 
@@ -66,9 +67,8 @@ int randomShiftFromHotEmployee(const EmployeeSchedule& schedule, const Penalized
                                const ShiftsOfGetter& shiftsOf, std::mt19937_64& rng,
                                double probability) {
     if (schedule.shifts.empty()) return -1;
-    std::uniform_real_distribution<double> unit(0.0, 1.0);
     const std::vector<int>& hot = penalized();
-    if (!hot.empty() && unit(rng) < probability) {
+    if (!hot.empty() && optimaru::random_unit(rng) < probability) {
         const std::vector<int>& list = shiftsOf(hot[rng() % hot.size()]);
         if (!list.empty()) {
             const int s = list[rng() % list.size()];
@@ -897,8 +897,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
         engineConfig.selection.entity_hint = [penalized, shiftsOf](std::mt19937_64& rng) -> int {
             const std::vector<int>& hot = penalized();
             if (hot.empty()) return -1;
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= 0.70) return -1;
+            if (optimaru::random_unit(rng) >= 0.70) return -1;
             const std::vector<int>& list = shiftsOf(hot[rng() % hot.size()]);
             if (list.empty()) return -1;
             return list[rng() % list.size()];
@@ -909,8 +908,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
         engineConfig.selection.value_hint = [&eligible](std::mt19937_64& rng, int s) -> int {
             const std::vector<int>& pool = eligible[s];
             if (pool.empty()) return -1;
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= 0.85) return -1;
+            if (optimaru::random_unit(rng) >= 0.85) return -1;
             return pool[rng() % pool.size()];
         };
     }

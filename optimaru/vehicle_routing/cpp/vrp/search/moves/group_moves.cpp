@@ -210,7 +210,7 @@ public:
         const int limit = pendingVisits_ + extra;
         for (int attempt = 0; attempt < 8 && pendingVisits_ < limit; ++attempt) {
             const int leader = leaders[static_cast<std::size_t>(
-                    random_index(rng, static_cast<int>(leaders.size())))];
+                    optimaru::random_index(rng, static_cast<int>(leaders.size())))];
             if (pendingVisits_ + groups_->sizeOf(leader) > limit) continue;
             take(leader);
         }
@@ -222,7 +222,7 @@ public:
         if (pool.empty()) return;
         for (int attempt = 0; attempt < 2 * limit && limit > 0; ++attempt) {
             const int unit = groups_->leaderOf(pool[static_cast<std::size_t>(
-                    random_index(rng, static_cast<int>(pool.size())))]);
+                    optimaru::random_index(rng, static_cast<int>(pool.size())))]);
             if (groups_->sizeOf(unit) == 1 || taken_[static_cast<std::size_t>(unit)]) continue;
             bool waits = true;
             for (int visit = unit; visit >= 0 && waits; visit = groups_->nextOf(visit)) {
@@ -244,7 +244,7 @@ public:
     // first (they need the most room on one vehicle), the rest in random
     // order. A unit no vehicle takes whole ends the move in the pool.
     void reinsert(std::mt19937_64& rng) {
-        std::shuffle(pending_.begin(), pending_.end(), rng);
+        optimaru::random_shuffle(pending_.begin(), pending_.end(), rng);
         std::stable_sort(pending_.begin(), pending_.end(),
                          [this](int a, int b) { return groups_->sizeOf(a) > groups_->sizeOf(b); });
         for (int unit : pending_) {
@@ -416,11 +416,12 @@ public:
         if (leaders.empty() || work.vehicleCount() == 0) return false;
 
         const int seed = leaders[static_cast<std::size_t>(
-                random_index(rng, static_cast<int>(leaders.size())))];
+                optimaru::random_index(rng, static_cast<int>(leaders.size())))];
         work.take(seed);
         // What leaves with it: nothing, the units around it, or other groups.
-        const int extra = random_index(rng, std::max(0, work.settings().ruinMaxVisits) + 1);
-        switch (random_index(rng, 3)) {
+        const int extra =
+                optimaru::random_index(rng, std::max(0, work.settings().ruinMaxVisits) + 1);
+        switch (optimaru::random_index(rng, 3)) {
             case 0:
                 break;
             case 1:

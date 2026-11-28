@@ -13,6 +13,7 @@
 #include "optimaru/settings.hpp"
 #include "ts/score/incremental_calculator.hpp"
 #include "ts/score/score_calculator.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace ts {
 
@@ -229,7 +230,7 @@ private:
             if (loads[t] > 0 && drainable_[t]) pool_.push_back(static_cast<int>(t));
         }
         if (static_cast<int>(pool_.size()) < count) return false;
-        std::shuffle(pool_.begin(), pool_.end(), rng);
+        optimaru::random_shuffle(pool_.begin(), pool_.end(), rng);
         if ((rng() & 1U) == 0U) return markDrainSet(count);
 
         // Coverage-greedy: a day holding c assignments needs c teams that are
@@ -299,7 +300,7 @@ private:
         }
         const int need = target - counts_.loadedTeamCount();
         if (need <= 0 || static_cast<int>(pool_.size()) < need) return false;
-        std::shuffle(pool_.begin(), pool_.end(), rng);
+        optimaru::random_shuffle(pool_.begin(), pool_.end(), rng);
         if ((rng() & 1U) == 0U) {
             std::stable_sort(pool_.begin(), pool_.end(),
                              [&](int a, int b) { return penaltyDays_[a] < penaltyDays_[b]; });
@@ -310,7 +311,7 @@ private:
         ctx.editor.begin_batch();
         for (int i = 0; i < need; ++i) {
             const int team = pool_[i];
-            std::shuffle(dayOrder_.begin(), dayOrder_.end(), rng);
+            optimaru::random_shuffle(dayOrder_.begin(), dayOrder_.end(), rng);
             std::int64_t taken = 0;
             for (int day : dayOrder_) {
                 if (taken >= fairShare) break;

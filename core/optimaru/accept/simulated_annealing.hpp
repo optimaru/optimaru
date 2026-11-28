@@ -10,6 +10,7 @@
 
 #include "optimaru/accept/acceptor.hpp"
 #include "optimaru/score/score.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -38,8 +39,7 @@ public:
             if (temp <= 0) return false;
             probability *= std::exp(soft_delta / temp);
         }
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-        return unit(rng) < probability;
+        return random_unit(rng) < probability;
     }
 
 private:

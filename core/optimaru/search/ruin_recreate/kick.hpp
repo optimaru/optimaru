@@ -18,6 +18,7 @@
 #include "optimaru/search/ruin_recreate/ruin_pool.hpp"
 #include "optimaru/select/scheme.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -50,10 +51,10 @@ public:
                 std::mt19937_64& rng) {
         Editor<Solution>& editor = ctx.editor;
         const int n = ruin_candidate_count(ctx);
-        std::uniform_real_distribution<double> fraction(lns_.min_ruin_fraction,
-                                                        lns_.max_ruin_fraction);
-        const int ruin_count =
-                kick_ruin_count(static_cast<int>(fraction(rng) * n), n, lns_.max_ruin_count);
+        const int ruin_count = kick_ruin_count(
+                static_cast<int>(random_real(rng, lns_.min_ruin_fraction, lns_.max_ruin_fraction) *
+                                 n),
+                n, lns_.max_ruin_count);
 
         int op = ruins_.selector().select(rng);
         std::vector<int> ruined = ruins_.operators()[op]->select_ruin_set(ctx, ruin_count, rng);

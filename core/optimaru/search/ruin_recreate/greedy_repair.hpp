@@ -20,6 +20,7 @@
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/search/moves/preview_evaluation.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -124,7 +125,7 @@ public:
     void recreate(Editor<Solution>& editor, std::vector<int> ruined, std::mt19937_64& rng,
                   int exclude_list = -1) {
         Solution& solution = editor.solution();
-        std::shuffle(ruined.begin(), ruined.end(), rng);
+        random_shuffle(ruined.begin(), ruined.end(), rng);
         if constexpr (Traits::shape == Shape::Assignment) {
             // assignment repair stays plain best-value: with one variable per
             // entity there is no insertion position to regret, and the value
@@ -258,13 +259,12 @@ private:
                              RegretEntry& entry) {
         Solution& solution = editor.solution();
         collect_candidates(solution, e, exclude_list, unassigned_list, candidate_scratch_);
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
 
         top_scores_.clear();  // k best scores, descending; k is small
         entry.evaluated = false;
         for (const Placement& c : candidate_scratch_) {
             if (c.position > Traits::list_size(solution, c.list)) continue;
-            if (entry.evaluated && blink_rate > 0.0 && unit(rng) < blink_rate) continue;
+            if (entry.evaluated && blink_rate > 0.0 && random_unit(rng) < blink_rate) continue;
             const Score score = evaluate_with_preview(
                     editor,
                     [&](Objective<Solution>& calc, Score& out) {

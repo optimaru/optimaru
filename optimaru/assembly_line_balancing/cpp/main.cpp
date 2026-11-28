@@ -11,6 +11,7 @@
 
 #include "alb/model/domain.hpp"
 #include "alb/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace alb;
 
@@ -18,13 +19,12 @@ namespace {
 
 AssemblyLineBalancingProblem buildDemoProblem(int taskCount, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
-    std::uniform_int_distribution<int> durations(1, 20);
     AssemblyLineBalancingProblem problem;
     problem.cycleTime = 50;
     for (int t = 0; t < taskCount; ++t) {
         Task task;
         task.id = "T" + std::to_string(t + 1);
-        task.duration = durations(rng);
+        task.duration = optimaru::random_int(rng, 1, 20);
         problem.tasks.push_back(task);
     }
     // Each task depends on up to two random earlier tasks: acyclic by

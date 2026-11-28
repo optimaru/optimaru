@@ -16,6 +16,7 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/accept/acceptors.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace fab {
 
@@ -94,8 +95,7 @@ std::function<int(std::mt19937_64&, int)> value_hint(const SemiconductorSchedule
         const int rank = s.rankOf(value);
         const int slot = s.slotOf(value);
         const int options = s.optionCountOfRow(row);
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-        if (options > 1 && unit(rng) < machine_move_probability) {
+        if (options > 1 && optimaru::random_unit(rng) < machine_move_probability) {
             const int shift = 1 + static_cast<int>(rng() % static_cast<std::uint64_t>(options - 1));
             return s.valueOf(rank, (slot % options + shift) % options);
         }

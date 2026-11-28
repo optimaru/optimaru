@@ -13,6 +13,7 @@
 
 #include "ba/model/domain.hpp"
 #include "ba/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace ba;
 
@@ -23,8 +24,7 @@ const std::vector<std::string> EQUIPMENT_TYPES = {"telemetry", "television", "ox
 
 // Draws the index of the first cumulative threshold >= a unit draw.
 int drawIndex(std::mt19937_64& rng, const std::vector<double>& cumulative) {
-    std::uniform_real_distribution<double> unit(0.0, 1.0);
-    const double draw = unit(rng);
+    const double draw = optimaru::random_unit(rng);
     for (std::size_t i = 0; i < cumulative.size(); ++i) {
         if (draw <= cumulative[i]) return static_cast<int>(i);
     }
@@ -66,17 +66,17 @@ BedPlan generateDemoData() {
     {
         std::vector<int> order(roomCount);
         for (int r = 0; r < roomCount; ++r) order[r] = r;
-        std::shuffle(order.begin(), order.end(), rng);
+        optimaru::random_shuffle(order.begin(), order.end(), rng);
         for (int i = 0; i < roomCount; ++i)
             plan.rooms[order[i]].capacity = i < 8 ? 1 : (i == 8 ? 2 : 3);
 
         // 76% of the rooms carry equipment; count distribution 11% one /
         // 16% two / 42% three / 31% four.
-        std::shuffle(order.begin(), order.end(), rng);
+        optimaru::random_shuffle(order.begin(), order.end(), rng);
         for (int i = 0; i < static_cast<int>(0.76 * roomCount); ++i) {
             const int equipmentCount = drawIndex(rng, {0.11, 0.27, 0.69, 1.0}) + 1;
             std::vector<std::string> pool = EQUIPMENT_TYPES;
-            std::shuffle(pool.begin(), pool.end(), rng);
+            optimaru::random_shuffle(pool.begin(), pool.end(), rng);
             pool.resize(equipmentCount);
             plan.rooms[order[i]].equipment = pool;
         }

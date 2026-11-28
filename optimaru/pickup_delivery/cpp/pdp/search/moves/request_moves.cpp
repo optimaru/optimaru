@@ -282,7 +282,7 @@ public:
 
     bool takeRandom(std::mt19937_64& rng) {
         for (int attempt = 0; attempt < 16; ++attempt) {
-            if (take(random_index(rng, deliveryCount()))) return true;
+            if (take(optimaru::random_index(rng, deliveryCount()))) return true;
         }
         return false;
     }
@@ -290,7 +290,7 @@ public:
     // A request that is whole on one route and free to leave it, or -1.
     int randomRouted(std::mt19937_64& rng) const {
         for (int attempt = 0; attempt < 8; ++attempt) {
-            const int deliveryIndex = random_index(rng, deliveryCount());
+            const int deliveryIndex = optimaru::random_index(rng, deliveryCount());
             if (movable(deliveryIndex) && where(deliveryIndex) == Where::Routed) {
                 return deliveryIndex;
             }
@@ -300,7 +300,7 @@ public:
 
     void takeAtRandom(int count, std::mt19937_64& rng) {
         for (int attempt = 0; attempt < 4 * count + 8 && pendingCount() < count; ++attempt) {
-            take(random_index(rng, deliveryCount()));
+            take(optimaru::random_index(rng, deliveryCount()));
         }
     }
 
@@ -312,7 +312,7 @@ public:
         while (pendingCount() < count) {
             const Delivery& from =
                     plan_->deliveries[static_cast<std::size_t>(pending_[static_cast<std::size_t>(
-                            random_index(rng, static_cast<int>(pending_.size())))])];
+                            optimaru::random_index(rng, static_cast<int>(pending_.size())))])];
             const std::vector<int>& nearPickup = ctx_->nearby.of(from.pickupNodeIndex);
             const std::vector<int>& nearDropoff = ctx_->nearby.of(from.dropoffNodeIndex);
             const std::size_t reach = std::max(nearPickup.size(), nearDropoff.size());
@@ -322,7 +322,7 @@ public:
                     if (n >= list->size()) continue;
                     // Not always the nearest: the same seed should not take the
                     // same set every time.
-                    if (random_index(rng, 4) == 0) continue;
+                    if (optimaru::random_index(rng, 4) == 0) continue;
                     const int other =
                             plan_->nodes[static_cast<std::size_t>((*list)[n])].deliveryIndex;
                     if (take(other)) {
@@ -352,7 +352,7 @@ public:
             for (int d = 0; d < deliveryCount(); ++d) price(d);
         } else {
             for (int sample = 0; sample < 8 * count; ++sample) {
-                price(random_index(rng, deliveryCount()));
+                price(optimaru::random_index(rng, deliveryCount()));
             }
         }
         std::sort(gains_.begin(), gains_.end(), [](const auto& a, const auto& b) {
@@ -377,7 +377,7 @@ public:
         const std::vector<int>& route =
                 plan_->vehicles[static_cast<std::size_t>(vehicle)].nodeIndices;
         const int size = static_cast<int>(route.size());
-        const int start = random_index(rng, size);
+        const int start = optimaru::random_index(rng, size);
         for (int step = 0; step < size && pendingCount() < count; ++step) {
             take(plan_->nodes[static_cast<std::size_t>(
                                       route[static_cast<std::size_t>((start + step) % size)])]
@@ -411,7 +411,7 @@ public:
         if (pool.empty()) return;
         for (int attempt = 0; attempt < 2 * limit && limit > 0; ++attempt) {
             const int nodeIndex = pool[static_cast<std::size_t>(
-                    random_index(rng, static_cast<int>(pool.size())))];
+                    optimaru::random_index(rng, static_cast<int>(pool.size())))];
             const int deliveryIndex =
                     plan_->nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex;
             const int unit = groups_->leaderOf(deliveryIndex);
@@ -461,8 +461,8 @@ public:
                     ctx_->nearby.of((side == 0) == pickupFirst ? delivery.pickupNodeIndex
                                                                : delivery.dropoffNodeIndex);
             if (neighbors.empty()) continue;
-            const std::size_t start =
-                    static_cast<std::size_t>(random_index(rng, static_cast<int>(neighbors.size())));
+            const std::size_t start = static_cast<std::size_t>(
+                    optimaru::random_index(rng, static_cast<int>(neighbors.size())));
             for (std::size_t n = 0; n < neighbors.size(); ++n) {
                 const int neighbor = neighbors[(start + n) % neighbors.size()];
                 const int list = listOf(neighbor);
@@ -479,7 +479,7 @@ public:
     }
 
     void shufflePending(std::mt19937_64& rng) {
-        std::shuffle(pending_.begin(), pending_.end(), rng);
+        optimaru::random_shuffle(pending_.begin(), pending_.end(), rng);
     }
 
     // Cheapest place first, in the order given.
@@ -749,9 +749,10 @@ private:
         nearStamp_[static_cast<std::size_t>(list)] = nearEpoch_;
         const std::vector<int>& route = plan_->vehicles[static_cast<std::size_t>(list)].nodeIndices;
         const int size = static_cast<int>(route.size());
-        const int length = 1 + random_index(rng, std::min(size, 2 * (count - pendingCount())));
-        const int start =
-                std::clamp(positionOf(nodeIndex) - random_index(rng, length), 0, size - length);
+        const int length =
+                1 + optimaru::random_index(rng, std::min(size, 2 * (count - pendingCount())));
+        const int start = std::clamp(positionOf(nodeIndex) - optimaru::random_index(rng, length), 0,
+                                     size - length);
         for (int p = start; p < start + length && pendingCount() < count; ++p) {
             take(plan_->nodes[static_cast<std::size_t>(route[static_cast<std::size_t>(p)])]
                          .deliveryIndex);
@@ -826,8 +827,8 @@ public:
 
         const int most = std::clamp(settings.ruinMaxRequests, 1,
                                     std::max(1, (2 * work.deliveryCount()) / 5));
-        const int count = 1 + random_index(rng, most);
-        switch (random_index(rng, 5)) {
+        const int count = 1 + optimaru::random_index(rng, most);
+        switch (optimaru::random_index(rng, 5)) {
             case 0:
                 work.takeAtRandom(count, rng);
                 break;
@@ -888,17 +889,19 @@ public:
         // Mostly to the route of a nearby stop; now and then to any other
         // vehicle, an idle one included, which is how a route gets split.
         int to = -1;
-        if (random_index(rng, 8) != 0) {
+        if (optimaru::random_index(rng, 8) != 0) {
             const int neighbor = work.neighborElsewhere(seed, from, rng);
             if (neighbor >= 0) to = work.listOf(neighbor);
         }
         if (to < 0) {
-            to = random_index(rng, work.vehicleCount() - 1);
+            to = optimaru::random_index(rng, work.vehicleCount() - 1);
             if (to >= from) ++to;
         }
 
-        work.bundleFrom(seed, 1 + random_index(rng, std::max(1, work.settings().bundleMaxRequests)),
-                        bundle_);
+        work.bundleFrom(
+                seed,
+                1 + optimaru::random_index(rng, std::max(1, work.settings().bundleMaxRequests)),
+                bundle_);
         for (int unit : bundle_) work.detachUnit(unit);
         Blinker every;
         for (int unit : bundle_) {
@@ -942,8 +945,8 @@ public:
         const int to = work.listOf(neighbor);
 
         const int most = std::max(1, work.settings().bundleMaxRequests);
-        work.bundleFrom(seed, 1 + random_index(rng, most), outgoing_);
-        work.bundleFrom(partner, 1 + random_index(rng, most), incoming_);
+        work.bundleFrom(seed, 1 + optimaru::random_index(rng, most), outgoing_);
+        work.bundleFrom(partner, 1 + optimaru::random_index(rng, most), incoming_);
         for (int unit : outgoing_) work.detachUnit(unit);
         for (int unit : incoming_) work.detachUnit(unit);
         Blinker every;
