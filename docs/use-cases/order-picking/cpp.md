@@ -12,9 +12,10 @@ Only the domain and constraints are implemented here, on top of the generic engi
   domain structs, the sequence-shape `SolutionTraits` specialization
   (the trolley's `pickTaskIndices` is the decision: the ordered list of pick tasks it visits).
 - `op/model/layout.hpp` — `makeGridWarehouse` and `makeNamedWarehouse` (a layout with its numbers checked),
-  `checkLayout` (every location inside the solution's warehouse) and `ActiveDistances`, the table of
+  `checkLocation` / `checkLayout` (a location, or every location of a solution, inside the
+  warehouse; a named location is an index and belongs to the warehouse it was made for) and `ActiveDistances`, the table of
   location-to-location distances a solve reads instead of computing (`Warehouse::active`; both kinds
-  of layout, a grid up to 2048 distinct locations in use).
+  of layout, a grid up to 2048 distinct locations in use; parallel starts share one).
 - `op/score/score_calculator.hpp` — full recompute + derived values
   (`trolleyIndex`/`previousPickTask`/`nextPickTask`) recalculation + per-constraint totals
   (`ConstraintTotals`, members named after the registry names, at the components'

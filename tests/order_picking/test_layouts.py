@@ -89,9 +89,14 @@ def test_column_letters_are_spreadsheet_columns():
     assert [column_of(letters) for letters in ("A", "E", "Z", "AA", "AZ", "BA", "ZZ", "AAA", "ZZZ")] == [
         0, 4, 25, 26, 51, 52, 701, 702, 18277,
     ]  # fmt: skip
-    for column in (0, 4, 25, 26, 51, 52, 701, 702, 18277):
+    # Every column there is: the model's letters come back as the column, and they are the
+    # letters the compiled side writes.
+    for column in range(op.Warehouse.MAX_COLUMN_COUNT):
         place = op.WarehouseLocation(column, 0, op.Side.LEFT, 0)
-        assert LocationModel.from_core(place).to_core().column == column
+        model = LocationModel.from_core(place)
+        assert model.to_core().column == column
+        assert place.shelving_id == f"({model.column},1)"
+    assert LocationModel.from_core(op.WarehouseLocation(18277, 0, op.Side.LEFT, 0)).column == "ZZZ"
     assert op.WarehouseLocation(26, 1, op.Side.LEFT, 0).shelving_id == "(AA,2)"
     assert op.WarehouseLocation(0, 0, op.Side.LEFT, 0).shelving_id == "(A,1)"
     for bad in ("a", "A1", "", "AAAA", "1"):
@@ -205,6 +210,16 @@ def test_a_grid_size_out_of_range_is_refused(field, value):
         op.Warehouse(**{field: value})
 
 
+def test_the_models_take_their_limits_from_the_compiled_warehouse():
+    assert (op.Warehouse.MAX_COLUMN_COUNT, op.Warehouse.MAX_SHELVING_ROW_COUNT) == (18278, 10000)
+    assert (op.Warehouse.MAX_SHELVING_SIZE, op.Warehouse.MAX_DISTANCE) == (1000, 1000000)
+    largest = WarehouseModel(
+        column_count=18278, shelving_row_count=10000, shelving_width=1000, shelving_height=1000, shelving_padding=1000
+    )
+    assert largest.to_core().column_count == 18278
+    op.Warehouse.from_distances(["a", "b"], [[0, 1000000], [1000000, 0]])
+
+
 def test_a_solution_checks_its_locations_against_its_warehouse():
     start = START.to_core()
     far = op.WarehouseLocation(27, 1, op.Side.RIGHT, 3)
@@ -221,8 +236,22 @@ def test_a_solution_checks_its_locations_against_its_warehouse():
     # A location swapped in afterwards is caught by the solve.
     solution = solution_in(GRID.to_core())
     solution.trolleys = [op.Trolley("1", 1, 10, op.WarehouseLocation(40, 0, op.Side.LEFT, 0))]
-    with pytest.raises(ValueError, match="trolley '1': column 40 is outside"):
-        op.solve(solution, time_limit_seconds=0.1)
+    for measure in (
+        lambda: op.solve(solution, time_limit_seconds=0.1),
+        lambda: op.calculate_score(solution),
+        lambda: op.distance_to_travel(solution, 0),
+        lambda: op.constraint_costs(solution),
+    ):
+        with pytest.raises(ValueError, match="trolley '1': column 40 is outside"):
+            measure()
+
+    # And so are the two locations of a distance.
+    grid = GRID.to_core()
+    with pytest.raises(ValueError, match="end: column 27 is outside the warehouse's columns 0..4"):
+        op.calculate_distance(start, far)
+    with pytest.raises(ValueError, match="start: row 7 is outside a shelving side's rows 0..6"):
+        op.calculate_distance(op.WarehouseLocation(0, 0, op.Side.LEFT, 7), far, grid)
+    assert op.calculate_distance(start, far, grid) == 177
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +318,32 @@ def test_a_table_request_solves_to_the_shortest_walk(constraints):
     assert solved.total_distance == solved.distance_by_trolley["1"] == 20
     assert solved.score == "0hard/-1020soft"
     assert sorted(stop.location for stop in solved.routes["1"]) == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize("constraints", PATHS)
+def test_a_one_way_loop_is_walked_forwards(constraints):
+    """A pack station and six bays on a one-way loop, 8 m a step: from a stop to another is the
+    rest of the lap. The table read the wrong way round anywhere would send the trolley
+    backwards, several laps; forwards it walks one lap, 56 m."""
+    stops = ["pack", *(f"bay-{i}" for i in range(1, 7))]
+    one_way = {a: {b: 8 * ((j - i) % 7) for j, b in enumerate(stops) if b != a} for i, a in enumerate(stops)}
+    request = OrderPickingRequest(
+        time_limit_seconds=0.5,
+        random_seed=1,
+        full_assert=True,
+        locations=stops,
+        distances=one_way,
+        trolleys=[TrolleyModel(id="1", bucket_count=4, bucket_capacity=48000, location="pack")],
+        orders=[
+            OrderModel(id="a", items=[ProductModel(id=f"a-{b}", volume=3000, location=f"bay-{b}") for b in (5, 2, 6)]),
+            OrderModel(id="b", items=[ProductModel(id=f"b-{b}", volume=3000, location=f"bay-{b}") for b in (3, 1)]),
+        ],
+    )
+
+    solved = solve_request(request, constraints=constraints())
+
+    assert [stop.location for stop in solved.routes["1"]] == ["bay-1", "bay-2", "bay-3", "bay-5", "bay-6"]
+    assert solved.total_distance == 56
 
 
 def test_a_larger_table_request_solves_on_every_path():
@@ -398,7 +453,7 @@ def test_the_compiled_warehouse_of_named_locations_checks_its_table():
     with pytest.raises(ValueError, match="needs its warehouse"):
         op.calculate_distance(a, b)
     grid_place = op.WarehouseLocation(0, 0, op.Side.LEFT, 0)
-    with pytest.raises(ValueError, match="not a location of this warehouse"):
+    with pytest.raises(ValueError, match="end: its location is not one of the warehouse's 2 named locations"):
         op.calculate_distance(a, grid_place, warehouse)
 
     # One solution, one kind of layout.

@@ -18,13 +18,15 @@
     argument, `warehouse`, and has the property of that name; `calculate_distance` takes a third.
     `PickStop.location` is a `LocationModel` or an id, as the request gave it.
   - A solve reads its distances from one location-to-location table for both kinds instead of
-    computing each one (a grid: up to 2048 distinct locations in use), which makes the default
+    computing each one (a grid: up to 2048 distinct locations in use; parallel starts share
+    it), which makes the default
     layout faster: about 1.1x the steps per second on the demo and 1.4x on the demo at four
     times the size, same results.
   - `WarehouseLocation(column, shelving_row, side, row)` no longer checks its numbers against the
     default grid (it cannot know the warehouse): a location outside the grid is refused by
-    `OrderPickingSolution(...)` and by `solve`, with a `ValueError` naming the trolley or pick
-    task. `LocationModel.column` is a string of 1 to 3 capital letters instead of a literal
+    `OrderPickingSolution(...)`, by `solve` and by what measures (`calculate_score`,
+    `distance_to_travel`, `constraint_costs`, `calculate_distance`), with a `ValueError` naming
+    the trolley or pick task. `LocationModel.column` is a string of 1 to 3 capital letters instead of a literal
     `A`..`E`, and `shelving_row` and `row` have no upper bound of their own: the request checks
     them against its grid.
   - **Breaking (C++):** `op::Warehouse` is an object (`OrderPickingSolution::warehouse`) and no

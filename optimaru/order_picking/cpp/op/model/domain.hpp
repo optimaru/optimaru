@@ -136,9 +136,13 @@ struct WarehouseLocation {
     Side side = Side::LEFT;
     int row = 0;  // row within the shelving side, 0..shelvingHeight
 
-    // Named layout: the index of the location. Grid: -1; the solver numbers
-    // the locations in use here while it runs (Warehouse::active) and puts -1
-    // back, so nothing outside a solve reads it.
+    // Named layout: the index of the location. An index says nothing of the
+    // warehouse it was taken from: a location belongs to the warehouse that
+    // made it, and one that is given to a solution of another warehouse is
+    // read in that one's table when the index exists there. Grid: -1; the
+    // solver numbers the locations in use here while it runs
+    // (Warehouse::active) and puts -1 back, so nothing outside a solve reads
+    // it.
     int node = -1;
 
     // A named location, by its index in Warehouse::locations.
@@ -216,14 +220,14 @@ inline int gridDistance(const Warehouse& warehouse, const WarehouseLocation& sta
 
 // Distance in meters between two locations of `warehouse`: read from the
 // solve's table while one is active (the hot path of every move), from the
-// table of a named layout otherwise (checked: std::out_of_range for a
+// table of a named layout otherwise (checked: std::invalid_argument for a
 // location that is not one of its named ones), computed on a grid.
 inline int calculateDistance(const Warehouse& warehouse, const WarehouseLocation& start,
                              const WarehouseLocation& end) {
     if (const DistanceTable* table = warehouse.active.get()) return table->at(start.node, end.node);
     if (const DistanceTable* table = warehouse.locations.get()) {
         if (!table->holds(start.node) || !table->holds(end.node))
-            throw std::out_of_range("a location is not one of the warehouse's named locations");
+            throw std::invalid_argument("a location is not one of the warehouse's named locations");
         return table->at(start.node, end.node);
     }
     return gridDistance(warehouse, start, end);

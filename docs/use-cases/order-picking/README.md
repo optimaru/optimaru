@@ -87,6 +87,12 @@ request = OrderPickingRequest(
   location is from every other one, also those no trolley or item is at. Nothing is derived by
   walking through a third location, and the distances given are used as they are.
 - An id in `distances` that is not in `locations` is refused.
+- The table is one number for every pair, so it grows with the square of `locations`: 1,000
+  locations are a million distances, which the request model checks and lays out in Python
+  (seconds, where the solve's own preparation takes milliseconds) and which have to fit the
+  body an API accepts. `locations` needs only the places the request's trolleys and items are
+  at, not the whole building. A caller that holds a large table as a matrix already can skip
+  the dict: `op.Warehouse.from_distances` takes it as it is.
 
 The distances are in the unit the score counts in. The default weight of
 `order_split_by_trolley_cost`, 1000, prices one more trolley on an order at 1000 of them.

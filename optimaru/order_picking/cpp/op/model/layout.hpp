@@ -27,11 +27,18 @@ Warehouse makeGridWarehouse(int columnCount = Warehouse::DEFAULT_COLUMN_COUNT,
 Warehouse makeNamedWarehouse(std::vector<std::string> ids,
                              const std::vector<std::vector<int>>& meters);
 
+// Whether `location` is one of `warehouse`: inside the grid, or one of the
+// named locations. Throws std::invalid_argument, which starts with `owner`
+// (who is there), when it is not.
+void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location,
+                   const std::string& owner);
+
 // Whether every trolley and pick task is at a location of the solution's
-// warehouse: inside the grid, or one of the named locations. Throws
-// std::invalid_argument naming the first one that is not (and for a grid
-// whose numbers are out of range). The Python constructor and Solver::solve
-// call it.
+// warehouse (checkLocation). Throws std::invalid_argument naming the first
+// one that is not (and for a grid whose numbers are out of range).
+// Solver::solve calls it, and so does every Python entry point that measures:
+// the solution's constructor, calculate_score, distance_to_travel and
+// constraint_costs.
 void checkLayout(const OrderPickingSolution& solution);
 
 // The distance table of a solve (Warehouse::active), set while an object of
@@ -39,7 +46,9 @@ void checkLayout(const OrderPickingSolution& solution);
 // distances between the distinct locations the solution uses, each of which
 // gets its node. A grid that uses more than kMaxGridNodes distinct locations
 // gets no table and keeps computing. Copies of the solution made meanwhile
-// (the engine's best solution, parallel starts) share the table.
+// (the engine's best solution, the candidates of parallel starts) share the
+// table: an object made for a solution that already carries one (a parallel
+// start's candidate) leaves it alone, when it is made and when it goes.
 class ActiveDistances {
 public:
     static constexpr int kMaxGridNodes = 2048;  // 16 MB of distances
@@ -51,6 +60,7 @@ public:
 
 private:
     OrderPickingSolution& solution_;
+    bool owner_ = true;  // false: the table was there already, and stays
 };
 
 }  // namespace op

@@ -450,11 +450,19 @@ void Solver::solve(OrderPickingSolution& solution) {
     // built-in moves only — cannot be used. Each start is a single-start
     // Solver of its own.
     if (config_.parallel_solver_count > 1) {
-        optimaru::solve_parallel_starts(
-                config_, solution, [](const Config& config, OrderPickingSolution& candidate, int) {
-                    Solver worker(config);
-                    worker.solve(candidate);
-                });
+        {
+            // One table for every start: the candidates are copies of the
+            // solution, which share it.
+            const ActiveDistances distances(solution);
+            optimaru::solve_parallel_starts(
+                    config_, solution,
+                    [](const Config& config, OrderPickingSolution& candidate, int) {
+                        Solver worker(config);
+                        worker.solve(candidate);
+                    });
+        }
+        // As below: the final score off the layout itself.
+        solution.score = ScoreCalculator::score(solution);
         return;
     }
 

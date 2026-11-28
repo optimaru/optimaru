@@ -76,12 +76,16 @@ print(op.distance_to_travel(solution, 0))   # 40: there and back
   a grid, in whole meters; `ValueError` outside 1..18278 columns, 1..10000 shelving rows and 1..1000 for the
   three sizes. `WarehouseLocation(column, shelving_row, side, row)` is 0-based and checks only that
   nothing is negative: whether a location is inside the grid is checked where the warehouse is known,
-  by `OrderPickingSolution(...)` and again by `solve` (`ValueError`, naming the trolley or pick task).
+  by `OrderPickingSolution(...)` and again by `solve`, `calculate_score`, `distance_to_travel` and
+  `constraint_costs` (`ValueError`, naming the trolley or pick task), and by `calculate_distance` for
+  its two locations.
 - `Warehouse.from_distances(location_ids, distances)`: named locations. The table is square over the
   ids and may be asymmetric; `ValueError` for a repeated id, a distance outside 0..1000000 or a
   location that is not 0 from itself. `warehouse.location(id)` is the location to give a trolley or a
   pick task (`location.index` is its position in `warehouse.location_ids`, -1 for a grid location),
-  and `warehouse.location_id(location)` names it again.
+  and `warehouse.location_id(location)` names it again. A named location belongs to the warehouse
+  that made it: it is an index, so another warehouse of named locations reads it as its own location
+  of that index.
 - One solution, one kind: a grid location in a warehouse of named locations, or the reverse, is a
   `ValueError`.
 - `calculate_distance(start, end, warehouse=None)` measures in the default grid without a warehouse.

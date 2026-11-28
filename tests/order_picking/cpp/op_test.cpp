@@ -663,13 +663,44 @@ void verifyLayouts() {
                   checkLayout(bad);
               }),
               "a location index beyond the table is refused");
-        bool outOfRange = false;
-        try {
-            calculateDistance(w, WarehouseLocation::named(9), s.trolleys[0].location);
-        } catch (const std::out_of_range&) {
-            outOfRange = true;
+        check(refused([&] {
+                  calculateDistance(w, WarehouseLocation::named(9), s.trolleys[0].location);
+              }),
+              "outside a solve, a distance from an unknown location throws");
+
+        // A one-way loop: the walk from one stop to another is the rest of the
+        // lap, 8 m per step forward. Read transposed anywhere (the score, the
+        // cheapest insertion of the order moves), the routes found would go
+        // around backwards and cost several laps; forwards, each trolley
+        // walks one lap of 56 m.
+        const int stops = 7;
+        std::vector<std::string> ids;
+        std::vector<std::vector<int>> lap(stops, std::vector<int>(stops, 0));
+        for (int from = 0; from < stops; ++from) {
+            ids.push_back("stop" + std::to_string(from));
+            for (int to = 0; to < stops; ++to) lap[from][to] = 8 * ((to - from + stops) % stops);
         }
-        check(outOfRange, "outside a solve, a distance from an unknown location throws");
+        OrderPickingSolution loop;
+        loop.warehouse = makeNamedWarehouse(ids, lap);
+        for (int o = 0; o < 4; ++o) loop.orders.push_back({"o" + std::to_string(o)});
+        // Two buckets a trolley and one per order: two orders on each.
+        for (int t = 0; t < 2; ++t) addTrolley(loop, 2, 10000, WarehouseLocation::named(0));
+        for (int p = 0; p < 16; ++p)
+            addPick(loop, p % 4, 500, WarehouseLocation::named(1 + (p * 5) % 6));
+        Solver::Config loopConfig;
+        loopConfig.time_limit = std::chrono::seconds(1);
+        loopConfig.score_checks = optimaru::ScoreChecks::Full;
+        loopConfig.seed = 3;
+        Solver(loopConfig).solve(loop);
+        check(loop.score.hard == 0 && loop.score.soft == -(2 * 56 + 4 * 1000.0) &&
+                      calculateDistanceToTravel(loop, loop.trolleys[0]) == 56 &&
+                      calculateDistanceToTravel(loop, loop.trolleys[1]) == 56,
+              "one-way loop: both trolleys walk one lap forwards, " + loop.score.str());
+        loopConfig.parallel_solver_count = 2;
+        for (Trolley& trolley : loop.trolleys) trolley.pickTaskIndices.clear();
+        Solver(loopConfig).solve(loop);
+        check(loop.score.soft == -(2 * 56 + 4 * 1000.0) && tableGone(loop),
+              "one-way loop: the same with two parallel starts, " + loop.score.str());
     }
     check(refused([] { makeNamedWarehouse({}, {}); }) &&
                   refused([] { makeNamedWarehouse({"a", "a"}, {{0, 1}, {1, 0}}); }) &&
@@ -760,6 +791,36 @@ void verifyLayouts() {
             tableBuilt = tableBuilt && same;
         }
         check(tableSkipped && tableGone(large), "a grid over the table's size limit gets no table");
+
+        // A solve of it runs on the grid arithmetic (from given routes: the
+        // construction of two thousand picks is not what is tested here).
+        for (int p = 0; p < static_cast<int>(large.pickTasks.size()); ++p)
+            large.trolleys[p % 12].pickTaskIndices.push_back(p);
+        const Score before = ScoreCalculator::score(large);
+        Solver::Config limited;
+        limited.time_limit = std::chrono::seconds(60);
+        limited.step_limit = 2000;
+        limited.seed = 4;
+        Solver(limited).solve(large);
+        OrderPickingSolution recomputed = large;
+        check(large.score >= before && ScoreCalculator::score(recomputed) == large.score &&
+                      tableGone(large),
+              "a grid over the limit solves without a table, " + before.str() + " -> " +
+                      large.score.str());
+
+        // Parallel starts share one table, and leave none behind.
+        OrderPickingSolution shared = build(300);
+        Solver::Config parallel;
+        parallel.time_limit = std::chrono::seconds(60);
+        parallel.step_limit = 2000;
+        parallel.parallel_solver_count = 3;
+        parallel.seed = 4;
+        Solver(parallel).solve(shared);
+        OrderPickingSolution again = shared;
+        check(shared.score.feasible() && ScoreCalculator::score(again) == shared.score &&
+                      tableGone(shared),
+              "three parallel starts on a grid: one shared table, gone afterwards, " +
+                      shared.score.str());
         check(tableBuilt && tableGone(small),
               "the solve's table holds the grid distances and is gone afterwards");
     }

@@ -77,6 +77,11 @@ PYBIND11_MODULE(_core, m) {
                         py::arg("distances"),
                         "A warehouse of named locations: distances[i][j] is the whole meters "
                         "from location_ids[i] to location_ids[j].")
+            // The limits of a layout (optimaru.order_picking.models reads them).
+            .def_readonly_static("MAX_COLUMN_COUNT", &Warehouse::MAX_COLUMN_COUNT)
+            .def_readonly_static("MAX_SHELVING_ROW_COUNT", &Warehouse::MAX_SHELVING_ROW_COUNT)
+            .def_readonly_static("MAX_SHELVING_SIZE", &Warehouse::MAX_SHELVING_SIZE)
+            .def_readonly_static("MAX_DISTANCE", &Warehouse::MAX_DISTANCE)
             .def_property_readonly("is_grid", &Warehouse::isGrid)
             .def_readonly("column_count", &Warehouse::columnCount)
             .def_readonly("shelving_row_count", &Warehouse::shelvingRowCount)
@@ -219,11 +224,11 @@ PYBIND11_MODULE(_core, m) {
             [](const WarehouseLocation& start, const WarehouseLocation& end,
                const Warehouse* warehouse) {
                 const Warehouse layout = warehouse != nullptr ? *warehouse : Warehouse{};
-                if (!layout.isGrid() &&
-                    (!layout.locations->holds(start.node) || !layout.locations->holds(end.node)))
-                    throw py::value_error("not a location of this warehouse");
                 if (layout.isGrid() && (start.node >= 0 || end.node >= 0))
                     throw py::value_error("a named location needs its warehouse");
+                // Both inside the layout (std::invalid_argument: ValueError).
+                checkLocation(layout, start, "start");
+                checkLocation(layout, end, "end");
                 return calculateDistance(layout, start, end);
             },
             py::arg("start"), py::arg("end"),
@@ -236,6 +241,7 @@ PYBIND11_MODULE(_core, m) {
             [](const OrderPickingSolution& solution, int trolleyIndex) {
                 if (trolleyIndex < 0 || trolleyIndex >= static_cast<int>(solution.trolleys.size()))
                     throw py::value_error("trolley_index out of range");
+                checkLayout(solution);
                 return calculateDistanceToTravel(solution, solution.trolleys[trolleyIndex]);
             },
             py::arg("solution"), py::arg("trolley_index"),
@@ -252,7 +258,11 @@ PYBIND11_MODULE(_core, m) {
 
     m.def(
             "calculate_score",
-            [](OrderPickingSolution& solution) { return ScoreCalculator::score(solution); },
+            [](OrderPickingSolution& solution) {
+                // A location may have been replaced since the solution was made.
+                checkLayout(solution);
+                return ScoreCalculator::score(solution);
+            },
             py::arg("solution"),
             "Refresh the derived fields and recompute the hard / soft score "
             "(also stores solution.score).");
@@ -307,5 +317,8 @@ PYBIND11_MODULE(_core, m) {
 
     // constraint_costs(), list_constraints() and constraint_info(), off the
     // default assembly. The units of constraint_costs() are the trolleys.
-    opy::bind_constraints<OrderPickingSolution>(m, "solution", [] { return defaultConstraints(); });
+    // Like calculate_score, it checks the locations first.
+    opy::bind_constraints<OrderPickingSolution>(
+            m, "solution", [] { return defaultConstraints(); },
+            [](OrderPickingSolution& solution) { checkLayout(solution); });
 }

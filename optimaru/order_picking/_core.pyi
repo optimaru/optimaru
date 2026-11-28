@@ -39,7 +39,10 @@ class WarehouseLocation:
     these; whether it is inside the grid is checked where the warehouse is known
     (`OrderPickingSolution`, `Solver.solve`).
 
-    In a warehouse of named locations: one of them, from `Warehouse.location(id)`."""
+    In a warehouse of named locations: one of them, from `Warehouse.location(id)`. It is that
+    warehouse's index of the location and belongs to it: given to a solution of another
+    warehouse of named locations, it is read as that one's location of the same index (or
+    refused when it has none)."""
 
     def __init__(self, column: int, shelving_row: int, side: Side, row: int) -> None: ...
     @property
@@ -67,6 +70,15 @@ class Warehouse:
     outside). A shelving side holds the rows 0..`shelving_height`.
 
     `Warehouse.from_distances(location_ids, distances)` is a warehouse of named locations."""
+
+    MAX_COLUMN_COUNT: int
+    """18278: columns A..ZZZ."""
+    MAX_SHELVING_ROW_COUNT: int
+    """10000."""
+    MAX_SHELVING_SIZE: int
+    """1000: the most meters of `shelving_width`, `shelving_height` and `shelving_padding`."""
+    MAX_DISTANCE: int
+    """1000000: the longest distance, in meters, a table of named locations may hold."""
 
     def __init__(
         self,
@@ -175,10 +187,17 @@ class OrderPickingSolution:
         """{trolley id: [pick task ids]} in pick order."""
 
 def calculate_distance(start: WarehouseLocation, end: WarehouseLocation, warehouse: Warehouse | None = None) -> int:
-    """Distance in meters between two locations of `warehouse` (None: the default grid)."""
+    """Distance in meters between two locations of `warehouse` (None: the default grid).
+
+    ValueError when one of them is not a location of it (outside the grid, or not one of its
+    named locations)."""
 
 def distance_to_travel(solution: OrderPickingSolution, trolley_index: int) -> int:
-    """One trolley's round-trip distance."""
+    """One trolley's round-trip distance.
+
+    Like `calculate_score` and `constraint_costs`, it first checks every location against the
+    solution's warehouse (ValueError), since a location can be replaced after the solution
+    was made."""
 
 def update_shadow_variables(solution: OrderPickingSolution) -> None:
     """Re-derive the pick tasks' derived fields from the pick lists."""

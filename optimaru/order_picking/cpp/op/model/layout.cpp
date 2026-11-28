@@ -29,6 +29,22 @@ void checkGrid(const Warehouse& warehouse) {
     checkRange("shelving_padding", warehouse.shelvingPadding, 1, Warehouse::MAX_SHELVING_SIZE);
 }
 
+// One number per grid location (the ranges checkLayout allows keep it in 64 bits).
+std::int64_t gridKey(const Warehouse& warehouse, const WarehouseLocation& location) {
+    std::int64_t key = location.column;
+    key = key * warehouse.shelvingRowCount + location.shelvingRow;
+    key = key * 2 + (location.side == Side::LEFT ? 0 : 1);
+    return key * (warehouse.shelvingHeight + 1) + location.row;
+}
+
+template <typename Visit>
+void forEachLocation(OrderPickingSolution& solution, Visit visit) {
+    for (Trolley& trolley : solution.trolleys) visit(trolley.location);
+    for (PickTask& task : solution.pickTasks) visit(task.location);
+}
+
+}  // namespace
+
 void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location,
                    const std::string& owner) {
     if (!warehouse.isGrid()) {
@@ -40,7 +56,8 @@ void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location
         }
         return;
     }
-    if (location.node >= 0) {
+    // While a solve's table is set, a grid location carries its node in it.
+    if (location.node >= 0 && warehouse.active == nullptr) {
         throw std::invalid_argument(owner +
                                     ": a named location in a grid warehouse (one solution uses "
                                     "one kind of layout)");
@@ -64,22 +81,6 @@ void checkLocation(const Warehouse& warehouse, const WarehouseLocation& location
                                     std::to_string(warehouse.shelvingHeight));
     }
 }
-
-// One number per grid location (the ranges checkLayout allows keep it in 64 bits).
-std::int64_t gridKey(const Warehouse& warehouse, const WarehouseLocation& location) {
-    std::int64_t key = location.column;
-    key = key * warehouse.shelvingRowCount + location.shelvingRow;
-    key = key * 2 + (location.side == Side::LEFT ? 0 : 1);
-    return key * (warehouse.shelvingHeight + 1) + location.row;
-}
-
-template <typename Visit>
-void forEachLocation(OrderPickingSolution& solution, Visit visit) {
-    for (Trolley& trolley : solution.trolleys) visit(trolley.location);
-    for (PickTask& task : solution.pickTasks) visit(task.location);
-}
-
-}  // namespace
 
 Warehouse makeGridWarehouse(int columnCount, int shelvingRowCount, int shelvingWidth,
                             int shelvingHeight, int shelvingPadding) {
@@ -149,6 +150,10 @@ void checkLayout(const OrderPickingSolution& solution) {
 
 ActiveDistances::ActiveDistances(OrderPickingSolution& solution) : solution_(solution) {
     Warehouse& warehouse = solution.warehouse;
+    if (warehouse.active != nullptr) {
+        owner_ = false;
+        return;
+    }
     if (!warehouse.isGrid()) {
         warehouse.active = warehouse.locations;
         return;
@@ -164,6 +169,10 @@ ActiveDistances::ActiveDistances(OrderPickingSolution& solution) : solution_(sol
     });
     const std::size_t size = places.size();
     if (size > static_cast<std::size_t>(kMaxGridNodes)) {
+        // No table. This return has to stay ahead of the assignment of
+        // `active` below: calculateDistance reads the table unchecked, by the
+        // nodes, whenever `active` is set, so it is set only with every node
+        // valid, and the nodes go back to -1 here.
         forEachLocation(solution, [](WarehouseLocation& location) { location.node = -1; });
         return;
     }
@@ -178,6 +187,7 @@ ActiveDistances::ActiveDistances(OrderPickingSolution& solution) : solution_(sol
 }
 
 ActiveDistances::~ActiveDistances() {
+    if (!owner_) return;
     Warehouse& warehouse = solution_.warehouse;
     warehouse.active.reset();
     if (warehouse.isGrid())

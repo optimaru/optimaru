@@ -76,10 +76,10 @@ def _pick_task_id(order_id: str, item_position: int) -> str:
 
 
 #: The limits of a layout: the compiled core's (`Warehouse` in op/model/domain.hpp).
-_MAX_COLUMN_COUNT = 18278  # A..ZZZ
-_MAX_SHELVING_ROW_COUNT = 10_000
-_MAX_SHELVING_SIZE = 1000  # width, height and padding, meters
-_MAX_DISTANCE = 1_000_000  # meters
+_MAX_COLUMN_COUNT: int = _core.Warehouse.MAX_COLUMN_COUNT  # 18278: A..ZZZ
+_MAX_SHELVING_ROW_COUNT: int = _core.Warehouse.MAX_SHELVING_ROW_COUNT  # 10000
+_MAX_SHELVING_SIZE: int = _core.Warehouse.MAX_SHELVING_SIZE  # 1000: width, height and padding, meters
+_MAX_DISTANCE: int = _core.Warehouse.MAX_DISTANCE  # 1000000 meters
 
 
 def _column_index(letters: str) -> int:
@@ -372,7 +372,11 @@ class OrderPickingResponse(StrictModel):
 
 
 def _to_warehouse(request: OrderPickingRequest) -> "_core.Warehouse":
-    """The compiled layout of the request: its named locations, or its grid (the default one without `warehouse`)."""
+    """The compiled layout of the request: its named locations, or its grid (the default one
+    without `warehouse`).
+
+    The table is laid out again here, after the request's validator did it once to check it:
+    a request can be changed after it was validated, so the rows are not kept on it."""
     if request.locations is not None:
         return _core.Warehouse.from_distances(
             request.locations, _distance_rows(request.locations, request.distances or {})
@@ -415,8 +419,9 @@ def parameter_uses(request: OrderPickingRequest) -> list[ParameterUse]:
     None here: every field that a cost reads is required (bucket count and capacity,
     volumes, locations), so none has a default to leave it off, and `initial_route` is a
     starting point. The layout (`warehouse`, or `locations` and `distances`) is not one
-    either: the response reports the meters walked from it whatever the constraints. Kept so `solve_request` checks this use case as it checks the others;
-    the table is "Parameters and their costs" in docs/use-cases/README.md."""
+    either: the response reports the meters walked from it whatever the constraints. Kept so
+    `solve_request` checks this use case as it checks the others; the table is "Parameters
+    and their costs" in docs/use-cases/README.md."""
     return []
 
 
