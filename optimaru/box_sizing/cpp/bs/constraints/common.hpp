@@ -54,8 +54,8 @@ inline void requirePrepared(const BoxSizingProblem& problem) {
 
 // A cost that is a sum over a box's parcels of one (parcel, box) term: the
 // base of parcelFitCost, boxWeightCost, voidVolumeCost and shippingCost
-// (boxCost and boardAreaCost add up the shipments and multiply once). A component writes term(),
-// and cost() adds the terms up.
+// (boxCost and boardAreaCost add up the shipments and multiply once). A
+// component writes term(), and cost() adds the terms up.
 //
 // No delta contract, on purpose. A sum of per-parcel terms could state what
 // one parcel adds (supports_delta / delta_cost), and a change of one parcel

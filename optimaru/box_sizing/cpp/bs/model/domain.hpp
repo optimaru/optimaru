@@ -28,7 +28,9 @@ namespace bs {
 // The weights are the components' kDefaultWeight (bs/constraints/*.hpp); the
 // problem carries none. The volumes are whole numbers and the engine keeps
 // soft in a double, which is why ScoreCalculator::prepare refuses a problem
-// whose shipped volume could pass 2^53.
+// whose shipped volume could pass 2^53. The board of a box can be up to six
+// times its volume and has no bound of its own: past 2^53 a weighted
+// boardAreaCost is added up to the double's precision, like a fractional cost.
 using Score = optimaru::Score;
 
 // The three sides of a size, ascending: a parcel may be turned any way, so

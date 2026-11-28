@@ -49,8 +49,13 @@ struct Pricing {
 // answer for a group in both cases.
 struct BoxRanking {
     std::vector<double> unitPrice;  // per box
-    std::vector<int> order;         // box indices, cheapest first (ties: lower index)
-    std::vector<int> rank;          // per box: its position in `order`
+    // Box indices, cheapest first, ties to the lower index. The group orders
+    // below break ties by the smaller volume first, on purpose: with the
+    // shipping cost picked alone every unit price is 0 and ties are the rule.
+    // This order keeps the lower index so that a solve without a shipping
+    // weight proposes the steps it always did.
+    std::vector<int> order;
+    std::vector<int> rank;  // per box: its position in `order`
     double typeWeight = 0.0;
     std::vector<std::vector<int>> groups;     // parcels by the set of boxes that take them
     std::vector<std::int64_t> groupQuantity;  // per group: its shipments

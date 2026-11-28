@@ -40,7 +40,8 @@ MAX_SIDE = 2_000_000
 MAX_WEIGHT = 1_000_000_000_000
 #: No quantity can be larger: the engine refuses a shipped volume above 2^53 (kMaxVolume).
 MAX_QUANTITY = 2**53
-#: The largest weight break of a rate table (a dimensional weight can pass MAX_WEIGHT).
+#: The largest weight break of a rate table and the largest dim_divisor (a dimensional weight
+#: can pass MAX_WEIGHT).
 MAX_BREAK = 2**62
 
 

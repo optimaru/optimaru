@@ -161,6 +161,16 @@ def test_rate_tables_that_cannot_price_every_parcel_are_refused(edit, message):
         BoxSizingProblemModel.model_validate(data)
 
 
+def test_billed_weight_an_exact_total_cannot_hold_is_refused_only_once_weight_is_billed():
+    data = nested_data()
+    data["parcels"][0] |= {"weight": 10**12, "quantity": 10_000}
+    data["boxes"][2]["max_weight"] = None
+    bs.solve(BoxSizingProblemModel.model_validate(data), time_limit_seconds=0)
+    data["boxes"][0]["dim_divisor"] = 1000
+    with pytest.raises(ValueError, match="the billed weight is too large for an exact total"):
+        bs.solve(BoxSizingProblemModel.model_validate(data), time_limit_seconds=0)
+
+
 def test_a_billed_weight_above_the_top_break_is_refused_by_the_engine():
     data = priced_data()
     data["rate_tables"][0]["breaks"].pop()  # the zone-less table now stops at 1,000; L bills 2,700
