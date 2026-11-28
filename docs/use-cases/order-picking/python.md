@@ -80,7 +80,7 @@ print(op.distance_to_travel(solution, 0))   # 40: there and back
   `constraint_costs` (`ValueError`, naming the trolley or pick task), and by `calculate_distance` for
   its two locations.
 - `Warehouse.from_distances(location_ids, distances)`: named locations. The table is square over the
-  ids and may be asymmetric; `ValueError` for a repeated id, a distance outside 0..1000000 or a
+  ids (at most 4096, `Warehouse.MAX_LOCATIONS`) and may be asymmetric; `ValueError` for a repeated id, a distance outside 0..1000000 or a
   location that is not 0 from itself. `warehouse.location(id)` is the location to give a trolley or a
   pick task (`location.index` is its position in `warehouse.location_ids`, -1 for a grid location),
   and `warehouse.location_id(location)` names it again. A named location belongs to the warehouse

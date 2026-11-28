@@ -82,6 +82,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readonly_static("MAX_SHELVING_ROW_COUNT", &Warehouse::MAX_SHELVING_ROW_COUNT)
             .def_readonly_static("MAX_SHELVING_SIZE", &Warehouse::MAX_SHELVING_SIZE)
             .def_readonly_static("MAX_DISTANCE", &Warehouse::MAX_DISTANCE)
+            .def_readonly_static("MAX_LOCATIONS", &Warehouse::MAX_LOCATIONS)
             .def_property_readonly("is_grid", &Warehouse::isGrid)
             .def_readonly("column_count", &Warehouse::columnCount)
             .def_readonly("shelving_row_count", &Warehouse::shelvingRowCount)
@@ -100,11 +101,10 @@ PYBIND11_MODULE(_core, m) {
                             throw py::value_error(
                                     "a grid warehouse has no named locations: use "
                                     "WarehouseLocation(column, shelving_row, side, row)");
-                        const std::vector<std::string>& ids = w.locations->ids;
-                        for (std::size_t i = 0; i < ids.size(); ++i) {
-                            if (ids[i] == id) return WarehouseLocation::named(static_cast<int>(i));
-                        }
-                        throw py::value_error("unknown location '" + id + "'");
+                        const auto found = w.locations->indexOf.find(id);
+                        if (found == w.locations->indexOf.end())
+                            throw py::value_error("unknown location '" + id + "'");
+                        return WarehouseLocation::named(found->second);
                     },
                     py::arg("id"), "The named location with this id.")
             .def(

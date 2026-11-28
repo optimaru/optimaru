@@ -65,7 +65,7 @@ request = OrderPickingRequest(
 ```
 
 **Named locations with a distance table.** For a building that is not such a grid, `locations`
-lists the ids of its places and `distances` the walk between them, `{from id: {to id: meters}}`
+lists the ids of its places (at most 4096) and `distances` the walk between them, `{from id: {to id: meters}}`
 in whole meters (0..1000000). The `location` of a trolley or an order item is then one of the
 ids, and the response's stops name them the same way.
 
@@ -88,9 +88,9 @@ request = OrderPickingRequest(
   walking through a third location, and the distances given are used as they are.
 - An id in `distances` that is not in `locations` is refused.
 - The table is one number for every pair, so it grows with the square of `locations`: 1,000
-  locations are a million distances, which the request model checks and lays out in Python
-  (seconds, where the solve's own preparation takes milliseconds) and which have to fit the
-  body an API accepts. `locations` needs only the places the request's trolleys and items are
+  locations are a million distances, which the request model reads and lays out in Python
+  (a second or so, where the solve's own preparation takes milliseconds) and which have to
+  fit the body an API accepts. `locations` needs only the places the request's trolleys and items are
   at, not the whole building. A caller that holds a large table as a matrix already can skip
   the dict: `op.Warehouse.from_distances` takes it as it is.
 

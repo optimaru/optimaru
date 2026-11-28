@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "optimaru/solution/solution_traits.hpp"
@@ -62,8 +63,9 @@ enum class Side { LEFT = 0, RIGHT = 1 };
 // locations for the time of a solve (Warehouse::active) leaves it empty.
 struct DistanceTable {
     int size = 0;
-    std::vector<int> meters;       // size * size; meters[from * size + to]
-    std::vector<std::string> ids;  // named layout: one per location
+    std::vector<int> meters;                       // size * size; meters[from * size + to]
+    std::vector<std::string> ids;                  // named layout: one per location
+    std::unordered_map<std::string, int> indexOf;  // named layout: id -> index
 
     int at(int from, int to) const { return meters[static_cast<std::size_t>(from) * size + to]; }
     bool holds(int node) const { return node >= 0 && node < size; }
@@ -80,8 +82,10 @@ struct Warehouse {
     static constexpr int MAX_COLUMN_COUNT = 18278;  // A..ZZZ
     static constexpr int MAX_SHELVING_ROW_COUNT = 10000;
     static constexpr int MAX_SHELVING_SIZE = 1000;  // width, height and padding, meters
-    // The longest distance a table of named locations may hold, meters.
+    // The longest distance a table of named locations may hold, meters, and
+    // the most locations it may be over (4096 x 4096 distances are 64 MB).
     static constexpr int MAX_DISTANCE = 1000000;
+    static constexpr int MAX_LOCATIONS = 4096;
 
     int columnCount = DEFAULT_COLUMN_COUNT;
     int shelvingRowCount = DEFAULT_SHELVING_ROW_COUNT;

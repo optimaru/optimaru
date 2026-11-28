@@ -79,6 +79,8 @@ class Warehouse:
     """1000: the most meters of `shelving_width`, `shelving_height` and `shelving_padding`."""
     MAX_DISTANCE: int
     """1000000: the longest distance, in meters, a table of named locations may hold."""
+    MAX_LOCATIONS: int
+    """4096: the most named locations of a warehouse."""
 
     def __init__(
         self,
@@ -93,8 +95,8 @@ class Warehouse:
         """A warehouse of named locations: `distances[i][j]` is the whole meters from
         `location_ids[i]` to `location_ids[j]`.
 
-        The table is square over the ids and may be asymmetric. ValueError for a repeated
-        id, a distance outside 0..1000000 or a location that is not 0 from itself."""
+        The table is square over the ids (at most 4096) and may be asymmetric. ValueError for
+        a repeated id, a distance outside 0..1000000 or a location that is not 0 from itself."""
     @property
     def is_grid(self) -> bool:
         """True for a grid, False for named locations."""

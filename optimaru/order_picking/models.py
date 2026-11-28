@@ -80,6 +80,7 @@ _MAX_COLUMN_COUNT: int = _core.Warehouse.MAX_COLUMN_COUNT  # 18278: A..ZZZ
 _MAX_SHELVING_ROW_COUNT: int = _core.Warehouse.MAX_SHELVING_ROW_COUNT  # 10000
 _MAX_SHELVING_SIZE: int = _core.Warehouse.MAX_SHELVING_SIZE  # 1000: width, height and padding, meters
 _MAX_DISTANCE: int = _core.Warehouse.MAX_DISTANCE  # 1000000 meters
+_MAX_LOCATIONS: int = _core.Warehouse.MAX_LOCATIONS  # 4096 named locations
 
 
 def _column_index(letters: str) -> int:
@@ -198,14 +199,20 @@ class TrolleyModel(StrictModel):
     )
 
 
-def _distance_rows(locations: list[str], distances: dict[str, dict[str, int]]) -> list[list[int]]:
-    """The square table of `distances` over `locations`, row = from, column = to.
+_NO_DISTANCES: dict[str, int] = {}
 
-    A location is 0 meters from itself. A pair given one way only is as long the other way; a
-    pair given neither way is refused (ValueError), as is an id that is not in `locations`, a
-    distance outside 0..1,000,000 and a distance from a location to itself other than 0.
+
+def _check_distances(locations: list[str], distances: dict[str, dict[str, int]]) -> None:
+    """Whether `distances` is a table over `locations`: ValueError when it is not.
+
+    Refused: an id that is not in `locations`, a distance outside 0..1,000,000, a distance from a
+    location to itself other than 0, and a pair of locations with no distance either way. It
+    reads what is given and lays nothing out, so a short table over many locations is refused
+    at the cost of reading it.
     """
     known = set(locations)
+    given = 0  # ordered pairs of two different locations
+    both_ways = 0  # of those, the pairs given in both directions, counted once
     for start, row in distances.items():
         if start not in known:
             raise ValueError(f"distances: unknown location {start!r}")
@@ -214,28 +221,46 @@ def _distance_rows(locations: list[str], distances: dict[str, dict[str, int]]) -
                 raise ValueError(f"distances from {start!r}: unknown location {end!r}")
             if not 0 <= meters <= _MAX_DISTANCE:
                 raise ValueError(f"distance from {start!r} to {end!r} must be 0..{_MAX_DISTANCE}, not {meters}")
-            if start == end and meters != 0:
-                raise ValueError(f"distance from {start!r} to itself must be 0, not {meters}")
-    empty: dict[str, int] = {}
+            if start == end:
+                if meters != 0:
+                    raise ValueError(f"distance from {start!r} to itself must be 0, not {meters}")
+                continue
+            given += 1
+            if start < end and start in distances.get(end, _NO_DISTANCES):
+                both_ways += 1
+    missing = len(locations) * (len(locations) - 1) // 2 - (given - both_ways)
+    if not missing:
+        return
+    shown: list[str] = []
+    for i, a in enumerate(locations):
+        row = distances.get(a, _NO_DISTANCES)
+        for j in range(i + 1, len(locations)):
+            b = locations[j]
+            if b not in row and a not in distances.get(b, _NO_DISTANCES):
+                shown.append(f"{a!r} and {b!r}")
+                if len(shown) == 5:
+                    break
+        if len(shown) == 5:
+            break
+    more = f" (and {missing - 5} more pairs)" if missing > 5 else ""
+    raise ValueError(f"distances: no distance between {', '.join(shown)}{more}")
+
+
+def _distance_rows(locations: list[str], distances: dict[str, dict[str, int]]) -> list[list[int]]:
+    """The square table of `distances` over `locations`, row = from, column = to.
+
+    A location is 0 meters from itself and a pair given one way only is as long the other way.
+    What `_check_distances` refuses is refused here (ValueError).
+    """
+    _check_distances(locations, distances)
     rows = []
-    missing = []
     for start in locations:
-        given = distances.get(start, empty)
+        given = distances.get(start, _NO_DISTANCES)
         row = []
         for end in locations:
             meters = 0 if start == end else given.get(end)
-            if meters is None:
-                meters = distances.get(end, empty).get(start)
-            if meters is None:
-                missing.append((start, end))
-                meters = 0
-            row.append(meters)
+            row.append(distances[end][start] if meters is None else meters)
         rows.append(row)
-    if missing:
-        pairs = sorted({tuple(sorted(pair)) for pair in missing})
-        shown = ", ".join(f"{a!r} and {b!r}" for a, b in pairs[:5])
-        more = f" (and {len(pairs) - 5} more pairs)" if len(pairs) > 5 else ""
-        raise ValueError(f"distances: no distance between {shown}{more}")
     return rows
 
 
@@ -256,9 +281,11 @@ class OrderPickingRequest(SolveRequest):
     locations: list[str] | None = Field(
         default=None,
         min_length=1,
+        max_length=_MAX_LOCATIONS,
         description=(
-            "Ids of the named locations of a warehouse that is not a grid. With them, `distances` is "
-            "required, and every `location` of a trolley or an order item is one of these ids."
+            "Ids of the named locations of a warehouse that is not a grid, at most 4096. With them, "
+            "`distances` is required, and every `location` of a trolley or an order item is one of "
+            "these ids."
         ),
     )
     distances: dict[str, dict[str, int]] | None = Field(
@@ -276,7 +303,10 @@ class OrderPickingRequest(SolveRequest):
     def _without_a_layout_left_out(self, handler):
         """A request that gives no layout dumps without the three layout fields, as it did
         before they existed: what it sends to the optimaru API is then what an API that does
-        not know them yet reads."""
+        not know them yet reads.
+
+        No return annotation on purpose: with one, the JSON schema of what is sent would be
+        that type (a bare object) and no longer the model's fields."""
         data = handler(self)
         for name in ("warehouse", "locations", "distances"):
             if data.get(name) is None:
@@ -330,7 +360,7 @@ class OrderPickingRequest(SolveRequest):
                 )
             if place not in known:
                 raise ValueError(f"{owner}: unknown location {place!r}")
-        _distance_rows(self.locations, self.distances)
+        _check_distances(self.locations, self.distances)
         return self
 
     @model_validator(mode="after")
@@ -375,8 +405,8 @@ def _to_warehouse(request: OrderPickingRequest) -> "_core.Warehouse":
     """The compiled layout of the request: its named locations, or its grid (the default one
     without `warehouse`).
 
-    The table is laid out again here, after the request's validator did it once to check it:
-    a request can be changed after it was validated, so the rows are not kept on it."""
+    The table is checked again as it is laid out, after the request's validator checked it: a
+    request can be changed after it was validated."""
     if request.locations is not None:
         return _core.Warehouse.from_distances(
             request.locations, _distance_rows(request.locations, request.distances or {})

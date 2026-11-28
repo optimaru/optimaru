@@ -19,11 +19,12 @@ Warehouse makeGridWarehouse(int columnCount = Warehouse::DEFAULT_COLUMN_COUNT,
                             int shelvingHeight = Warehouse::DEFAULT_SHELVING_HEIGHT,
                             int shelvingPadding = Warehouse::DEFAULT_SHELVING_PADDING);
 
-// A layout of named locations: `ids` (unique, at least one) and the whole
-// meters from each to each, meters[from][to], one row per id. The table does
-// not have to be symmetric. Throws std::invalid_argument when the table is
-// not square over the ids, an id repeats, a distance is negative or above
-// Warehouse::MAX_DISTANCE, or a location is not 0 meters from itself.
+// A layout of named locations: `ids` (unique, 1..Warehouse::MAX_LOCATIONS of
+// them) and the whole meters from each to each, meters[from][to], one row per
+// id. The table does not have to be symmetric. Throws std::invalid_argument
+// when there are too many ids, the table is not square over them, an id
+// repeats, a distance is negative or above Warehouse::MAX_DISTANCE, or a
+// location is not 0 meters from itself.
 Warehouse makeNamedWarehouse(std::vector<std::string> ids,
                              const std::vector<std::vector<int>>& meters);
 

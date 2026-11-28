@@ -147,6 +147,9 @@ def test_the_default_warehouse_is_the_grid_requests_always_had():
     assert "warehouse" in request(warehouse=WarehouseModel()).model_dump()
     assert {"locations", "distances"} <= table_request().model_dump(mode="json").keys()
     assert "warehouse" not in table_request().model_dump()
+    # The schema of what is sent still names every field.
+    sent = OrderPickingRequest.model_json_schema(mode="serialization")["properties"]
+    assert {"trolleys", "orders", "warehouse", "locations", "distances", "time_limit_seconds"} <= sent.keys()
 
 
 def test_a_seeded_demo_solve_is_the_same_with_the_warehouse_given():
@@ -166,7 +169,12 @@ def test_a_seeded_demo_solve_is_the_same_with_the_warehouse_given():
     assert str(explicit.score) == str(demo.score)
     assert explicit.routes() == demo.routes()
     assert str(op.calculate_score(demo)) == str(demo.score)
-    assert all(task.location.index == -1 for task in demo.pick_tasks)
+    # Nothing of the solve's table is left on the solution, whichever way it was solved.
+    parallel = op.solve(op.generate_demo_data(), time_limit_seconds=0.3, parallel_solver_count=2)
+    picked = op.solve(op.generate_demo_data(), time_limit_seconds=0.3, constraints=get_constraints())
+    for solved in (demo, explicit, parallel, picked):
+        places = [task.location for task in solved.pick_tasks] + [trolley.location for trolley in solved.trolleys]
+        assert all(place.index == -1 for place in places)
 
 
 @pytest.mark.parametrize(
@@ -213,6 +221,9 @@ def test_a_grid_size_out_of_range_is_refused(field, value):
 def test_the_models_take_their_limits_from_the_compiled_warehouse():
     assert (op.Warehouse.MAX_COLUMN_COUNT, op.Warehouse.MAX_SHELVING_ROW_COUNT) == (18278, 10000)
     assert (op.Warehouse.MAX_SHELVING_SIZE, op.Warehouse.MAX_DISTANCE) == (1000, 1000000)
+    assert op.Warehouse.MAX_LOCATIONS == 4096
+    with pytest.raises(ValueError, match="at most 4096 named locations, not 4097"):
+        op.Warehouse.from_distances([f"l{i}" for i in range(4097)], [])
     largest = WarehouseModel(
         column_count=18278, shelving_row_count=10000, shelving_width=1000, shelving_height=1000, shelving_padding=1000
     )
@@ -399,7 +410,10 @@ def test_a_larger_table_request_solves_on_every_path():
         ({"warehouse": {}}, "a request uses one kind of layout"),
         ({"locations": ["dock", "a", "b", "c", "a"]}, "duplicate location ids"),
         ({"locations": ["dock", "a", "b"]}, "order order, item p2: unknown location 'c'"),
-        ({"locations": LOCATIONS + ["d"]}, "no distance between 'a' and 'd', 'b' and 'd', 'c' and 'd', 'd' and 'dock'"),
+        (
+            {"locations": LOCATIONS + ["d"]},
+            "no distance between 'dock' and 'd', 'a' and 'd', 'b' and 'd', 'c' and 'd' \\[",
+        ),
         ({"distances": DISTANCES | {"nowhere": {"a": 1}}}, "distances: unknown location 'nowhere'"),
         ({"distances": DISTANCES | {"c": {"dock": 11, "x": 1}}}, "distances from 'c': unknown location 'x'"),
         ({"distances": DISTANCES | {"c": {"dock": -1}}}, "distance from 'c' to 'dock' must be 0..1000000, not -1"),
@@ -407,6 +421,13 @@ def test_a_larger_table_request_solves_on_every_path():
         ({"distances": DISTANCES | {"c": {"dock": 11, "c": 2}}}, "distance from 'c' to itself must be 0"),
         ({"distances": DISTANCES | {"c": {"dock": 1.5}}}, "valid integer"),
         ({"locations": []}, "at least 1 item"),
+        ({"locations": [f"l{i}" for i in range(4097)]}, "at most 4096 items"),
+        # Seven places and one distance: 20 pairs are missing, five are named.
+        (
+            {"locations": LOCATIONS + ["d", "e", "f"], "distances": DISTANCES | {"d": {"e": 1}}},
+            "no distance between 'dock' and 'd', 'dock' and 'e', 'dock' and 'f', 'a' and 'd', 'a' and 'e' "
+            "\\(and 9 more pairs\\)",
+        ),
     ],
 )
 def test_a_bad_table_is_refused(change, message):

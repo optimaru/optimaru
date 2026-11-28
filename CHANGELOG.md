@@ -13,7 +13,8 @@
     `locations` (ids) and `distances` (`{from: {to: meters}}`) on the request, where the
     `location` of a trolley or an order item is then an id; `op.Warehouse.from_distances(ids,
     table)` and `warehouse.location(id)` on the compiled side. The table may be asymmetric, a pair
-    given one way only is as long the other way, and a pair given neither way is refused.
+    given one way only is as long the other way, and a pair given neither way is refused. At
+    most 4096 locations.
   - One request uses one kind; mixing them is refused. `OrderPickingSolution` takes a fourth
     argument, `warehouse`, and has the property of that name; `calculate_distance` takes a third.
     `PickStop.location` is a `LocationModel` or an id, as the request gave it.

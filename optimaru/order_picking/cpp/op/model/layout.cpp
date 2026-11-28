@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -98,17 +97,21 @@ Warehouse makeNamedWarehouse(std::vector<std::string> ids,
                              const std::vector<std::vector<int>>& meters) {
     if (ids.empty()) throw std::invalid_argument("warehouse: no locations");
     const std::size_t size = ids.size();
-    std::unordered_set<std::string> seen;
-    for (const std::string& id : ids) {
-        if (!seen.insert(id).second)
-            throw std::invalid_argument("warehouse: duplicate location id '" + id + "'");
+    if (size > static_cast<std::size_t>(Warehouse::MAX_LOCATIONS)) {
+        throw std::invalid_argument("warehouse: at most " +
+                                    std::to_string(Warehouse::MAX_LOCATIONS) +
+                                    " named locations, not " + std::to_string(size));
+    }
+    auto table = std::make_shared<DistanceTable>();
+    for (std::size_t index = 0; index < size; ++index) {
+        if (!table->indexOf.emplace(ids[index], static_cast<int>(index)).second)
+            throw std::invalid_argument("warehouse: duplicate location id '" + ids[index] + "'");
     }
     if (meters.size() != size) {
         throw std::invalid_argument("warehouse: " + std::to_string(size) + " locations need " +
                                     std::to_string(size) + " rows of distances, not " +
                                     std::to_string(meters.size()));
     }
-    auto table = std::make_shared<DistanceTable>();
     table->size = static_cast<int>(size);
     table->meters.reserve(size * size);
     for (std::size_t from = 0; from < size; ++from) {
