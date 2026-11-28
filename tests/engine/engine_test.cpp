@@ -22,11 +22,21 @@
 #include <utility>
 #include <vector>
 
+#include "optimaru/model/editor.hpp"
+#include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/score/hard_medium_soft_score.hpp"
+#include "optimaru/score/levels.hpp"
+#include "optimaru/score/objective.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/search/operators.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/solver_config.hpp"
 #include "optimaru/worker_threads.hpp"
-#include "optimaru/testing/preview_parity.hpp"
-#include "optimaru/optimaru.hpp"
 #include "optimaru/testing/check.hpp"
+#include "optimaru/testing/preview_parity.hpp"
 
 using optimaru::Score;
 

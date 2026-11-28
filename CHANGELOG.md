@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Breaking (C++): no umbrella header.** `core/optimaru/optimaru.hpp` is gone. It included a
+  dozen engine headers for convenience, but only employee scheduling's bindings and the engine
+  test used it; every other use case includes the headers it needs, and those two now do too.
+  C++ that included it includes `"optimaru/solver.hpp"`, `"optimaru/settings.hpp"` and the
+  others it uses. The directory map it carried is the engine tree in `README.md`. Nothing
+  changes in the Python package or in what the solvers do.
 - **Breaking (C++): `accept/` and `select/` are folders of the engine again.** The acceptance
   rules and the adaptive operator selection are not operators the step loop draws: they decide
   whether it keeps a move and which operator it draws next, for moves and ruin-and-recreate
