@@ -12,10 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/model/element_index.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
+#include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/model/demo_data.hpp"

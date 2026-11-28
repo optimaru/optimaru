@@ -38,7 +38,7 @@
 #include "fcs/model/domain.hpp"
 #include "fcs/score/score_calculator.hpp"
 #include "fcs/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace fcs;

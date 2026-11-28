@@ -4,10 +4,10 @@
 #ifndef OPTIMARU_SEARCH_MOVES_LIST_MOVE_HPP
 #define OPTIMARU_SEARCH_MOVES_LIST_MOVE_HPP
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/objective.hpp"
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/element_index.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/moves/preview_evaluation.hpp"
 
 namespace optimaru {

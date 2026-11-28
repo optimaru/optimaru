@@ -8,8 +8,8 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
+#include "optimaru/solution/editor.hpp"
 // The plugin point only, never the select/schemes.hpp umbrella: that
 // one includes settings.hpp, which includes this header's scheme back.
 #include "optimaru/select/scheme.hpp"

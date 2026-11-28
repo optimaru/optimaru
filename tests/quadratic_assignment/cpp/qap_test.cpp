@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "qap/model/domain.hpp"
 #include "qap/score/incremental_calculator.hpp"
 #include "qap/score/score_calculator.hpp"

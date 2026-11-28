@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_MODEL_SNAPSHOT_HPP
-#define OPTIMARU_MODEL_SNAPSHOT_HPP
+#ifndef OPTIMARU_SOLUTION_SNAPSHOT_HPP
+#define OPTIMARU_SOLUTION_SNAPSHOT_HPP
 
 #include <stdexcept>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
 
 namespace optimaru {
 
@@ -179,4 +179,4 @@ struct SolutionSnapshot {
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_MODEL_SNAPSHOT_HPP
+#endif  // OPTIMARU_SOLUTION_SNAPSHOT_HPP

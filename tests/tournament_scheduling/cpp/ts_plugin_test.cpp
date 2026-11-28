@@ -43,7 +43,7 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "ts/constraints.hpp"
 #include "ts/model/domain.hpp"
 #include "ts/score/score_calculator.hpp"

@@ -35,7 +35,7 @@
 #include "fp/score/score_calculator.hpp"
 #include "fp/solver.hpp"
 #include "optimaru/construct/construction.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace fp;

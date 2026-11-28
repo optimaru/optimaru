@@ -40,7 +40,7 @@
 #include "cs/model/domain.hpp"
 #include "cs/score/score_calculator.hpp"
 #include "cs/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace cs;

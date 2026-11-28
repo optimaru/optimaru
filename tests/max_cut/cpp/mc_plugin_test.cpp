@@ -39,7 +39,7 @@
 #include "mc/score/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "mc_fixtures.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 
 using namespace mc;
 using namespace mc_test;

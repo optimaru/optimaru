@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_MODEL_NEIGHBORHOODS_HPP
-#define OPTIMARU_MODEL_NEIGHBORHOODS_HPP
+#ifndef OPTIMARU_SOLUTION_NEIGHBORHOODS_HPP
+#define OPTIMARU_SOLUTION_NEIGHBORHOODS_HPP
 
 #include <algorithm>
 #include <functional>
@@ -45,4 +45,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_MODEL_NEIGHBORHOODS_HPP
+#endif  // OPTIMARU_SOLUTION_NEIGHBORHOODS_HPP

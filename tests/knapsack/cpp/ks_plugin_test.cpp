@@ -43,7 +43,7 @@
 #include "ks/score/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 
 using namespace ks;
 using namespace ks_test;

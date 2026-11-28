@@ -46,7 +46,7 @@
 #include "op/model/layout.hpp"
 #include "op/score/score_calculator.hpp"
 #include "op/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "optimaru/testing/check.hpp"
 

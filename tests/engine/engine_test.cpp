@@ -23,8 +23,8 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/score/hard_medium_soft_score.hpp"

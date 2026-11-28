@@ -7,8 +7,8 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/model/element_index.hpp"
-#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/solution/element_index.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
 #include "optimaru/search/moves/list_move.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/utils/random.hpp"

@@ -9,7 +9,7 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/search/moves/move_mix.hpp"
 #include "optimaru/search/operators.hpp"
