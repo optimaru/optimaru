@@ -253,15 +253,28 @@ def axle_stages(container, boxes) -> list[tuple[int | None, list[Fraction]]]:
 
 
 def _axle_excess(container, boxes) -> int:
-    """The worst stage's summed excess over the two groups' max_load, rounded up; 0 for a
+    """The worst stage's sum over the two groups of the excess over max_load, each rounded up after
+    the engine's rounding tolerance (about 1e-11 of the numbers the loads come from); 0 for a
     container that holds no placed item."""
-    if not boxes:
+    if not boxes or len(container.axle_groups) != 2:
         return 0
-    worst = Fraction(0)
-    for _, (front_load, rear_load) in axle_stages(container, boxes):
-        front, rear = container.axle_groups
-        worst = max(worst, max(0, front_load - front.max_load) + max(0, rear_load - rear.max_load))
-    return math.ceil(worst)
+    front, rear = container.axle_groups
+    span = abs(rear.position - front.position)
+    worst = 0
+    for stop, loads in axle_stages(container, boxes):
+        staying = [box for box in boxes if stop is None or box.unload_order is None or box.unload_order > stop]
+        weight = sum(box.weight for box in staying)
+        size = sum(abs(box.weight * (box.x + box.placed_length / 2)) for box in staying)
+        empty = sum(abs(float(load)) for load in loads) - abs(weight)  # an upper bound of the empty shares
+        scale = weight + ((abs(front.position) + abs(rear.position)) * weight + size) / span + max(0.0, empty)
+        over = 0
+        for load, axle in zip(loads, (front, rear)):
+            tolerance = max(1e-6, 1e-11 * (scale + axle.max_load))
+            excess = load - axle.max_load
+            if excess > tolerance:
+                over += math.ceil(excess - Fraction(tolerance))
+        worst = max(worst, over)
+    return worst
 
 
 def _balance(container, boxes) -> int:

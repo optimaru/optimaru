@@ -276,7 +276,7 @@ class AxleLoadCost(Constraint):
     placed item of weight w whose middle is at x puts w (rear - x) / (rear - front) on the
     front group, the rest on the rear, plus each group's `empty_load` or share of
     `tare_weight`. Checked at departure and after each stop's items are unloaded; the worst
-    stage counts, its excesses over the two groups added, rounded up to a whole weight unit."""
+    stage counts, each group's excess rounded up to a whole weight unit and the two added."""
 
     name = "axle_load_cost"
     label_en = "Axle loads"

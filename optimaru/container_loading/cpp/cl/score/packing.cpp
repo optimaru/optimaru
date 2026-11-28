@@ -926,9 +926,14 @@ std::int64_t segregationPairs(const ContainerLoadingProblem& problem, const Pack
     return pairs;
 }
 
-void axleStages(const ContainerLoadingProblem& problem, int container, const Packing& packing,
-                std::vector<AxleStage>& out) {
+namespace {
+
+// The axle loads of one decode, stage by stage, with the size of the numbers
+// each was computed from (for the rounding tolerance of axleExcess).
+void axleLoads(const ContainerLoadingProblem& problem, int container, const Packing& packing,
+               std::vector<AxleStage>& out, std::vector<double>* scales) {
     out.clear();
+    if (scales != nullptr) scales->clear();
     const Container& space = problem.containers[static_cast<std::size_t>(container)];
     if (space.axleGroups.size() != 2) return;
     const AxleGroup& front = space.axleGroups[0];
@@ -950,33 +955,47 @@ void axleStages(const ContainerLoadingProblem& problem, int container, const Pac
         emptyFront = tare * (pr - middle) / span;
         emptyRear = tare - emptyFront;
     }
-    // The placed items by stop: what leaves at a stop is taken off after it.
-    std::vector<std::pair<int, std::pair<double, double>>> leaving;  // (stop, (W, M))
-    double weight = 0.0;
-    double moment = 0.0;
+    // The stops, and at each stage the weight and moment of what stays, summed
+    // afresh (taking the leaving items off a running sum would carry its
+    // rounding from stage to stage).
+    std::vector<int> stops;
     for (const Box& box : packing.boxes) {
-        const Item& item = problem.items[static_cast<std::size_t>(box.item)];
-        const double w = static_cast<double>(item.weight);
-        const double m = w * (static_cast<double>(box.x) + 0.5 * static_cast<double>(box.length));
-        weight += w;
-        moment += m;
-        if (item.unloadOrder) leaving.push_back({*item.unloadOrder, {w, m}});
+        const auto& order = problem.items[static_cast<std::size_t>(box.item)].unloadOrder;
+        if (order) stops.push_back(*order);
     }
-    std::sort(leaving.begin(), leaving.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(stops.begin(), stops.end());
+    stops.erase(std::unique(stops.begin(), stops.end()), stops.end());
     const auto stage = [&](std::optional<int> afterStop) {
+        double weight = 0.0;
+        double moment = 0.0;
+        double size = 0.0;
+        for (const Box& box : packing.boxes) {
+            const Item& item = problem.items[static_cast<std::size_t>(box.item)];
+            if (afterStop && item.unloadOrder && *item.unloadOrder <= *afterStop) continue;
+            const double w = static_cast<double>(item.weight);
+            const double m =
+                    w * (static_cast<double>(box.x) + 0.5 * static_cast<double>(box.length));
+            weight += w;
+            moment += m;
+            size += std::fabs(m);
+        }
         const double onFront = (pr * weight - moment) / span;
         out.push_back({afterStop, {emptyFront + onFront, emptyRear + (weight - onFront)}});
+        if (scales != nullptr) {
+            scales->push_back(weight +
+                              ((std::fabs(pf) + std::fabs(pr)) * weight + size) / std::fabs(span) +
+                              std::fabs(emptyFront) + std::fabs(emptyRear));
+        }
     };
     stage(std::nullopt);
-    for (std::size_t i = 0; i < leaving.size();) {
-        const int stop = leaving[i].first;
-        for (; i < leaving.size() && leaving[i].first == stop; ++i) {
-            weight -= leaving[i].second.first;
-            moment -= leaving[i].second.second;
-        }
-        stage(stop);
-    }
+    for (int stop : stops) stage(stop);
+}
+
+}  // namespace
+
+void axleStages(const ContainerLoadingProblem& problem, int container, const Packing& packing,
+                std::vector<AxleStage>& out) {
+    axleLoads(problem, container, packing, out, nullptr);
 }
 
 std::int64_t axleExcess(const ContainerLoadingProblem& problem, int container,
@@ -987,22 +1006,26 @@ std::int64_t axleExcess(const ContainerLoadingProblem& problem, int container,
     // A vehicle with nothing placed in it is not on the road.
     if (space.axleGroups.size() != 2 || packing.boxes.empty()) return 0;
     std::vector<AxleStage> stages;
-    axleStages(problem, container, packing, stages);
-    double worst = 0.0;
-    for (const AxleStage& stage : stages) {
-        double over = 0.0;
+    std::vector<double> scales;
+    axleLoads(problem, container, packing, stages, &scales);
+    std::int64_t worst = 0;
+    for (std::size_t s = 0; s < stages.size(); ++s) {
+        // Each group's excess rounded up to a whole unit. The tolerance absorbs
+        // the rounding of the shares; it grows with the size of the numbers
+        // they come from (about 1e-11 of it), so a load computed to exactly
+        // its limit is not counted over it.
+        std::int64_t over = 0;
         for (std::size_t g = 0; g < 2; ++g) {
             const double limit = static_cast<double>(space.axleGroups[g].maxLoad);
-            over += std::max(0.0, stage.loads[g] - limit);
+            const double excess = stages[s].loads[g] - limit;
+            const double tolerance = std::max(1e-6, 1e-11 * (scales[s] + limit));
+            if (excess > tolerance)
+                over += static_cast<std::int64_t>(std::ceil(excess - tolerance));
         }
         worst = std::max(worst, over);
     }
-    // A whole unit per started unit; the tolerance absorbs the rounding of the
-    // shares, as for the stacking loads.
-    const double tolerance = std::max(1e-6, 1e-12 * worst);
-    if (worst > tolerance)
-        packing.axleExcess = static_cast<std::int64_t>(std::ceil(worst - tolerance));
-    return packing.axleExcess;
+    packing.axleExcess = worst;
+    return worst;
 }
 
 std::int64_t stackingViolations(const ContainerLoadingProblem& problem, const Packing& packing) {

@@ -72,7 +72,7 @@ use clip=True (a threshold) or another level`. On soft it is allowed.
 | `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: the weight resting on each item above its `max_load_on_top`, rounded up per item |
 | `stacking_rule_cost` | `StackingRuleCost` | hard | 1 | per container: the pairs where an item stands on another although a stacking rule forbids its `stack_group` on the other's, plus the layers above each item's `max_stack_layers` |
 | `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs where an item with a higher `unload_order` stands between one with a lower order and the door, or above it |
-| `axle_load_cost` | `AxleLoadCost` | hard | 1 | per container with axle groups: at the worst stage of the route, what the two groups carry above `max_load` (lever rule), rounded up |
+| `axle_load_cost` | `AxleLoadCost` | hard | 1 | per container with axle groups: at the worst stage of the route, what the two groups carry above `max_load` (lever rule), each rounded up, added |
 | `segregation_cost` | `SegregationCost` | hard | 1 | per container: the pairs of placed items whose classes a rule keeps out of one container, plus the pairs closer than a rule's distance |
 | `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: the percent of half its length (width) its load's centre of gravity lies beyond `max_offset_length` (`max_offset_width`), each rounded up |
 | `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |

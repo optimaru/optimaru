@@ -268,7 +268,7 @@ The score is the engine's `Score` type as it is, with no mapping.
 | `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: over its placed items with `max_load_on_top`, the weight resting on the item above that limit, rounded up per item |
 | `stacking_rule_cost` | `StackingRuleCost` | hard | 1 | per container: the pairs (a, b) of placed items where a stands on b and a stacking rule forbids a's `stack_group` on b's, plus, over the placed items with `max_stack_layers`, the layers the tallest column through the item has beyond that limit |
 | `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs (a, b) of placed items with `unload_order(a) < unload_order(b)` where b blocks a |
-| `axle_load_cost` | `AxleLoadCost` | hard | 1 | per container with axle groups: at the worst stage (departure, or after a stop's items are off), what the two groups carry above their `max_load`, added and rounded up; 0 for one with no placed item |
+| `axle_load_cost` | `AxleLoadCost` | hard | 1 | per container with axle groups: at the worst stage (departure, or after a stop's items are off), what the two groups carry above their `max_load`, each rounded up, added; 0 for one with no placed item |
 | `segregation_cost` | `SegregationCost` | hard | 1 | per container: the pairs of its placed items whose classes a rule keeps out of one container, plus the pairs whose classes must keep a distance and stand closer than it |
 | `balance_limit_cost` | `BalanceLimitCost` | hard | 1 | per container: how far the placed items' centre of gravity lies from the container's centre beyond `max_offset_length` (in percent of half the length) plus beyond `max_offset_width` (in percent of half the width), each rounded up to a whole percent |
 | `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |
@@ -331,7 +331,12 @@ What the raw costs mean exactly:
   load of 100 with its middle at 1 carries 70 on the front and 30 on the rear. The loads are
   checked at departure and after each stop in increasing `unload_order` (its items taken
   off; items without an order stay to the end), and the worst stage counts: the sum over the
-  two groups of what lies above `max_load`, rounded up to a whole weight unit. A container
+  two groups of what lies above `max_load`, each rounded up to a whole weight unit (a load
+  computed to exactly its limit is not counted over it: about 1e-11 of the numbers the loads
+  come from is tolerated for rounding). A share that falls below 0 (a group lifted) or
+  below what a steer axle needs is not a violation here: `axle_load_cost` 0 says no group is
+  overloaded, not that the distribution is good. The groups are listed front first by
+  convention; only the order of the loads in `axle_loads` follows it. A container
   with no placed item costs nothing. Exactly two groups or none: with three or more the
   loads are not fixed by statics alone (the springs share them), so model a tandem or tridem
   as one group at its middle with its combined limit. For a semitrailer the front group is

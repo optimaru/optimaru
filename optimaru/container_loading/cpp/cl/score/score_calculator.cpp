@@ -49,7 +49,8 @@ void validate(const ContainerLoadingProblem& problem) {
         }
         if (container.tareWeight &&
             (*container.tareWeight < 0 || *container.tareWeight > kMaxLimit))
-            throw std::invalid_argument(what + ": tare_weight must be >= 0");
+            throw std::invalid_argument(what + ": tare_weight must be between 0 and " +
+                                        std::to_string(kMaxLimit));
         if (!container.axleGroups.empty() && container.axleGroups.size() != 2)
             throw std::invalid_argument(what +
                                         ": axle_groups must be two (front and rear) or none");
@@ -60,7 +61,8 @@ void validate(const ContainerLoadingProblem& problem) {
             if (axle.maxLoad < 0 || axle.maxLoad > kMaxLimit ||
                 (axle.emptyLoad && (*axle.emptyLoad < 0 || *axle.emptyLoad > kMaxLimit)))
                 throw std::invalid_argument(what + ": axle group '" + axle.id +
-                                            "': max_load and empty_load must be >= 0");
+                                            "': max_load and empty_load must be between 0 and " +
+                                            std::to_string(kMaxLimit));
         }
         if (container.axleGroups.size() == 2) {
             if (container.axleGroups[0].id == container.axleGroups[1].id)

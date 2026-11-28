@@ -206,7 +206,8 @@ void axleStages(const ContainerLoadingProblem& problem, int container, const Pac
                 std::vector<AxleStage>& out);
 
 // axleLoadCost: over the stages, the largest sum over the two groups of the
-// load above maxLoad, rounded up to a whole weight unit. 0 without axle groups
+// load above maxLoad, each group's rounded up to a whole weight unit (with a
+// tolerance of about 1e-11 of the numbers the loads come from). 0 without axle groups
 // and for a container that holds no placed item (a vehicle not on the road).
 std::int64_t axleExcess(const ContainerLoadingProblem& problem, int container,
                         const Packing& packing);

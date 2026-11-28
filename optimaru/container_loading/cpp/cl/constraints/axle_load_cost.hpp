@@ -11,7 +11,7 @@ namespace cl {
 // Hard, weight 1: axleLoadCost -- axle groups loaded above their limit. Raw
 // cost per container with two axle groups = over its stages (departure, and
 // after each stop's items are unloaded), the largest sum of what the groups
-// carry above their maxLoad, rounded up to a whole weight unit; 0 = no group
+// carry above their maxLoad, each group's rounded up to a whole weight unit; 0 = no group
 // is overloaded at any stage, or the container has no axle groups or holds no
 // placed item.
 //
