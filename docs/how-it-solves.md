@@ -9,8 +9,9 @@ how to add to it. The steps and their names are those of the flowchart on
 
 The loop itself is `Solver::run` in
 [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp). It holds no move: every
-part it draws on is a plugin under [`core/optimaru/search/`](../core/optimaru/search/),
-and the built-in ones use the same interfaces a use case registers its own with.
+operator it draws on is a plugin under [`core/optimaru/search/`](../core/optimaru/search/),
+the acceptance rules are in [`core/optimaru/accept/`](../core/optimaru/accept/) and the
+operator selection in [`core/optimaru/select/`](../core/optimaru/select/), and the built-in ones use the same interfaces a use case registers its own with.
 Each step below is marked in `Solver::solve` (step 1) and `Solver::run` (the rest) with a comment that names it
 (`// How it solves, 3: ...`), so you can find it there by its number.
 

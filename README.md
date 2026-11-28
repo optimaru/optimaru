@@ -328,8 +328,8 @@ core/optimaru/
 │                                 cheapest insertion
 ├── stop/                         when a solve ends (StopCondition) and the
 │                                 throttle long-running moves consult it through
-├── search/                       what the solver's step loop (Solver::run)
-│   │                             draws on; it holds no loop of its own
+├── search/                       the operators the solver's step loop
+│   │                             (Solver::run) draws; it holds no loop of its own
 │   ├── operators.hpp             the plugin points for custom operators
 │   │                             (MoveOperator / RuinOperator)
 │   ├── strategies.hpp            the built-in strategies of a solve and the
@@ -339,19 +339,21 @@ core/optimaru/
 │   │                             moves of list_move, with their previews),
 │   │                             descent, ejection chain, iterated local
 │   │                             search, route elimination
-│   ├── ruin_recreate/            one destroy-and-repair unit: the ruin operators
-│   │                             (random, related, worst, SISR, route) and
-│   │                             ruin_pool, the adaptive selection over them;
-│   │                             the greedy / regret-k recreate; kick, the
-│   │                             stagnation kick; ruin_recreate_move, the same
-│   │                             parts as an ordinary move
-│   ├── accept/                   Acceptor and one file per rule: hill climbing,
-│   │                             late acceptance, entity tabu, simulated
-│   │                             annealing, great deluge, step counting,
-│   │                             record-to-record travel; the factory
-│   │                             (make_acceptor); history_stages, late
-│   │                             acceptance in stages of growing history
-│   └── select/                   adaptive operator selection: MoveOutcome,
+│   └── ruin_recreate/            one destroy-and-repair unit: the ruin operators
+│                                 (random, related, worst, SISR, route) and
+│                                 ruin_pool, the adaptive selection over them;
+│                                 the greedy / regret-k recreate; kick, the
+│                                 stagnation kick; ruin_recreate_move, the same
+│                                 parts as an ordinary move
+├── accept/                       whether the step loop keeps a move: Acceptor
+│                                 and one file per rule: hill climbing, late
+│                                 acceptance, entity tabu, simulated annealing,
+│                                 great deluge, step counting, record-to-record
+│                                 travel; the factory (make_acceptor);
+│                                 history_stages, late acceptance in stages of
+│                                 growing history
+├── select/                       adaptive operator selection, which operator
+│                                 the step loop draws next: MoveOutcome,
 │                                 roulette wheel, segmented roulette, alpha-UCB,
 │                                 uniform
 ├── python/                       pybind11 helpers: constraint specs ->
