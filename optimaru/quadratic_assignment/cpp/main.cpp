@@ -12,6 +12,7 @@
 #include "qap/model/domain.hpp"
 #include "qap/score/score_calculator.hpp"
 #include "qap/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace qap;
 
@@ -39,7 +40,6 @@ QuadraticAssignmentProblem plantLayout() {
 
 QuadraticAssignmentProblem randomInstance(int n, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
-    std::uniform_int_distribution<int> value(0, 9);
     QuadraticAssignmentProblem problem;
     for (int i = 0; i < n; ++i) {
         problem.facilities.push_back({"F" + std::to_string(i), std::nullopt, -1});
@@ -49,8 +49,8 @@ QuadraticAssignmentProblem randomInstance(int n, std::uint64_t seed) {
     problem.distances.assign(n, std::vector<std::int64_t>(n, 0));
     for (int a = 0; a < n; ++a) {
         for (int b = a + 1; b < n; ++b) {
-            problem.flows[a][b] = problem.flows[b][a] = value(rng);
-            problem.distances[a][b] = problem.distances[b][a] = 1 + value(rng);
+            problem.flows[a][b] = problem.flows[b][a] = optimaru::random_int(rng, 0, 9);
+            problem.distances[a][b] = problem.distances[b][a] = 1 + optimaru::random_int(rng, 0, 9);
         }
     }
     return problem;

@@ -1,4 +1,5 @@
 #include "bp/construct/construction.hpp"
+#include "optimaru/utils/random.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -25,8 +26,8 @@ std::vector<int> tieShuffledOrder(const BinPackingProblem& problem, std::mt19937
                problem.items[order[end]].weight == problem.items[order[begin]].weight) {
             ++end;
         }
-        std::shuffle(order.begin() + static_cast<std::ptrdiff_t>(begin),
-                     order.begin() + static_cast<std::ptrdiff_t>(end), rng);
+        optimaru::random_shuffle(order.begin() + static_cast<std::ptrdiff_t>(begin),
+                                 order.begin() + static_cast<std::ptrdiff_t>(end), rng);
         begin = end;
     }
     return order;

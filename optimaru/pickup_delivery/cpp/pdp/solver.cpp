@@ -20,6 +20,7 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace pdp {
 
@@ -87,11 +88,9 @@ public:
         if (deliveryCount == 0 || vehicleCount == 0) return false;
         const int pool = Descriptor::unassigned_list(plan);
 
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-
         // Tier 1: prefer a broken request when there is one.
         int deliveryIndex = -1;
-        if (unit(rng) < repairProbability_) {
+        if (optimaru::random_unit(rng) < repairProbability_) {
             for (int attempt = 0; attempt < 8; ++attempt) {
                 const int candidate =
                         static_cast<int>(rng() % static_cast<std::uint64_t>(deliveryCount));
@@ -154,7 +153,8 @@ public:
             target = insertion.vehicle;
             greedyPickupPos = insertion.pickupPosition;
             greedyDropoffPos = insertion.dropoffPosition;
-        } else if (unit(rng) < assignmentProbability_ && (!grouped || riding < 0)) {
+        } else if (optimaru::random_unit(rng) < assignmentProbability_ &&
+                   (!grouped || riding < 0)) {
             // Not a request whose group rides on; one that rides alone while
             // the rest of its group waits may join them.
             target = pool;  // drop the request

@@ -10,6 +10,7 @@
 
 #include "bp/model/domain.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace bp {
 
@@ -72,7 +73,7 @@ public:
         for (int i = 0; i < n; ++i) {
             if (problem.items[i].bin == source) members_.push_back(i);
         }
-        std::shuffle(members_.begin(), members_.end(), rng);
+        optimaru::random_shuffle(members_.begin(), members_.end(), rng);
         std::stable_sort(members_.begin(), members_.end(), [&problem](int a, int b) {
             return problem.items[a].weight > problem.items[b].weight;
         });
@@ -248,7 +249,7 @@ public:
             members_[bin].clear();
             load_[bin] = 0;
         }
-        std::shuffle(removed_.begin(), removed_.end(), rng);
+        optimaru::random_shuffle(removed_.begin(), removed_.end(), rng);
         std::stable_sort(removed_.begin(), removed_.end(), [&problem](int a, int b) {
             return problem.items[a].weight > problem.items[b].weight;
         });

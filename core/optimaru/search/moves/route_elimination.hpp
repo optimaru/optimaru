@@ -14,6 +14,7 @@
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/model/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -95,7 +96,7 @@ public:
 
             // Reinsert one at a time, in random order, everywhere BUT the list
             // being emptied.
-            std::shuffle(displaced_.begin(), displaced_.end(), rng);
+            random_shuffle(displaced_.begin(), displaced_.end(), rng);
             for (int element : displaced_) {
                 repair_.insert_cheapest(editor, element, rng, /*exclude_list=*/target,
                                         repair_.excluded_list());

@@ -32,12 +32,12 @@ struct MoveDraw {
     const Settings& config;
     const Neighborhoods& nearby;
     ElementIndex<Solution>& index;
-    std::uniform_real_distribution<double> unit{0.0, 1.0};
 
     // A random nearby neighbour of `e`, drawn with NeighborSettings::probability
     // when nearby selection is configured; -1 means draw uniformly instead.
     int nearby_pick(int e, std::mt19937_64& rng) {
-        if (!nearby.enabled() || !(unit(rng) < config.selection.nearby.probability)) return -1;
+        if (!nearby.enabled() || !(random_unit(rng) < config.selection.nearby.probability))
+            return -1;
         const std::vector<int>& neighbours = nearby.of(e);
         return neighbours.empty() ? -1 : neighbours[rng() % neighbours.size()];
     }

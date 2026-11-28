@@ -12,6 +12,7 @@
 #include "mnt/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace mnt {
 
@@ -145,8 +146,8 @@ void Solver::solve(MaintenanceSchedule& schedule) {
                                              s, &calculator](std::mt19937_64& rng,
                                                              int jobIndex) -> int {
             if (probability < 1.0) {
-                std::uniform_real_distribution<double> unit(0.0, 1.0);
-                if (unit(rng) >= probability) return -1;  // fall back to the engine's uniform draw
+                if (optimaru::random_unit(rng) >= probability)
+                    return -1;  // fall back to the engine's uniform draw
             }
             const int lo = windows->lo[jobIndex];
             const int top = windows->top[jobIndex];

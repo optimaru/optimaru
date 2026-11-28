@@ -103,7 +103,8 @@ key nothing is sent.
   always runs on this machine.
 - `config` travels as the `SolverConfig` fields that differ from the defaults and
   `constraints` as the picks in their order, so a solve with the same seed and a step
-  limit gives the same result there as here on the same engine version. A `solve` keyword
+  limit gives the same result there as here on the same engine version, whichever platform
+  either runs on (every draw goes through `core/optimaru/utils/random.hpp`). A `solve` keyword
   or a `SolverConfig` field left at its default takes the default of the engine the API
   runs; a request carries all its own fields.
 - `use_api()` applies to the process that calls it. Worker processes that start fresh

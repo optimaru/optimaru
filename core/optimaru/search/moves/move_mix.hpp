@@ -126,13 +126,10 @@ private:
         const SelectionSettings& select = draw_.config.selection;
         const MoveMix& ms = draw_.config.moves;
         const int entity_count = Traits::entity_count(solution);
-        const int value_count = Traits::value_count(solution);
-        std::uniform_int_distribution<int> entity_pick(0, entity_count - 1);
-        std::uniform_int_distribution<int> value_pick(0, value_count - 1);
 
         int e = select.entity_hint ? select.entity_hint(rng) : -1;
-        if (e < 0) e = entity_pick(rng);
-        e = movable_entity(solution, e, entity_pick, rng);  // never move a pinned entity
+        if (e < 0) e = random_index(rng, entity_count);
+        e = movable_entity(solution, e, rng);  // never move a pinned entity
 
         const double swap_weight = entity_count < 2 ? 0.0 : ms.swap_weight;
         const double total = ms.change_weight + swap_weight;
@@ -140,10 +137,10 @@ private:
         SampledMove move;
         move.entities[0] = e;
         move.previous[0] = Traits::value_of(solution, e);
-        if (draw_.unit(rng) * total < ms.change_weight || total <= 0) {
-            apply_change(editor, draw_, value_pick, rng, move);
+        if (random_unit(rng) * total < ms.change_weight || total <= 0) {
+            apply_change(editor, draw_, rng, move);
         } else {
-            apply_swap(editor, draw_, entity_pick, rng, move);
+            apply_swap(editor, draw_, rng, move);
         }
         return move;
     }
@@ -170,7 +167,7 @@ private:
         const double total =
                 w_relocate + w_swap + w_two_opt + w_or_opt + w_tail_swap + w_inter_exchange;
 
-        const double dice = draw_.unit(rng) * total;
+        const double dice = random_unit(rng) * total;
         if (dice < w_relocate || element_count < 2 || total <= 0) {
             return sample_relocate(solution, draw_, rng, e1);
         }

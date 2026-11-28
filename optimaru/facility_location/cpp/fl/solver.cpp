@@ -12,6 +12,7 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace fl {
 
@@ -84,8 +85,7 @@ public:
         }
         if (members_.empty()) return false;
 
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-        const bool migrate = unit(rng) < migrateProbability_;
+        const bool migrate = optimaru::random_unit(rng) < migrateProbability_;
 
         // The victim is being emptied: its residual capacity is irrelevant
         // and it must never be picked as a target.
@@ -483,8 +483,7 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
         const double p = config.value_recommender_probability;
         engineConfig.selection.value_hint = [valuePreference, valueKeep, p](
                                                     std::mt19937_64& rng, int entityIndex) -> int {
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= p) return -1;
+            if (optimaru::random_unit(rng) >= p) return -1;
             const std::size_t base = static_cast<std::size_t>(entityIndex) * valueKeep;
             return (*valuePreference)[base + rng() % valueKeep];
         };

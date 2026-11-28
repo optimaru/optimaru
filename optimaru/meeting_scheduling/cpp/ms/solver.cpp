@@ -11,6 +11,7 @@
 #include "ms/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace ms {
 
@@ -89,14 +90,14 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule, int para
         engineConfig.selection.value_hint = [working, starts, dayFitProbability](
                                                     std::mt19937_64& rng,
                                                     int assignmentIndex) -> int {
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= dayFitProbability) return -1;
+            if (optimaru::random_unit(rng) >= dayFitProbability) return -1;
             const std::vector<int>& fit = (*starts)[assignmentIndex];
             if (fit.empty()) return -1;
             const int roomCount = working->roomCount();
-            return working->grainRoomOf(
-                    fit[rng() % fit.size()],
-                    static_cast<int>(rng() % static_cast<std::uint64_t>(roomCount)));
+            // Two statements: the order a call's arguments are evaluated in is
+            // the compiler's, and these two draws must come in one order.
+            const int grain = fit[rng() % fit.size()];
+            return working->grainRoomOf(grain, optimaru::random_index(rng, roomCount));
         };
     }
 

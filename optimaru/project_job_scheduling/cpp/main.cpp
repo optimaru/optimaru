@@ -14,20 +14,17 @@
 
 #include "pjs/model/domain.hpp"
 #include "pjs/solver.hpp"
+#include "optimaru/utils/random.hpp"
 
 using namespace pjs;
 
 namespace {
 
 int randInt(std::mt19937_64& rng, int minInclusive, int maxInclusive) {
-    std::uniform_int_distribution<int> pick(minInclusive, maxInclusive);
-    return pick(rng);
+    return optimaru::random_int(rng, minInclusive, maxInclusive);
 }
 
-double unitDraw(std::mt19937_64& rng) {
-    std::uniform_real_distribution<double> unit(0.0, 1.0);
-    return unit(rng);
-}
+double unitDraw(std::mt19937_64& rng) { return optimaru::random_unit(rng); }
 
 // Draws from a cumulative distribution table: the index of the first
 // cumulative threshold >= a unit draw.

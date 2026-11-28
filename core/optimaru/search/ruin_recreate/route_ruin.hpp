@@ -12,6 +12,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/search/ruin_recreate/random_ruin.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -51,7 +52,7 @@ public:
             // budget is what keeps the kick recoverable).
             std::vector<int> order(static_cast<std::size_t>(list_count));
             for (int l = 0; l < list_count; ++l) order[static_cast<std::size_t>(l)] = l;
-            std::shuffle(order.begin(), order.end(), rng);
+            random_shuffle(order.begin(), order.end(), rng);
 
             std::vector<int> ruined;
             ruined.reserve(static_cast<std::size_t>(ruin_count));

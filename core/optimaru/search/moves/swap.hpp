@@ -10,6 +10,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/search/moves/movable_entity.hpp"
 #include "optimaru/search/moves/move_draw.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -22,11 +23,9 @@ namespace optimaru {
 // Applies the move.
 //
 // Expects move.entities[0] = e and move.previous[0] = e's value, filled in by
-// MoveMixSampler before it chose this move. `entity_pick` is the sampler's own
-// distribution, passed in so the draws stay those of the sampler.
+// MoveMixSampler before it chose this move.
 template <typename Solution>
-void apply_swap(Editor<Solution>& editor, MoveDraw<Solution>& draw,
-                std::uniform_int_distribution<int>& entity_pick, std::mt19937_64& rng,
+void apply_swap(Editor<Solution>& editor, MoveDraw<Solution>& draw, std::mt19937_64& rng,
                 SampledMove& move) {
     using Traits = SolutionTraits<Solution>;
     Solution& solution = editor.solution();
@@ -34,11 +33,11 @@ void apply_swap(Editor<Solution>& editor, MoveDraw<Solution>& draw,
     const int e = move.entities[0];
     const int old_value = move.previous[0];
     int e2 = draw.nearby_pick(e, rng);
-    if (e2 < 0) e2 = entity_pick(rng);
-    e2 = movable_entity(solution, e2, entity_pick, rng);  // no pinned swap partner
+    if (e2 < 0) e2 = random_index(rng, entity_count);
+    e2 = movable_entity(solution, e2, rng);  // no pinned swap partner
     for (int attempt = 0; attempt < 8 && (e2 == e || Traits::value_of(solution, e2) == old_value);
          ++attempt) {
-        e2 = movable_entity(solution, entity_pick(rng), entity_pick, rng);
+        e2 = movable_entity(solution, random_index(rng, entity_count), rng);
     }
     if (e2 == e || Traits::value_of(solution, e2) == old_value) {
         for (int candidate = 0; candidate < entity_count; ++candidate) {

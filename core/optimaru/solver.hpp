@@ -35,6 +35,7 @@
 #include "optimaru/search/strategies.hpp"
 #include "optimaru/stop/stop_condition.hpp"
 #include "optimaru/utils/worker_threads.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 
@@ -216,7 +217,6 @@ private:
     // Run-scoped stop of one multi-start start (null outside solve_multistart).
     std::shared_ptr<std::atomic<bool>> run_stop_;
     // The draw of the custom operators' gate (custom_operators_get_a_turn).
-    std::uniform_real_distribution<double> unit_{0.0, 1.0};
 
     // The search: construction has run, `editor` holds its solution. Leaves
     // the best solution found in place and returns its score.
@@ -486,7 +486,7 @@ private:
         if (move_operators_.empty()) return false;
         double gate = config_.custom_moves.share;
         if (in_later_stage) gate *= config_.acceptance.later_stage_custom_move_share;
-        return gate >= 1.0 || (gate > 0.0 && unit_(rng) < gate);
+        return gate >= 1.0 || (gate > 0.0 && random_unit(rng) < gate);
     }
 
     // The acceptor a search starting at `initial_score` judges its moves by:

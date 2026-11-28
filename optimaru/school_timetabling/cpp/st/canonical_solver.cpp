@@ -15,6 +15,7 @@
 #include "st/search/moves/unassign.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace st::canon {
 
@@ -183,8 +184,7 @@ void Solver::solve(Timetable& table) {
         const double probability = config_.hot_lesson_probability;
         engineConfig.selection.entity_hint = [&calculator,
                                               probability](std::mt19937_64& rng) -> int {
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= probability) return -1;
+            if (optimaru::random_unit(rng) >= probability) return -1;
             return calculator.hotLesson(rng);
         };
     }
@@ -219,8 +219,7 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
         const double probability = config_.hot_lesson_probability;
         engineConfig.selection.entity_hint = [&hotSource,
                                               probability](std::mt19937_64& rng) -> int {
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= probability) return -1;
+            if (optimaru::random_unit(rng) >= probability) return -1;
             return hotSource.hotLesson(rng);
         };
     }

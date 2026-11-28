@@ -11,6 +11,7 @@
 #include "cs/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace cs {
 
@@ -66,8 +67,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                                                             int talkIndex) -> int {
             const std::vector<int>& values = (*compatibleValues)[talkIndex];
             if (values.empty()) return -1;  // fall back to the uniform draw
-            std::uniform_real_distribution<double> unit(0.0, 1.0);
-            if (unit(rng) >= probability) return -1;
+            if (optimaru::random_unit(rng) >= probability) return -1;
             return values[rng() % values.size()];
         };
     }
@@ -164,8 +164,7 @@ void Solver::solve(ConferenceSchedule& schedule) {
             const int talkCount = static_cast<int>(schedule.talks.size());
             segmentConfig.selection.entity_hint = [&calculator, probability,
                                                    talkCount](std::mt19937_64& rng) -> int {
-                std::uniform_real_distribution<double> unit(0.0, 1.0);
-                if (unit(rng) >= probability) return -1;
+                if (optimaru::random_unit(rng) >= probability) return -1;
                 for (int attempt = 0; attempt < 4; ++attempt) {
                     const int talk =
                             static_cast<int>(rng() % static_cast<std::uint64_t>(talkCount));

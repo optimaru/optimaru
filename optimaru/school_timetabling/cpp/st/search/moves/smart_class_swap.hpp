@@ -10,6 +10,7 @@
 
 #include "st/model/canonical_domain.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace st::canon {
 
@@ -117,8 +118,7 @@ private:
         }
         if (a < 0 || table.lessons[a].pinned) return false;
 
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-        if (unit(rng) < 0.25) {
+        if (optimaru::random_unit(rng) < 0.25) {
             const std::vector<int>& mates = lessonsOfClass_[classOf_[a]];
             const int slotA = table.lessons[a].slot;
             for (int attempt = 0; attempt < 8; ++attempt) {
