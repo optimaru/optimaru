@@ -22,3 +22,4 @@ benchmarks/vehicle-routing/bench/
 benchmarks/school-timetabling/out/
 benchmarks/school-timetabling/cpsat/out/
 site/
+.mkdocs-versioned.yml

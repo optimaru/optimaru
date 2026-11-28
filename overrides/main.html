@@ -1,0 +1,9 @@
+{#- The banner the theme's version selector shows on every version but the
+    newest release (extra.version, set by scripts/build_versioned_docs.py; a
+    plain mkdocs build has no selector and shows nothing). -#}
+{% extends "base.html" %}
+
+{% block outdated %}
+  This is not the documentation of the newest release.
+  <a href="{{ '../' ~ base_url }}" style="color: inherit; text-decoration: underline"><strong>Go to the newest release.</strong></a>
+{% endblock %}
