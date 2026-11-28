@@ -3,7 +3,7 @@
 Six steps, from a change that needs no build to a constraint that is on in every solve.
 Each step is complete by itself, so stop at the first one that does what you need.
 The engine contracts behind the steps are in [Extending a use case](../../extending.md);
-the model and its eight constraints are in the [guide](README.md) and [python.md](python.md).
+the model and its ten constraints are in the [guide](README.md) and [python.md](python.md).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
@@ -16,10 +16,12 @@ the model and its eight constraints are in the [guide](README.md) and [python.md
 
 The steps build one example: `gravityHeightCost`, how high a container's load sits. A
 pallet with its heavy cartons on top tips; a van with them on the floor drives better. The
-eight constraints say whether a box may stand where it stands and what the containers
+ten constraints say whether a box may stand where it stands and what the containers
 cost; none says that of two loadings that fit, the one with the weight low is the better.
 Every snippet below was compiled and run, and every figure measured, on optimaru 0.8.0
-with this use case added; a later change to the solver moves the figures, not the steps.
+with this use case added, when it had eight constraints (before `stacking_rule_cost` and
+`balance_limit_cost`, which add one row each to the catalogs the steps name); a later
+change to the solver moves the figures, not the steps.
 
 ## How a loading is scored
 
@@ -32,7 +34,7 @@ What sets this use case apart is that most costs are not functions of the list a
 They cost where the items **stand**, and that is derived: the decoder
 ([`cl/score/packing.hpp`](../../../optimaru/container_loading/cpp/cl/score/packing.hpp))
 places the list's items one after the other and returns a `Packing`, the placed boxes
-with their positions. Six of the seven unit constraints read a `Packing`; they share
+with their positions. Eight of the nine unit constraints read a `Packing`; they share
 one decode per container and list through `PackingContext`
 ([`constraints/common.hpp`](../../../optimaru/container_loading/cpp/cl/constraints/common.hpp)),
 so a move that touches a container decodes its candidate list once however many of them
@@ -47,7 +49,7 @@ the same loading (`cl_plugin_test` checks the assembly against a full recompute,
 | | `cl.solve(problem)` | `cl.solve(problem, constraints=[...])` |
 | --- | --- | --- |
 | Scored by | the assembly: one component per constraint, `cpp/cl/constraints/` | the same |
-| Constraints | the eight, at their defaults (two of them at weight 0) | the ones you list, with your knobs |
+| Constraints | the ten, at their defaults (two of them at weight 0) | the ones you list, with your knobs |
 | Steps per second | 39.4 thousand | 41.8 thousand with the defaults listed (one search: the difference is noise) |
 | Moves | the built-in list moves, `EmptyContainerMove`, `RepackPairMove`, `SwitchContainerMove`, `StopOrderMove` | the same |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -93,7 +95,7 @@ The domain has two levels: `level="medium"` raises `ValueError`. A compiled prob
 solved as it is given; a pydantic model that sets `max_load_on_top` while the list leaves
 `stacking_load_cost` out is refused (see
 [Parameters and their costs](README.md#parameters-and-their-costs)). Stop here if the
-constraint you need is one of the eight.
+constraint you need is one of the ten.
 
 ## 2. A new constraint from one function
 
@@ -279,12 +281,12 @@ ctest --test-dir build --output-on-failure     # cl_test, cl_plugin_test
 uv run pytest -q tests/container_loading tests/test_constraints_contract.py
 ```
 
-**The counts.** A ninth constraint fails three checks of `cl_plugin_test` and
+**The counts.** An eleventh constraint fails three checks of `cl_plugin_test` and
 eight Python tests. Update them:
 
-- `cl_plugin_test.cpp`: `rows.size() == 8` in both checks of `verifyCatalog()` (add a
-  `rowIs<GravityHeightCost>(rows[7], "gravityHeightCost", soft, 0.0, false)` and move the
-  global one to `rows[8]`), and `constraint_totals().size() == 8` in
+- `cl_plugin_test.cpp`: `rows.size() == 10` in both checks of `verifyCatalog()` (add a
+  `rowIs<GravityHeightCost>(rows[9], "gravityHeightCost", soft, 0.0, false)` and move the
+  global one to `rows[10]`), and `constraint_totals().size() == 10` in
   `verifyConstraintTotals()`;
 - `tests/container_loading/test_constraint_specs.py`: `NAMES` and `CLASSES` at the top (they
   feed `test_list_constraints_matches_the_spec_names`), the rows of
@@ -301,7 +303,7 @@ eight Python tests. Update them:
   cost a second time, from the positions and not from the `Packing`, is the check that the
   component computes what its comment says;
 - `tests/test_layout.py`: `test_a_guide_states_the_number_of_constraints_its_use_case_has`
-  reads "eight" in the first paragraph of this guide.
+  reads "ten" in the first paragraph of this guide.
 
 **Incremental against full.** Solve with every score checked against a full recompute, and
 every preview of a move against the score after the move. It raises `RuntimeError`
@@ -319,7 +321,7 @@ check in the suite, add the constraint with a weight to `weightedAssembly()` in
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `cl.constraint_info()`; add the row. The constraints are
-also counted or listed in "six of the eight are scored by default" under the README
+also counted or listed in "eight of the ten are scored by default" under the README
 table, in the docstrings of `constraints.py`, `__init__.py` and `_core.pyi`, in the
 comments of `common.hpp` and `constraints.hpp`, in the first paragraph of this guide, and
 the notebook `examples/container-loading.ipynb` prints the constraint list.
@@ -390,7 +392,7 @@ decodes are still valid for the problem.
 
 `cost()` returns what it returned before, and the solves end on the same scores. Steps per
 second at weight 0.01, the weight of the step-2 solve, in thousands, against
-39.4 to 41.8 for the eight constraints alone:
+39.4 to 41.8 for the defaults alone:
 
 | | At weight 0.01 |
 | --- | --- |
@@ -398,7 +400,7 @@ second at weight 0.01, the weight of the step-2 solve, in thousands, against
 | kept with the decode | 42.1 |
 
 The two rows differ by less than two runs of one row do on the machine these were measured
-on, and neither can be told from the eight constraints alone: the pass over the twenty
+on, and neither can be told from the defaults alone: the pass over the twenty
 boxes of a pallet is small next to their decode, which the constraint gets for nothing.
 Keeping a result with the decode pays for a cost that is quadratic in the boxes, as the
 stacking loads are. At weight 0 the constraint is asked on no move, kept or not.
@@ -477,7 +479,7 @@ With the example at weight 0.01 these failed, and are expected to:
   [`benchmarks/container-loading`](../../../benchmarks/container-loading) no longer
   compares one objective until it follows, and its published results change.
 
-With the ninth constraint on, the default solve ran at 41.7 thousand steps per second and
+With the new constraint on, the default solve ran at 41.7 thousand steps per second and
 ended where the picked one of step 4 did: it is the same assembly.
 
 ## 6. Measure

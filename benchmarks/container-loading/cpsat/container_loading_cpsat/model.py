@@ -19,7 +19,8 @@ covers the model's optimum is a bound no loading order can beat: an engine answe
 equals a proven optimum is optimal.
 
 What it leaves out, and refuses: `max_load_on_top` (the load an item passes down is
-shared by contact area, a division) and `unload_order`. It is quadratic in the number of
+shared by contact area, a division), `unload_order`, and the stacking rules, layer
+limits, `bottom_only`, stack heights and balance limits. It is quadratic in the number of
 items (a product per pair for the contact areas), so it is for instances of up to
 `MAX_ITEMS` items.
 """
@@ -74,6 +75,17 @@ def solve(problem: ContainerLoadingProblemModel, *, seconds: float, seed: int = 
     items, containers = problem.items, problem.containers
     if any(item.max_load_on_top is not None or item.unload_order is not None for item in items):
         raise ValueError("the CP-SAT model covers neither max_load_on_top nor unload_order")
+    if (
+        problem.stacking_rules
+        or any(item.bottom_only or item.max_stack_layers is not None or item.stack_group for item in items)
+        or any(
+            container.max_stack_height is not None
+            or container.max_offset_length is not None
+            or container.max_offset_width is not None
+            for container in containers
+        )
+    ):
+        raise ValueError("the CP-SAT model covers no stacking rules, layer limits, stack heights or balance limits")
     if len(items) > MAX_ITEMS:
         raise RuntimeError(f"the model is for up to {MAX_ITEMS} items, not {len(items)} (status=TOO_LARGE)")
     defaults = _default_weights()

@@ -23,7 +23,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def random_problem(seed: int) -> cl.ContainerLoadingProblem:
-    """Boxes with sides of 1 to 6 for a few spaces of two sizes, with every optional field in use."""
+    """Boxes with sides of 1 to 6 for a few spaces of two sizes, with every optional field in use
+    (stacking rules, layer limits, bottom_only, stack heights and balance limits included)."""
     rng = random.Random(seed)
     containers = [
         cl.Container(
@@ -33,6 +34,9 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             9,
             max_weight=rng.choice([None, 40, 60]),
             cost=rng.choice([1.0, 2.0, 2.5]),
+            max_stack_height=rng.choice([None, None, 7]),
+            max_offset_length=rng.choice([None, None, 0.1, 0.3]),
+            max_offset_width=rng.choice([None, None, 0.2]),
         )
         for c in range(rng.randint(2, 5))
     ]
@@ -47,10 +51,16 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             max_load_on_top=rng.choice([None, None, 0, 3, 8]),
             unload_order=rng.choice([None, 1, 2, 3]),
             group=rng.choice([None, "a", "b", "c"]),
+            bottom_only=rng.random() < 0.1,
+            max_stack_layers=rng.choice([None, None, None, 1, 2, 3]),
+            stack_group=rng.choice([None, "food", "chem"]),
         )
         for i in range(rng.randint(8, 40))
     ]
-    return cl.ContainerLoadingProblem(containers, items, min_support_ratio=rng.choice([0.5, 0.8, 1.0]))
+    rules = rng.choice([[], [("chem", "food")], [("chem", "food"), ("food", "food")]])
+    return cl.ContainerLoadingProblem(
+        containers, items, min_support_ratio=rng.choice([0.5, 0.8, 1.0]), stacking_rules=rules
+    )
 
 
 def scatter(problem: cl.ContainerLoadingProblem, rng: random.Random) -> None:

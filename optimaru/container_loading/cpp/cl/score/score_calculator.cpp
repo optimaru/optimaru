@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "cl/constraints.hpp"
@@ -40,6 +41,17 @@ void validate(const ContainerLoadingProblem& problem) {
             throw std::invalid_argument(what + ": max_weight must be >= 0");
         if (!std::isfinite(container.cost) || container.cost < 0.0)
             throw std::invalid_argument(what + ": cost must be finite and >= 0");
+        if (container.maxStackHeight &&
+            (*container.maxStackHeight <= 0 || *container.maxStackHeight > kMaxLength)) {
+            throw std::invalid_argument(what + ": max_stack_height must be between 1 and " +
+                                        std::to_string(kMaxLength));
+        }
+        for (const auto& [name, share] :
+             {std::pair{"max_offset_length", container.maxOffsetLength},
+              std::pair{"max_offset_width", container.maxOffsetWidth}}) {
+            if (share && !(*share >= 0.0 && *share <= 1.0))
+                throw std::invalid_argument(what + ": " + name + " must be between 0 and 1");
+        }
     }
     ids.clear();
     for (const Item& item : problem.items) {
@@ -53,6 +65,12 @@ void validate(const ContainerLoadingProblem& problem) {
         }
         if (item.maxLoadOnTop && *item.maxLoadOnTop < 0)
             throw std::invalid_argument(what + ": max_load_on_top must be >= 0");
+        if (item.maxStackLayers && *item.maxStackLayers < 1)
+            throw std::invalid_argument(what + ": max_stack_layers must be >= 1");
+    }
+    for (const StackingRule& rule : problem.stackingRules) {
+        if (rule.top.empty() || rule.bottom.empty())
+            throw std::invalid_argument("a stacking rule names an empty stack group");
     }
     std::vector<char> listed(problem.items.size(), 0);
     for (const Container& container : problem.containers) {
@@ -110,7 +128,9 @@ Score ConstraintTotals::toScore() const {
             UnplacedItemCost::kDefaultWeight * static_cast<double>(unplacedItemCost) +
             ContainerWeightCost::kDefaultWeight * static_cast<double>(containerWeightCost) +
             StackingLoadCost::kDefaultWeight * static_cast<double>(stackingLoadCost) +
-            UnloadingOrderCost::kDefaultWeight * static_cast<double>(unloadingOrderCost);
+            StackingRuleCost::kDefaultWeight * static_cast<double>(stackingRuleCost) +
+            UnloadingOrderCost::kDefaultWeight * static_cast<double>(unloadingOrderCost) +
+            BalanceLimitCost::kDefaultWeight * static_cast<double>(balanceLimitCost);
     const double soft = UsedContainerCost::kDefaultWeight * usedContainerCost +
                         GroupSplitCost::kDefaultWeight * static_cast<double>(groupSplitCost) +
                         UsedLengthCost::kDefaultWeight * static_cast<double>(usedLengthCost) +
@@ -128,6 +148,30 @@ void ScoreCalculator::prepare(ContainerLoadingProblem& problem) {
     problem.groupCount = 0;
     problem.anyLoadLimit = false;
     problem.anyUnloadOrder = false;
+    problem.anyLayerLimit = false;
+    for (Container& container : problem.containers) {
+        container.fillHeight = container.maxStackHeight
+                                       ? std::min(*container.maxStackHeight, container.height)
+                                       : container.height;
+    }
+    // The stack groups the rules name, numbered densely; an item's group that
+    // no rule names is -1, as no group.
+    std::unordered_map<std::string, int> stackGroups;
+    for (const StackingRule& rule : problem.stackingRules) {
+        for (const std::string* name : {&rule.top, &rule.bottom})
+            stackGroups.try_emplace(*name, static_cast<int>(stackGroups.size()));
+    }
+    problem.stackGroupCount = static_cast<int>(stackGroups.size());
+    problem.forbidden.assign(static_cast<std::size_t>(problem.stackGroupCount) *
+                                     static_cast<std::size_t>(problem.stackGroupCount),
+                             0);
+    for (const StackingRule& rule : problem.stackingRules) {
+        problem.forbidden[static_cast<std::size_t>(stackGroups.at(rule.top)) *
+                                  static_cast<std::size_t>(problem.stackGroupCount) +
+                          static_cast<std::size_t>(stackGroups.at(rule.bottom))] = 1;
+    }
+    problem.stackGroupOf.assign(count, -1);
+    problem.anyStackRule = false;
     std::unordered_map<std::string, int> groups;
     for (std::size_t i = 0; i < count; ++i) {
         const Item& item = problem.items[i];
@@ -141,6 +185,14 @@ void ScoreCalculator::prepare(ContainerLoadingProblem& problem) {
         }
         problem.anyLoadLimit = problem.anyLoadLimit || item.maxLoadOnTop.has_value();
         problem.anyUnloadOrder = problem.anyUnloadOrder || item.unloadOrder.has_value();
+        problem.anyLayerLimit = problem.anyLayerLimit || item.maxStackLayers.has_value();
+        if (item.stackGroup && problem.stackGroupCount > 0) {
+            const auto found = stackGroups.find(*item.stackGroup);
+            if (found != stackGroups.end()) {
+                problem.stackGroupOf[i] = found->second;
+                problem.anyStackRule = true;
+            }
+        }
     }
 }
 
@@ -191,7 +243,9 @@ ConstraintTotals ScoreCalculator::calculateTotals(ContainerLoadingProblem& probl
         decode(problem, unit, container.items, packing);
         totals.unplacedItemCost += packing.unplaced();
         totals.stackingLoadCost += stackingExcess(problem, packing);
+        totals.stackingRuleCost += stackingViolations(problem, packing);
         totals.unloadingOrderCost += unloadingBlocks(problem, packing);
+        totals.balanceLimitCost += balanceExcess(problem, unit, packing);
         if (!packing.boxes.empty()) totals.usedContainerCost += container.cost;
         totals.usedLengthCost += packing.usedLength;
         totals.loadBalanceCost += balancePerMille(problem, unit, packing);

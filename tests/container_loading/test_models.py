@@ -39,6 +39,7 @@ def test_the_field_names_are_the_contract():
         "containers",
         "items",
         "min_support_ratio",
+        "stacking_rules",
         "score_hard",
         "score_soft",
         "containers_used",
@@ -51,6 +52,9 @@ def test_the_field_names_are_the_contract():
         "height",
         "max_weight",
         "cost",
+        "max_stack_height",
+        "max_offset_length",
+        "max_offset_width",
         "initial_items",
         "items",
         "unplaced_items",
@@ -69,6 +73,9 @@ def test_the_field_names_are_the_contract():
         "max_load_on_top",
         "unload_order",
         "group",
+        "bottom_only",
+        "max_stack_layers",
+        "stack_group",
         "container",
         "sequence",
         "x",
@@ -87,6 +94,10 @@ def test_the_defaults():
     assert (container.max_weight, container.cost, container.initial_items, container.items) == (None, 1.0, [], None)
     assert (item.rotations, item.max_load_on_top, item.weight) == ("all", None, 15000)
     assert ItemModel(id="a", length=1, width=1, height=1).weight == 0
+    bare = ItemModel(id="a", length=1, width=1, height=1)
+    assert (bare.bottom_only, bare.max_stack_layers, bare.stack_group) == (False, None, None)
+    assert (container.max_stack_height, container.max_offset_length, container.max_offset_width) == (None, None, None)
+    assert model.stacking_rules == []
     assert (item.container, item.sequence, item.x, item.placed_length) == (None, None, None, None)
 
 
@@ -155,17 +166,19 @@ def test_a_solved_model_scores_as_solved_and_solves_on():
 
 def test_a_round_trip_never_scores_worse_than_the_solve():
     """Everything placed: the same score exactly. With unplaced items, which are loaded back
-    after the placed ones, never more of them."""
+    after the placed ones, never more of them (the hard score may still differ: an item placed
+    now may break a limit or move a centre of gravity, as `loading_order()` says)."""
     from .test_reference_parity import random_problem
 
     for seed in range(20):
         core = random_problem(300 + seed)
         config = cl.SolverConfig(stop={"time_limit_seconds": 30, "step_limit": 300}, run={"random_seed": seed})
         solved = cl.solve(ContainerLoadingProblemModel.from_core(core), config=config)
-        back = cl.calculate_score(solved.to_core())
+        again = solved.to_core()
+        back = cl.calculate_score(again)
         if not solved.unplaced_items:
             assert (back.hard, back.soft) == (solved.score_hard, solved.score_soft)
-        assert back.hard >= solved.score_hard
+        assert len(again.unplaced_items()) <= len(solved.unplaced_items)
 
 
 def test_initial_items_are_the_starting_point_and_stay_on_the_result():
@@ -224,6 +237,13 @@ def test_solve_request_is_solve_with_the_request_settings():
         (lambda data: data.update(min_support_ratio=0), "greater than 0"),
         (lambda data: data.update(min_support_ratio=1.2), "less than or equal to 1"),
         (lambda data: data.update(weights={"used_container_cost": 2}), "Extra inputs are not permitted"),
+        (lambda data: data["items"][0].update(max_stack_layers=0), "greater than or equal to 1"),
+        (lambda data: data["items"][0].update(stack_group=""), "at least 1 character"),
+        (lambda data: data["containers"][0].update(max_stack_height=0), "greater than 0"),
+        (lambda data: data["containers"][0].update(max_offset_length=1.5), "less than or equal to 1"),
+        (lambda data: data["containers"][0].update(max_offset_width=-0.1), "greater than or equal to 0"),
+        (lambda data: data.update(stacking_rules=[{"top": "", "bottom": "food"}]), "at least 1 character"),
+        (lambda data: data.update(stacking_rules=[{"top": "a", "bottom": "b", "allowed": True}]), "Extra inputs"),
     ],
 )
 def test_a_bad_model_is_refused(change, message):
@@ -236,3 +256,33 @@ def test_a_bad_model_is_refused(change, message):
 def test_an_empty_group_is_refused() -> None:
     with pytest.raises(ValidationError):
         ItemModel(id="a", length=1, width=1, height=1, group="")
+
+
+def test_the_stacking_inputs_go_through_to_the_engine_and_back():
+    """Every new input reaches the engine (it decodes by them) and comes back on the result."""
+    model = ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [
+                {"id": "c", "length": 8, "width": 4, "height": 10, "max_stack_height": 8, "max_offset_width": 0.5}
+            ],
+            "items": [
+                {"id": "food", "length": 4, "width": 4, "height": 4, "rotations": "fixed", "stack_group": "food"},
+                {"id": "chem", "length": 4, "width": 4, "height": 4, "rotations": "fixed", "stack_group": "chem"},
+                {"id": "pallet", "length": 4, "width": 4, "height": 4, "rotations": "fixed", "bottom_only": True},
+                {"id": "box", "length": 4, "width": 4, "height": 4, "rotations": "fixed", "max_stack_layers": 2},
+            ],
+            "stacking_rules": [{"top": "chem", "bottom": "food"}],
+        }
+    )
+    core = model.to_core()
+    assert core.stacking_rules == [("chem", "food")]
+    assert (core.containers[0].max_stack_height, core.containers[0].max_offset_width) == (8, 0.5)
+    assert (core.items[2].bottom_only, core.items[3].max_stack_layers, core.items[0].stack_group) == (True, 2, "food")
+    solved = cl.solve(model, time_limit_seconds=1.0, random_seed=0)
+    assert solved.score_hard == 0 and solved.unplaced_items == []
+    by_id = {item.id: item for item in solved.items}
+    assert by_id["pallet"].z == 0
+    assert all(item.z + item.placed_height <= 8 for item in solved.items)
+    assert not (by_id["chem"].z == 4 and (by_id["chem"].x, by_id["chem"].y) == (by_id["food"].x, by_id["food"].y))
+    assert solved.stacking_rules == model.stacking_rules
+    assert ContainerLoadingProblemModel.from_core(solved.to_core()).containers[0].max_stack_height == 8

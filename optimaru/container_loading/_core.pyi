@@ -12,7 +12,8 @@ caller's unit.
 
 Score (hard/soft, lexicographic), at the default weights: hard = -(items that found no
 place + weight above a container's max_weight + weight on an item above its
-max_load_on_top + pairs where a later item blocks an earlier one), soft = -(cost of the
+max_load_on_top + stacking rules and layer limits broken + pairs where a later item
+blocks an earlier one + centre of gravity beyond its limits, per mille), soft = -(cost of the
 containers in use + containers a group is in beyond its first). The weights are the C++
 components' defaults (constraint_info()); the problem carries none.
 """
@@ -40,7 +41,7 @@ class Rotation(Enum):
     """As given."""
 
 class Item:
-    """One box. The fields after `group` are derived: `calculate_score` and every solve write them."""
+    """One box. The fields after `stack_group` are derived: `calculate_score` and every solve write them."""
 
     def __init__(
         self,
@@ -53,6 +54,9 @@ class Item:
         max_load_on_top: int | None = None,
         unload_order: int | None = None,
         group: str | None = None,
+        bottom_only: bool = False,
+        max_stack_layers: int | None = None,
+        stack_group: str | None = None,
     ) -> None: ...
     id: str
     length: int
@@ -68,6 +72,12 @@ class Item:
     """Lower leaves first (a route's stop number). None = no order."""
     group: str | None
     """Items of one group belong in one container."""
+    bottom_only: bool
+    """Only on the floor (z = 0); other items may stand on it."""
+    max_stack_layers: int | None
+    """At most this many items in a column through it, itself included (>= 1). None = no limit."""
+    stack_group: str | None
+    """The group the problem's stacking_rules name."""
     @property
     def container(self) -> int:
         """Index of the container it stands in; -1 = not placed."""
@@ -102,6 +112,9 @@ class Container:
         max_weight: int | None = None,
         cost: float = 1.0,
         items: list[int] = ...,
+        max_stack_height: int | None = None,
+        max_offset_length: float | None = None,
+        max_offset_width: float | None = None,
     ) -> None: ...
     id: str
     length: int
@@ -111,6 +124,14 @@ class Container:
     max_weight: int | None
     cost: float
     """What using this container costs (1 = count containers)."""
+    max_stack_height: int | None
+    """How high the load may reach (1 to 1,000,000; the decoder fills up to the lower of it and
+    `height`). None = up to `height`."""
+    max_offset_length: float | None
+    """How far the placed load's centre of gravity may lie from the centre along x, as a share
+    of half the length (0 to 1). None = no limit."""
+    max_offset_width: float | None
+    """The same across, as a share of half the width. None = no limit."""
     items: list[int]
     """The decision variable: item indices in loading order."""
     @property
@@ -138,18 +159,24 @@ class ContainerLoadingProblem:
 
     ValueError for what the engine refuses: a min_support_ratio outside (0, 1], a repeated
     id, a size outside 1..1,000,000, a weight outside 0..1,000,000,000, a negative limit
-    or cost, an item listed twice, or items without a container."""
+    or cost, a max_stack_layers below 1, a max_stack_height outside 1..1,000,000, an offset
+    limit outside 0..1, a stacking rule with an empty group, an item listed twice, or items
+    without a container."""
 
     def __init__(
         self,
         containers: list[Container],
         items: list[Item],
         min_support_ratio: float = 0.8,
+        stacking_rules: list[tuple[str, str]] = ...,
     ) -> None: ...
     containers: list[Container]
     items: list[Item]
     min_support_ratio: float
     """Share of an item's base that must rest on the floor or on other items, in (0, 1]."""
+    stacking_rules: list[tuple[str, str]]
+    """(top, bottom): items whose stack_group is top may not stand on items whose stack_group
+    is bottom. Anything not listed is allowed."""
     @property
     def score(self) -> Score: ...
     def loading(self) -> list[list[int]]:
@@ -210,8 +237,9 @@ class SolverConfig:
 
         first_fit_decreasing: bool
         """True (default): the items no list holds go group by group and largest first
-        (those that leave last before the others, those with a max_load_on_top after
-        them), each into the first container that takes it. False: the engine's
+        (those that leave last before the others, the bottom_only ones before the rest,
+        those with a max_load_on_top after them), each into the first container that takes
+        it. False: the engine's
         cheapest insertion places them."""
 
     construction: Construction
@@ -249,7 +277,7 @@ class SolverConfig:
         containers into the others in a single step, the only way past the
         containers-used step function. An item moves only where the decoder still
         places it and everything placed before, within the weight limit, and without
-        breaking a stacking limit or the unloading order."""
+        breaking a stacking limit, a stacking rule or the unloading order."""
         empty_container_candidates: int
         """EmptyContainerMove empties one of this many least filled containers in use
         (3; 1 = always the least filled). ValueError below 1."""
@@ -357,8 +385,9 @@ class Solver:
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    unplaced_item_cost, container_weight_cost, stacking_load_cost, unloading_order_cost,
-    used_container_cost, used_length_cost, load_balance_cost, group_split_cost.
+    unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
+    unloading_order_cost, balance_limit_cost, used_container_cost, used_length_cost,
+    load_balance_cost, group_split_cost.
     The same names optimaru.container_loading.constraints uses."""
 
 def constraint_costs(
@@ -368,7 +397,7 @@ def constraint_costs(
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. The seven per-container
+    "default_weight": float, "default_level": str}}. The nine per-container
     constraints list one cost per container, an empty one included; group_split_cost
     (global) lists the one total. None = the default constraints; a pick list (as for
     solve) scores exactly those picks, each entry carrying its pick's knobs, the k-th
@@ -388,7 +417,7 @@ class ConstraintInfo(NamedTuple):
 
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order:
-    unplaced_item_cost, container_weight_cost, stacking_load_cost and
-    unloading_order_cost (hard, 1), used_container_cost (soft, 1), used_length_cost and
+    unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
+    unloading_order_cost and balance_limit_cost (hard, 1), used_container_cost (soft, 1), used_length_cost and
     load_balance_cost (soft, 0: opt-in, default_enabled False), group_split_cost
     (soft, 1); all flippable, none a reward."""

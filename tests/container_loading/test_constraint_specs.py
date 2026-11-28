@@ -11,21 +11,25 @@ import pytest
 
 import optimaru.container_loading as cl
 from optimaru.container_loading.constraints import (
+    BalanceLimitCost,
     ContainerWeightCost,
     GroupSplitCost,
     Level,
     LoadBalanceCost,
     StackingLoadCost,
+    StackingRuleCost,
     UnloadingOrderCost,
     UnplacedItemCost,
     UsedContainerCost,
     UsedLengthCost,
+    balance_limit_cost,
     container_weight_cost,
     get_constraints,
     group_split_cost,
     load_balance_cost,
     score,
     stacking_load_cost,
+    stacking_rule_cost,
     unloading_order_cost,
     unplaced_item_cost,
     used_container_cost,
@@ -38,7 +42,9 @@ NAMES = [
     "unplaced_item_cost",
     "container_weight_cost",
     "stacking_load_cost",
+    "stacking_rule_cost",
     "unloading_order_cost",
+    "balance_limit_cost",
     "used_container_cost",
     "used_length_cost",
     "load_balance_cost",
@@ -49,7 +55,9 @@ CLASSES = (
     UnplacedItemCost,
     ContainerWeightCost,
     StackingLoadCost,
+    StackingRuleCost,
     UnloadingOrderCost,
+    BalanceLimitCost,
     UsedContainerCost,
     UsedLengthCost,
     LoadBalanceCost,
@@ -109,7 +117,9 @@ def test_list_constraints_matches_the_spec_names():
         unplaced_item_cost,
         container_weight_cost,
         stacking_load_cost,
+        stacking_rule_cost,
         unloading_order_cost,
+        balance_limit_cost,
         used_container_cost,
         used_length_cost,
         load_balance_cost,
@@ -143,6 +153,8 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("hard", 1.0, True, False, True),
         ("hard", 1.0, True, False, True),
         ("hard", 1.0, True, False, True),
+        ("hard", 1.0, True, False, True),
+        ("hard", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
         ("soft", 0.0, True, False, False),
         ("soft", 0.0, True, False, False),
@@ -157,7 +169,9 @@ def test_constraint_costs_are_the_raw_costs_by_hand():
         "unplaced_item_cost": [0, 1],
         "container_weight_cost": [5, 0],
         "stacking_load_cost": [0, 0],
+        "stacking_rule_cost": [0, 0],
         "unloading_order_cost": [1, 0],
+        "balance_limit_cost": [0, 0],
         "used_container_cost": [2, 1],
         "used_length_cost": [8, 4],
         "load_balance_cost": BALANCE,
@@ -170,6 +184,29 @@ def test_constraint_costs_are_the_raw_costs_by_hand():
         assert entry["global"] is (row.name == "group_split_cost")
         assert (entry["name"], entry["label"]) == (row.name, "")
         assert "medium_fold" not in entry  # no medium level in this domain
+    # The two scoped constraints evaluate no container here: nothing sets their inputs.
+    assert raw["stacking_rule_cost"]["units"] == [] and raw["balance_limit_cost"]["units"] == []
+    assert "units" not in raw["stacking_load_cost"]
+
+
+def test_the_scoped_constraints_evaluate_the_containers_that_use_them():
+    """stacking_rule_cost is scoped to every container once an item can break a rule or a layer
+    limit, balance_limit_cost to the containers with a limit; constraint_costs() names them."""
+    problem = hand()
+    containers = problem.containers
+    containers[1].max_offset_width = 0.1
+    problem.containers = containers
+    items = problem.items
+    items[0].max_stack_layers = 1
+    problem.items = items
+    raw = cl.constraint_costs(problem)
+    assert raw["stacking_rule_cost"]["units"] == [0, 1]
+    assert raw["balance_limit_cost"]["units"] == [1]
+    # c1 holds only c (d finds no place), centred across: within the limit.
+    assert raw["balance_limit_cost"]["costs"] == [0, 0]
+    # A literal offset charges the evaluated containers only.
+    assert engine_score(problem, [BalanceLimitCost(level="soft", offset=5, clip=False)]) == (0, 5.0)
+    assert score(raw, [BalanceLimitCost(level="soft", offset=5, clip=False)]) == (0, 5.0)
 
 
 def test_the_default_score_by_hand():

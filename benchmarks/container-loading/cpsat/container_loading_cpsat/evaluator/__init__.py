@@ -13,9 +13,11 @@ This module has the shape the comparison runner asks of a use case package
 its `PACKAGE`. For the engine's answers the runner also compares the score computed
 here with the one the engine reported itself.
 
-Two of the eight constraints are outside the CP-SAT model (stacking loads and unloading
+Two of the constraints are outside the CP-SAT model (stacking loads and unloading
 order); they are scored here all the same, so an instance that uses them is still
-compared correctly for the engine and refused by the model.
+compared correctly for the engine and refused by the model. The stacking rules, layer
+limits, `bottom_only`, stack heights and balance limits are not scored here: no instance
+of the comparison sets them, and a model that does is refused (ValueError).
 """
 
 from __future__ import annotations
@@ -140,9 +142,27 @@ def _balance(container, boxes) -> int:
     return math.floor(1000 * offset / math.hypot(container.length / 2, container.width / 2) + 0.5)
 
 
+def _refuse_unscored_inputs(model: ContainerLoadingProblemModel) -> None:
+    """The inputs this evaluator does not score: a model that sets one is refused."""
+    unscored = [
+        f"item {item.id}" for item in model.items if item.bottom_only or item.max_stack_layers or item.stack_group
+    ] + [
+        f"container {container.id}"
+        for container in model.containers
+        if container.max_stack_height is not None
+        or container.max_offset_length is not None
+        or container.max_offset_width is not None
+    ]
+    if model.stacking_rules:
+        unscored.append("the problem's stacking_rules")
+    if unscored:
+        raise ValueError(f"the evaluator does not score stacking rules, layers or balance limits: {unscored[:3]}")
+
+
 def raw_costs(model: ContainerLoadingProblemModel) -> dict[str, list[float]]:
     """Every constraint's raw cost from the positions of a solved model: one per container, or
     the one total of group_split_cost."""
+    _refuse_unscored_inputs(model)
     by_id = {item.id: item for item in model.items}
     names = [name for name in container_loading.list_constraints() if name != "group_split_cost"]
     costs: dict[str, list[float]] = {name: [] for name in names}
@@ -155,7 +175,9 @@ def raw_costs(model: ContainerLoadingProblemModel) -> dict[str, list[float]]:
         costs["unplaced_item_cost"].append(len(container.unplaced_items or []))
         costs["container_weight_cost"].append(max(0, weight - limit) if limit is not None else 0)
         costs["stacking_load_cost"].append(_stacking_excess(boxes))
+        costs["stacking_rule_cost"].append(0)  # refused above when anything could break one
         costs["unloading_order_cost"].append(_unloading_blocks(boxes))
+        costs["balance_limit_cost"].append(0)
         costs["used_container_cost"].append(container.cost if boxes else 0.0)
         costs["used_length_cost"].append(max((box.x + box.placed_length for box in boxes), default=0))
         costs["load_balance_cost"].append(_balance(container, boxes))

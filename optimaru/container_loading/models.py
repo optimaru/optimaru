@@ -35,6 +35,7 @@ __all__ = [
     "ContainerLoadingRequest",
     "ContainerModel",
     "ItemModel",
+    "StackingRuleModel",
     "parameter_uses",
     "solve_request",
     "with_initial_solution",
@@ -77,6 +78,21 @@ class ItemModel(StrictModel):
     group: str | None = Field(
         default=None, min_length=1, description="Items of one group belong in one container (the items of an order)."
     )
+    bottom_only: bool = Field(
+        default=False, description="Only on the floor (z = 0); other items may still stand on it."
+    )
+    max_stack_layers: int | None = Field(
+        default=None,
+        ge=1,
+        le=10**9,
+        description=(
+            "At most this many items in a column through this item, itself included: the items under "
+            "it down to the floor and the tallest chain on top of it. None = no limit."
+        ),
+    )
+    stack_group: str | None = Field(
+        default=None, min_length=1, description="The group the problem's stacking_rules name."
+    )
 
     container: str | None = Field(
         default=None, description="Output: id of the container it stands in; None = not placed."
@@ -104,6 +120,30 @@ class ContainerModel(StrictModel):
     max_weight: int | None = Field(default=None, ge=0, le=MAX_LIMIT, description="Weight it may hold. None = no limit.")
     cost: float = Field(
         default=1.0, ge=0, allow_inf_nan=False, description="What using this container costs (1 = count containers)."
+    )
+    max_stack_height: int | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_LENGTH,
+        description="How high the load may reach, below `height` (a hand's height). None = up to `height`.",
+    )
+    max_offset_length: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "How far the placed load's centre of gravity may lie from the centre along x, as a share "
+            "of half the length. None = no limit."
+        ),
+    )
+    max_offset_width: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "How far the placed load's centre of gravity may lie from the centre along y, as a share "
+            "of half the width. None = no limit."
+        ),
     )
     initial_items: list[str] = Field(
         default_factory=list,
@@ -147,6 +187,13 @@ class ContainerModel(StrictModel):
         return [*self.items, *(self.unplaced_items or [])]
 
 
+class StackingRuleModel(StrictModel):
+    """Items whose `stack_group` is `top` may not stand on items whose `stack_group` is `bottom`."""
+
+    top: str = Field(min_length=1, description="The stack group of the item on top.")
+    bottom: str = Field(min_length=1, description="The stack group of the item it may not stand on.")
+
+
 class ContainerLoadingProblemModel(StrictModel):
     """The containers and the items to load into them. The score fields, `containers_used`
     and `unplaced_items` are outputs."""
@@ -159,9 +206,16 @@ class ContainerLoadingProblemModel(StrictModel):
         le=1,
         description="Share of an item's base that must rest on the floor or on other items.",
     )
+    stacking_rules: list[StackingRuleModel] = Field(
+        default_factory=list,
+        description="Pairs of stack groups where the top one may not stand on the bottom one; anything else may.",
+    )
     score_hard: int | None = Field(
         default=None,
-        description="Negative weighted hard score (unplaced items, weight and stacking limits, unloading order).",
+        description=(
+            "Negative weighted hard score (unplaced items, weight and stacking limits, stacking rules, "
+            "unloading order, centre of gravity limits)."
+        ),
     )
     score_soft: float | None = Field(
         default=None, description="Negative weighted soft score (cost of the containers used, split groups)."
@@ -205,6 +259,9 @@ class ContainerLoadingProblemModel(StrictModel):
                     max_weight=container.max_weight,
                     cost=container.cost,
                     items=[index[item_id] for item_id in container.loading_order()],
+                    max_stack_height=container.max_stack_height,
+                    max_offset_length=container.max_offset_length,
+                    max_offset_width=container.max_offset_width,
                 )
                 for container in self.containers
             ],
@@ -219,10 +276,14 @@ class ContainerLoadingProblemModel(StrictModel):
                     max_load_on_top=item.max_load_on_top,
                     unload_order=item.unload_order,
                     group=item.group,
+                    bottom_only=item.bottom_only,
+                    max_stack_layers=item.max_stack_layers,
+                    stack_group=item.stack_group,
                 )
                 for item in self.items
             ],
             min_support_ratio=self.min_support_ratio,
+            stacking_rules=[(rule.top, rule.bottom) for rule in self.stacking_rules],
         )
 
     @classmethod
@@ -246,6 +307,9 @@ class ContainerLoadingProblemModel(StrictModel):
                     height=container.height,
                     max_weight=container.max_weight,
                     cost=container.cost,
+                    max_stack_height=container.max_stack_height,
+                    max_offset_length=container.max_offset_length,
+                    max_offset_width=container.max_offset_width,
                     items=[items[i].id for i in container.placed_items],
                     unplaced_items=[items[i].id for i in container.unplaced_items],
                     loaded_weight=container.loaded_weight,
@@ -266,6 +330,9 @@ class ContainerLoadingProblemModel(StrictModel):
                     max_load_on_top=item.max_load_on_top,
                     unload_order=item.unload_order,
                     group=item.group,
+                    bottom_only=item.bottom_only,
+                    max_stack_layers=item.max_stack_layers,
+                    stack_group=item.stack_group,
                     **(
                         {
                             "container": containers[item.container].id,
@@ -284,6 +351,7 @@ class ContainerLoadingProblemModel(StrictModel):
                 for item in items
             ],
             min_support_ratio=problem.min_support_ratio,
+            stacking_rules=[StackingRuleModel(top=top, bottom=bottom) for top, bottom in problem.stacking_rules],
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
             containers_used=problem.containers_used(),
@@ -297,12 +365,18 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
     `solve` refuses a model whose selection holds none of a parameter's costs
     (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
     docs/use-cases/README.md. The sizes and `min_support_ratio` are read by the decoder,
-    whatever the selection, and `cost` is `used_container_cost`'s own scale."""
-    uses = [
-        ParameterUse(f"container {container.id}", "max_weight", None, ("container_weight_cost",))
-        for container in problem.containers
-        if container.max_weight is not None
-    ]
+    whatever the selection, and so are `bottom_only` and `max_stack_height`; `cost` is
+    `used_container_cost`'s own scale."""
+    uses = []
+    for container in problem.containers:
+        where = f"container {container.id}"
+        if container.max_weight is not None:
+            uses.append(ParameterUse(where, "max_weight", None, ("container_weight_cost",)))
+        for field in ("max_offset_length", "max_offset_width"):
+            if getattr(container, field) is not None:
+                uses.append(ParameterUse(where, field, None, ("balance_limit_cost",)))
+    if problem.stacking_rules:
+        uses.append(ParameterUse("the problem", "stacking_rules", [], ("stacking_rule_cost",)))
     for item in problem.items:
         where = f"item {item.id}"
         if item.max_load_on_top is not None:
@@ -311,6 +385,9 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
             uses.append(ParameterUse(where, "unload_order", None, ("unloading_order_cost",)))
         if item.group is not None:
             uses.append(ParameterUse(where, "group", None, ("group_split_cost",)))
+        for field in ("max_stack_layers", "stack_group"):
+            if getattr(item, field) is not None:
+                uses.append(ParameterUse(where, field, None, ("stacking_rule_cost",)))
     return uses
 
 
@@ -363,6 +440,9 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 height=container.height,
                 max_weight=container.max_weight,
                 cost=container.cost,
+                max_stack_height=container.max_stack_height,
+                max_offset_length=container.max_offset_length,
+                max_offset_width=container.max_offset_width,
                 initial_items=orders.get(container.id, []),
             )
             for container in problem.containers
@@ -378,10 +458,14 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 max_load_on_top=item.max_load_on_top,
                 unload_order=item.unload_order,
                 group=item.group,
+                bottom_only=item.bottom_only,
+                max_stack_layers=item.max_stack_layers,
+                stack_group=item.stack_group,
             )
             for item in problem.items
         ],
         min_support_ratio=problem.min_support_ratio,
+        stacking_rules=[rule.model_copy() for rule in problem.stacking_rules],
     )
 
 

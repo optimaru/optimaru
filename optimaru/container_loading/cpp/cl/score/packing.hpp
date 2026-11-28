@@ -25,7 +25,9 @@ namespace cl {
 //     one of its allowed orientations is feasible. Feasible = inside the
 //     container, overlapping no placed item, and with at least
 //     minSupportRatio of its base resting on the floor or on the tops of
-//     placed items.
+//     placed items. The container's top is its fillHeight (maxStackHeight,
+//     at most its height), and a bottomOnly item is tried only at points on
+//     the floor.
 //   - Of the orientations feasible at that point, it takes the one that
 //     divides the free room best: the one with the most axes along which the
 //     room from the point to the next item or wall is a whole multiple of the
@@ -38,15 +40,18 @@ namespace cl {
 //     points).
 //   - An item for which no point works is unplaced. It stays in the list,
 //     changes nothing for the items after it, and unplacedItemCost counts it.
-//   - When items set an unloadOrder or a maxLoadOnTop, a place is also
-//     judged by what it would break, and the first point that breaks nothing
-//     wins over earlier ones that do. A place "blocks" when the item would
-//     stand in the way of a placed item that leaves earlier (between it and
-//     the door, or above it), or have a placed item that leaves later in its
-//     own way; it "overloads" when its weight, passed down through the items
-//     it stands on, would put more on a placed item than that item's
-//     maxLoadOnTop. The item goes to the first point where some orientation
-//     does neither; if there is none, to the first that only blocks; if
+//   - When items set an unloadOrder, a maxLoadOnTop, a maxStackLayers or a
+//     stackGroup a stacking rule names, a place is also judged by what it
+//     would break, and the first point that breaks nothing wins over earlier
+//     ones that do. A place "blocks" when the item would stand in the way of a
+//     placed item that leaves earlier (between it and the door, or above it),
+//     or have a placed item that leaves later in its own way; it "overloads"
+//     when its weight, passed down through the items it stands on, would put
+//     more on a placed item than that item's maxLoadOnTop, when it would stand
+//     on a placed item (or have one stand on it) against a stacking rule, or
+//     when it would make a column taller than its own maxStackLayers or that
+//     of an item under it. The item goes to the first point where some
+//     orientation does neither; if there is none, to the first that only blocks; if
 //     there is none either, to the first feasible point, as without them.
 //     So an item is never left unplaced for the sake of an order or a limit,
 //     and a list in the construction's order (what leaves last first) comes
@@ -126,6 +131,12 @@ struct Packing {
     std::vector<int> supportStart;
     std::vector<int> supportBox;
     std::vector<double> supportShare;
+    // Only when some item sets maxStackLayers: per box, its layer (1 = on the
+    // floor, else one above the highest box it stands on) and how many items
+    // stand in the tallest column on it. The supports above are then kept
+    // too (also without load limits).
+    std::vector<int> level;
+    std::vector<int> above;
 
     int unplaced() const { return static_cast<int>(members.size() - boxes.size()); }
 
@@ -134,6 +145,8 @@ struct Packing {
     mutable std::int64_t stackingExcess = -1;
     mutable std::int64_t unloadingBlocks = -1;
     mutable int balancePerMille = -1;
+    mutable std::int64_t stackingViolations = -1;
+    mutable std::int64_t balanceExcess = -1;
 };
 
 // Decode `members` as the loading order of container `container` into `out`.
@@ -160,6 +173,15 @@ void measureRoom(const ContainerLoadingProblem& problem, int container, const Pa
 // shared by contact area (an item on the floor passes it to the floor).
 std::int64_t stackingExcess(const ContainerLoadingProblem& problem, const Packing& packing);
 
+// stackingRuleCost: the pairs (a, b) of placed items where a stands on b (its
+// base on b's top, overlapping it in the floor plane) and a stacking rule
+// forbids a's stack group on b's, plus, over the placed items that set
+// maxStackLayers, the layers the tallest column through the item has beyond
+// that limit. A column through an item: the item, the items under it down to
+// the floor (its layer: 1 on the floor, else one above the highest item it
+// stands on) and the tallest chain of items standing on it.
+std::int64_t stackingViolations(const ContainerLoadingProblem& problem, const Packing& packing);
+
 // unloadingOrderCost: the pairs (a, b) of placed items with unloadOrder(a) <
 // unloadOrder(b) where b is in a's way out: between a and the door (at or
 // beyond a's far end along x, overlapping a in y and z) or above a (at or
@@ -171,6 +193,14 @@ std::int64_t unloadingBlocks(const ContainerLoadingProblem& problem, const Packi
 // (0 = centred, 1000 = in a corner), rounded to the nearest whole number. 0
 // for a container whose placed items weigh nothing.
 int balancePerMille(const ContainerLoadingProblem& problem, int container, const Packing& packing);
+
+// balanceLimitCost: how far the placed items' centre of gravity lies beyond
+// the container's maxOffsetLength along x and its maxOffsetWidth along y, in
+// thousandths of half the length (width), each axis rounded up to a whole
+// thousandth and the two added. 0 for a container without the limits or
+// whose placed items weigh nothing.
+std::int64_t balanceExcess(const ContainerLoadingProblem& problem, int container,
+                           const Packing& packing);
 
 // ---------------------------------------------------------------------------
 // PackingCache
@@ -195,8 +225,9 @@ public:
 
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
-    // (sizes, rotations, the support ratio, and the weights, load limits and
-    // unloading orders the decode and the kept costs read) are not the ones
+    // (sizes, rotations, the support ratio, the stack heights, bottomOnly, the
+    // layer limits and stacking rules, and the weights, load limits, unloading
+    // orders and balance limits the decode and the kept costs read) are not the ones
     // the kept decodes were made for. The facts are compared through a
     // 64-bit hash, which is trusted: a collision (practically impossible)
     // would keep decodes made for other facts.

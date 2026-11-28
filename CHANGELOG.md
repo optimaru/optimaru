@@ -5,6 +5,23 @@
 - **Documentation by version.** The documentation site has a version menu: `latest/` (the newest
   release), `dev/` (`main`) and one copy per release minor since 0.4, each linking to repository files
   at its own tag. The old addresses redirect to `latest/`.
+- **Container loading: stacking rules and a centre of gravity limit.** New inputs, all off by
+  default (a request that sets none of them solves exactly as before):
+  - item `bottom_only` (only on the floor) and container `max_stack_height` (how high the load
+    may reach): the decoder's, no cost needed;
+  - item `max_stack_layers` (at most this many items in a column through it), item
+    `stack_group` and the problem's `stacking_rules` (`{"top": ..., "bottom": ...}`: the top
+    group may not stand on the bottom one), scored by the new hard constraint
+    `stacking_rule_cost` (pairs against a rule plus layers above a limit); the decoder steers
+    away from places that break them, as it does for load limits;
+  - container `max_offset_length` / `max_offset_width` (how far the load's centre of gravity
+    may lie from the centre, as a share of half the length or width), scored by the new hard
+    constraint `balance_limit_cost` (thousandths beyond the limit).
+  Both constraints are scoped (`constraint_costs()` names their `units`), so a problem that
+  does not use them pays nothing for them per move. The construction loads `bottom_only`
+  items first, and it, `EmptyContainerMove` and `RepackPairMove` keep the stacking rules as
+  they keep the load limits. The CP-SAT comparison refuses instances that set the new inputs.
+
 - **Container loading: vehicle loads in stop order.** A cargo space with items for many stops
   often came back with hundreds of unloading-order pairs left. Four changes:
   - The decoder judges a place by what it would break when items set `unload_order` or

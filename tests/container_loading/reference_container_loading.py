@@ -3,8 +3,9 @@
 It does not decode anything. It takes the positions a solve returned and
 
 - `loading_faults(model)` checks that they are a loading at all: every placed item inside
-  its container, in an orientation its `rotations` allow, overlapping no other item, with at
-  least `min_support_ratio` of its base on the floor or on the tops of other items, and the
+  its container and below its `max_stack_height`, in an orientation its `rotations` allow,
+  overlapping no other item, with at least `min_support_ratio` of its base on the floor or on
+  the tops of other items, on the floor when `bottom_only`, and the
   per-container outputs (`items`, `sequence`, `loaded_weight`, `loaded_volume`, `fill_ratio`,
   `used_length`) agreeing with the items;
 - `raw_costs(model)` recomputes every constraint's raw cost from those positions, written
@@ -64,6 +65,10 @@ def loading_faults(model) -> list[str]:
                 or box.z + box.placed_height > container.height
             ):
                 faults.append(f"{box.id}: outside {container.id}")
+            if container.max_stack_height is not None and box.z + box.placed_height > container.max_stack_height:
+                faults.append(f"{box.id}: above the stack height of {container.id}")
+            if box.bottom_only and box.z > 0:
+                faults.append(f"{box.id}: bottom_only, yet off the floor")
             supported = 0
             for other in boxes:
                 if other is box:
@@ -138,6 +143,54 @@ def _unloading_blocks(boxes) -> int:
     return blocks
 
 
+def _stacking_violations(model, boxes) -> int:
+    """Pairs where an item stands on another against a stacking rule, plus the layers above each
+    item's max_stack_layers in the tallest column through it."""
+    forbidden = {(rule.top, rule.bottom) for rule in model.stacking_rules}
+    under = {box.id: [] for box in boxes}
+    for box, other in itertools.permutations(boxes, 2):
+        touching = _span(box.x, box.placed_length, other.x, other.placed_length) and _span(
+            box.y, box.placed_width, other.y, other.placed_width
+        )
+        if other.z + other.placed_height == box.z and touching:
+            under[box.id].append(other)
+    pairs = sum((box.stack_group, other.stack_group) in forbidden for box in boxes for other in under[box.id])
+    level, above = {}, {box.id: 0 for box in boxes}
+    for box in sorted(boxes, key=lambda box: box.z):  # bottom up
+        level[box.id] = 1 + max((level[other.id] for other in under[box.id]), default=0)
+    for box in sorted(boxes, key=lambda box: -box.z):  # top down
+        for other in under[box.id]:
+            above[other.id] = max(above[other.id], above[box.id] + 1)
+    layers = sum(
+        max(0, level[box.id] + above[box.id] - box.max_stack_layers)
+        for box in boxes
+        if box.max_stack_layers is not None
+    )
+    return pairs + layers
+
+
+def _balance_excess(container, boxes) -> int:
+    """Thousandths of the half size the centre of gravity lies beyond each limit, rounded up; a
+    millionth of a thousandth over is not counted (a limit such as 0.3 is not exact in binary)."""
+    weight = sum(box.weight for box in boxes)
+    if weight == 0:
+        return 0
+    excess = 0
+    for limit, size, centre in (
+        (container.max_offset_length, container.length, lambda box: 2 * box.x + box.placed_length),
+        (container.max_offset_width, container.width, lambda box: 2 * box.y + box.placed_width),
+    ):
+        if limit is None:
+            continue
+        # The centre of gravity times 2, as an exact fraction; the offset as a share of half the size.
+        doubled = Fraction(sum(box.weight * centre(box) for box in boxes), weight)
+        over = 1000 * (abs(doubled - size) / size - Fraction(limit))
+        tolerance = Fraction(1, 10**6)
+        if over > tolerance:
+            excess += math.ceil(over - tolerance)
+    return excess
+
+
 def _balance(container, boxes) -> int:
     weight = sum(box.weight for box in boxes)
     if weight == 0:
@@ -158,7 +211,9 @@ def raw_costs(model) -> dict[str, list[float]]:
             "unplaced_item_cost",
             "container_weight_cost",
             "stacking_load_cost",
+            "stacking_rule_cost",
             "unloading_order_cost",
+            "balance_limit_cost",
             "used_container_cost",
             "used_length_cost",
             "load_balance_cost",
@@ -173,7 +228,9 @@ def raw_costs(model) -> dict[str, list[float]]:
         costs["unplaced_item_cost"].append(len(container.unplaced_items))
         costs["container_weight_cost"].append(max(0, weight - limit) if limit is not None else 0)
         costs["stacking_load_cost"].append(_stacking_excess(boxes))
+        costs["stacking_rule_cost"].append(_stacking_violations(model, boxes))
         costs["unloading_order_cost"].append(_unloading_blocks(boxes))
+        costs["balance_limit_cost"].append(_balance_excess(container, boxes))
         costs["used_container_cost"].append(container.cost if boxes else 0.0)
         costs["used_length_cost"].append(max((box.x + box.placed_length for box in boxes), default=0))
         costs["load_balance_cost"].append(_balance(container, boxes))
