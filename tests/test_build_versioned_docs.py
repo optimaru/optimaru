@@ -39,3 +39,25 @@ def test_a_page_may_not_shadow_a_version_folder(tmp_path, name):
     _page(tmp_path / "latest", name)
     with pytest.raises(SystemExit):
         docs.write_redirects(tmp_path, "https://example.org/docs/", "0.9", {"dev", "0.9", "0.8"})
+
+
+def test_a_release_tree_links_its_tag_and_gets_the_banner(tmp_path):
+    hooks = tmp_path / "scripts" / "mkdocs_hooks.py"
+    hooks.parent.mkdir()
+    hooks.write_text('url = f"{GITHUB}/{kind}/main/{repo_path}"\n')
+    (tmp_path / "mkdocs.yml").write_text("site_name: optimaru\n")
+    docs.prepare_release_tree(tmp_path, "v0.4.3")
+    assert "/{kind}/v0.4.3/" in hooks.read_text()
+    assert (tmp_path / "overrides" / "main.html").is_file()
+    # A tag without custom_dir gets one; a release has no edit link; dev keeps its own config.
+    assert docs.release_overrides(tmp_path, "v0.4.3") == {"edit_uri": "", "theme": {"custom_dir": "overrides"}}
+    (tmp_path / "mkdocs.yml").write_text("theme:\n  custom_dir: overrides\n")
+    assert docs.release_overrides(tmp_path, "v0.9.0") == {"edit_uri": ""}
+    assert docs.release_overrides(tmp_path, "main") == {}
+
+
+def test_a_tag_keeps_its_own_banner_template(tmp_path):
+    (tmp_path / "overrides").mkdir()
+    (tmp_path / "overrides" / "main.html").write_text("own")
+    docs.prepare_release_tree(tmp_path, "v0.9.0")
+    assert (tmp_path / "overrides" / "main.html").read_text() == "own"

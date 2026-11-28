@@ -19,14 +19,15 @@ Run it with the docs requirements, from a clone that has the release tags
         python scripts/build_versioned_docs.py --out site \\
         --site-url https://optimaru.github.io/optimaru/
 
-It needs Python 3.12 or later (``tarfile``'s extraction filter). Every version is built with the MkDocs of this environment: the requirements
+Every version is built with the MkDocs of this environment: the requirements
 have been the same pins since 0.4. Release builds are not strict (their
 warnings cannot be fixed any more); ``--strict`` applies to ``dev``. A release
 is built from ``git archive`` of its tag, where two things are adjusted: its
 links to repository files name the tag instead of ``main``, and the theme gets
 the version banner (overrides/main.html) when the tag predates it. An older
 release that fails to build is left out of the menu with a warning; dev or the
-newest release failing fails the run.
+newest release failing fails the run. Pull requests build every release too, on
+purpose: a change to docs/requirements.txt that breaks an old tag shows there.
 """
 
 from __future__ import annotations
@@ -97,6 +98,18 @@ def prepare_release_tree(tree: Path, ref: str) -> None:
         shutil.copyfile(banner, target)
 
 
+def release_overrides(tree: Path, ref: str) -> dict:
+    """What the wrapper changes in a release's config, beyond the version selector."""
+    if ref == "main":
+        return {}
+    # No edit link on frozen docs: GitHub cannot edit a file on a tag, and main may have moved it.
+    extra: dict = {"edit_uri": ""}
+    # 0.4 and 0.5 had no custom_dir: without one they would not read the banner template.
+    if "custom_dir:" not in (tree / "mkdocs.yml").read_text():
+        extra["theme"] = {"custom_dir": "overrides"}
+    return extra
+
+
 def build(tree: Path, out: Path, site_url: str, ref: str, strict: bool) -> None:
     """Build the site of ``tree`` into ``out``, with the version selector turned on."""
     wrapper = tree / WRAPPER
@@ -106,8 +119,7 @@ def build(tree: Path, out: Path, site_url: str, ref: str, strict: bool) -> None:
             {
                 "INHERIT": "mkdocs.yml",
                 "site_url": site_url,
-                # 0.4 and 0.5 had no custom_dir: without it they would not read the banner template.
-                "theme": {"custom_dir": "overrides"},
+                **release_overrides(tree, ref),
                 "extra": {"version": {"provider": "mike", "default": LATEST, "alias": True}},
             }
         )
@@ -145,6 +157,7 @@ def write_redirects(out: Path, site_url: str, newest: str, versions: set[str]) -
     """
     latest = out / LATEST
     count = 0
+    # Version folders are always top-level, so only a page's first path segment can collide.
     for page in latest.rglob("index.html"):
         rel = page.parent.relative_to(latest).as_posix()
         rel = "" if rel == "." else f"{rel}/"
