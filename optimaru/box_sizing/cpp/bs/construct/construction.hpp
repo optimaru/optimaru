@@ -26,6 +26,13 @@ namespace bs {
 // it comes to the top of the queue (lazy greedy): the same picks as
 // evaluating every size every round.
 //
+// Step 2 is a greedy cover, which is not exact: with candidates that do not
+// nest (a tall box and a flat one), it can spend the limit on sizes that take
+// many parcels each and leave a parcel for one size more, although another
+// set of maxBoxTypes sizes takes them all. The start is then above the limit,
+// and closing the size that was one too many is a single CloseBoxMove
+// (bs_test builds such an instance).
+//
 // A parcel that already has a box (a seed) stays put, and every size a seed
 // ships in is open, also when the seed uses more sizes than maxBoxTypes. When
 // maxBoxTypes is reached with parcels no open size takes (at once, with such

@@ -195,6 +195,10 @@ needs no search: among the boxes that take a parcel, the cheapest is the one wit
   size with the largest saving (what the parcels that would move to it save, less the
   fixed cost of a size when `box_type_cost` has a weight), until `max_box_types` is reached
   or no size saves anything. `time_limit_seconds=0` returns this construction as it is.
+  The cover is greedy and so not exact: with candidates that do not nest (a tall box and a
+  flat one) it can use up the limit and leave a parcel for one size more, although another
+  set within the limit takes them all. The search then starts one size over the limit, and
+  closing that size is one `CloseBoxMove`.
 - **`CloseBoxMove`** (`custom_moves.close_box`) takes one size out of use and sends each of
   its parcels to the cheapest remaining size that takes it.
 - **`OpenBoxMove`** (`custom_moves.open_box`) puts one more size into use and pulls in every

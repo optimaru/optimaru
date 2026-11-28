@@ -40,8 +40,10 @@ namespace bs {
 // that goes up and down inside its band puts the next refill off for as long
 // as it does (the figures of the guide were measured with this rule).
 //
-// Everything is counted in steps, so a seeded solve with a step limit is
-// reproducible. The engine keeps the best solution, whatever the walks do.
+// Everything is counted in steps (the engine calls on_step_end after every
+// step, whether the move was taken, turned down or not made), so a seeded
+// solve with a step limit is reproducible. The engine keeps the best solution,
+// whatever the walks do.
 class ReheatingLateAcceptance final : public optimaru::Acceptor {
 public:
     static constexpr double kGaps[] = {0.005, 0.01, 0.02, 0.04, 0.08};

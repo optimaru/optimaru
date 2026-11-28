@@ -90,6 +90,9 @@ private:
             loss_[first] += static_cast<double>(ranking_->groupQuantity[g]) *
                             (next - ranking_->unitPrice[first]);
         }
+        // Every size may be as good as impossible to close (an infinite
+        // loss): the first one is then returned, and commit() brings in the
+        // size its parcels need or does not make the move.
         int best = closable_.front();
         for (int box : closable_) {
             if (loss_[box] < loss_[best]) best = box;

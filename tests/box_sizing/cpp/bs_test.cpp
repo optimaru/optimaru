@@ -365,6 +365,38 @@ void verifyConstruction() {
               "a seed keeps its box, the others use the open sizes");
     }
     {
+        // The cover is greedy, and candidates that do not nest can fool it.
+        // Cube takes the six small parcels, Tall three of them and two rods,
+        // Flat the other three and two plates. The cover opens Cube (six),
+        // then one of the two (two more), and at a limit of two the last two
+        // parcels need a third size: the start is one size over the limit,
+        // although Tall and Flat together take everything. The search gets
+        // there by closing Cube.
+        BoxSizingProblem p;
+        addBox(p, 20, 20, 20);                                // Cube
+        addBox(p, 10, 10, 40);                                // Tall
+        addBox(p, 5, 30, 30);                                 // Flat
+        for (int i = 0; i < 3; ++i) addParcel(p, 8, 8, 18);   // Cube or Tall
+        for (int i = 0; i < 3; ++i) addParcel(p, 4, 15, 18);  // Cube or Flat
+        for (int i = 0; i < 2; ++i) addParcel(p, 8, 8, 35);   // Tall only
+        for (int i = 0; i < 2; ++i) addParcel(p, 4, 25, 28);  // Flat only
+        p.maxBoxTypes = 2;
+        BoxSizingProblem start = p;
+        Solver::Config construction;
+        construction.time_limit = std::chrono::seconds(0);
+        Solver(construction).solve(start);
+        check(start.boxTypesUsed() == 3 && start.score.hard == -1,
+              "a greedy cover can start one size over the limit");
+        Solver::Config config;
+        config.time_limit = std::chrono::seconds(20);
+        config.step_limit = 200;
+        config.seed = 1;
+        Solver(config).solve(p);
+        check(p.score.hard == 0 && p.boxTypesUsed() == 2 &&
+                      p.assignment() == std::vector<int>{1, 1, 1, 2, 2, 2, 1, 1, 2, 2},
+              "and the search closes the size that was one too many");
+    }
+    {
         // A cost changes the order: M at a cost of 30000 per box is dearer
         // than L (27000 + 0), so nothing ships in M.
         BoxSizingProblem p = nested();
