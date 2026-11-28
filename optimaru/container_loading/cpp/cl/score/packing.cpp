@@ -281,10 +281,15 @@ std::int64_t stackingExcess(const ContainerLoadingProblem& problem, const Packin
     for (std::size_t index = 0; index < count; ++index) {
         const auto& limit = problem.items[static_cast<std::size_t>(boxes[index].item)].maxLoadOnTop;
         if (!limit) continue;
-        const double over = load[index] - static_cast<double>(*limit);
-        // A whole unit per started unit; the tolerance absorbs the rounding
-        // of the shares, which add up to a whole weight again.
-        if (over > 1e-6) excess += static_cast<std::int64_t>(std::ceil(over - 1e-6));
+        const double carried = static_cast<double>(*limit);
+        const double over = load[index] - carried;
+        // A whole unit per started unit. The tolerance absorbs the rounding
+        // of the shares, which add up to a whole weight again; double's
+        // rounding grows with the load (about 1e-5 at 1e11), so the tolerance
+        // is relative: 1e-12 of the load, at least 1e-6. Below 0.1 of a unit
+        // up to loads of 1e11, so a real excess of a whole unit always counts.
+        const double tolerance = std::max(1e-6, 1e-12 * std::max(load[index], carried));
+        if (over > tolerance) excess += static_cast<std::int64_t>(std::ceil(over - tolerance));
     }
     packing.stackingExcess = excess;
     return excess;

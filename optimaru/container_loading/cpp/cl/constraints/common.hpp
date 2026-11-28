@@ -68,6 +68,11 @@ struct PackingContext final : optimaru::SharedConstraintContext {
     PackingCache cache;
 
 private:
+    // The solution the last reset was handed. The engine's shared-context
+    // contract (SharedConstraintContext::on_list_changed) is that the lists
+    // changed are those of the solution handed in on_reset(), and every
+    // rebuild resets first, so this points at the solution being edited.
+    // Only pinning reads it; a decode never does.
     const ContainerLoadingProblem* problem_ = nullptr;
     std::uint64_t seen_ = 0;
 };

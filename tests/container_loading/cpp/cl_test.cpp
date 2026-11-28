@@ -6,7 +6,8 @@
 //       the container, no overlap, enough support), and a decode resumed from
 //       any shared prefix equals a decode from scratch
 //   (c) the costs of one decoded container by hand: stacking load (passed
-//       down, shared by contact area), unloading order (in front, on top),
+//       down, shared by contact area, exact at loads of 5.6e10), unloading
+//       order (in front, on top),
 //       used length, load balance
 //   (d) PackingCache: what it returns is decode()'s result, a repeated list
 //       is a hit, changed facts drop the decodes
@@ -375,6 +376,32 @@ void verifyCostsByHand() {
               "two bases and one item across them");
         check(ScoreCalculator::calculateTotals(p).stackingLoadCost == 1,
               "stacking: the load is shared by contact area, an excess of 0.5 counts 1");
+    }
+    {
+        // Heavy loads: 56 slabs of 997,041,038 on five supports of widths
+        // 6, 9, 8, 9 and 5 over a base that carries exactly their weight. The
+        // shares are not whole numbers, and in double they add up to about
+        // 8e-6 more than the total: the tolerance has to grow with the load.
+        constexpr int kSlabs = 56;
+        constexpr std::int64_t kSlabWeight = 997'041'038;
+        const int widths[] = {6, 9, 8, 9, 5};
+        ContainerLoadingProblem p;
+        addContainer(p, 1, 37, 2 + kSlabs);
+        const int base = addItem(p, 1, 37, 1, Rotation::Fixed, 1);
+        for (int width : widths) addItem(p, 1, width, 1, Rotation::Fixed, 0);
+        for (int slab = 0; slab < kSlabs; ++slab)
+            addItem(p, 1, 37, 1, Rotation::Fixed, kSlabWeight);
+        p.items[static_cast<std::size_t>(base)].maxLoadOnTop = kSlabs * kSlabWeight;
+        loadAll(p);
+        ScoreCalculator::score(p);
+        check(p.containers[0].unplacedItems.empty() && at(p.items[2], 0, 6, 1) &&
+                      at(p.items[6], 0, 0, 2),
+              "five supports side by side on the base, the slabs on them");
+        check(ScoreCalculator::calculateTotals(p).stackingLoadCost == 0,
+              "stacking: a base loaded to exactly its limit by 5.6e10 costs nothing");
+        p.items[static_cast<std::size_t>(base)].maxLoadOnTop = kSlabs * kSlabWeight - 1;
+        check(ScoreCalculator::calculateTotals(p).stackingLoadCost == 1,
+              "stacking: one unit over it still counts 1");
     }
     {
         // a leaves at stop 1, b at stop 2.

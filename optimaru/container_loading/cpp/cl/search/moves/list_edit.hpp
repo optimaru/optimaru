@@ -20,6 +20,11 @@ namespace cl {
 // In the moves a container is "in use" when its list is not empty, placed or
 // not; usedContainerCost and containers_used() count only containers with a
 // placed item. Not a bug: the acceptor judges every move by the score.
+//
+// The three moves keep decodes of their own (a PackingCache each), reset for
+// the problem they are built with. The solver builds its moves per solve
+// (cl/solver.cpp), so the facts cannot change under them; a move reused for
+// another problem would have to reset its cache first.
 
 // One of `list`'s elements, uniformly (the list is not empty).
 template <typename T>
