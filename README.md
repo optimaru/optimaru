@@ -330,11 +330,15 @@ core/optimaru/
 │   │                             (MoveOperator / RuinOperator)
 │   ├── strategies.hpp            the built-in strategies of a solve and the
 │   │                             draw among them
-│   ├── moves/                    every move the step loop draws: move_mix (the
-│   │                             ordinary moves: change, swap, and the sequence
-│   │                             moves of list_move, with their previews),
-│   │                             descent, ejection chain, iterated local
-│   │                             search, route elimination
+│   ├── moves/                    every move the step loop draws, one file
+│   │                             each: the ordinary moves (change, swap,
+│   │                             relocate, element swap, 2-opt, Or-opt, 2-opt*,
+│   │                             CROSS-exchange) and move_mix, the weighted draw
+│   │                             among them; list_move, the sequence moves'
+│   │                             preview / apply / undo; the strategies
+│   │                             descent, ejection chain, iterated local search
+│   │                             (with granular_local_search, its descent),
+│   │                             route elimination
 │   └── ruin_recreate/            one destroy-and-repair unit: the ruin operators
 │                                 (random, related, worst, SISR, route) and
 │                                 ruin_pool, the adaptive selection over them;

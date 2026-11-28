@@ -384,7 +384,7 @@ struct StrategySettings {
     // iteration only descends, so the construction result is a local optimum
     // before anything is perturbed. Needs nearby selection and a calculator
     // that serves previews; it declines every draw otherwise. See
-    // search/moves/iterated_local_search.hpp.
+    // search/moves/iterated_local_search.hpp and granular_local_search.hpp.
     double iterated_local_search_weight = 0.0;
     // Elements ruined per iteration, uniform in [min, max].
     int iterated_local_search_min_ruin = 5;

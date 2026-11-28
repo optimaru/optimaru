@@ -28,6 +28,17 @@ def test_every_subpackage_is_a_use_case():
     assert all((ROOT / "tests" / name).is_dir() for name in USE_CASES)
 
 
+def test_the_engine_top_level_holds_the_solver_and_folders():
+    """core/optimaru/ keeps the solver, its settings and its config at the top; everything
+    else is in a folder by role (model/, score/, construct/, stop/, search/, accept/,
+    select/, utils/, python/, testing/), as the README's engine tree shows."""
+    tracked = subprocess.run(["git", "ls-files", "core/optimaru"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    top = {path.split("/")[2] for path in tracked.stdout.splitlines() if path.count("/") == 2}
+    assert top == {"solver.hpp", "settings.hpp", "solver_config.hpp"}, top
+
+
 def test_a_use_case_keeps_only_its_sources_under_cpp():
     """What the extension and the core library build from. The C++ tests are in
     tests/<use case>/cpp/ and a C++ bench is in benchmarks/<slug>/cpp/. All four entries are
