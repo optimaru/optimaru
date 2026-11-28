@@ -3,9 +3,9 @@
 A metaheuristic optimization engine for real-world routing, scheduling,
 timetabling and allocation, with 22 ready-to-use models you call from Python.
 
-optimaru comes in a free, open-source edition, this repository, and an Enterprise
-edition, the optimaru API: the same engine run as a hosted service. A program
-that uses this package moves onto it with one setting, an API key
+This repository contains the free, open-source edition. The Enterprise edition
+hosts the same engine as the optimaru API. To switch an existing Python program
+to the API, add a single setting for the API key
 ([Solving on the optimaru API](#solving-on-the-optimaru-api)).
 
 Documentation: <https://optimaru.github.io/optimaru/> (built from [`docs/`](docs)
@@ -17,9 +17,9 @@ with MkDocs; the API reference is generated from the sources).
 pip install optimaru
 ```
 
-One package with every use case as a subpackage — `optimaru.vehicle_routing`,
-`optimaru.school_timetabling`, … — compiled for Linux, macOS and Windows
-(Python 3.11+, pydantic 2.11+). No C++ toolchain is needed. Every use case has
+Each use case has a subpackage, such as `optimaru.vehicle_routing` and
+`optimaru.school_timetabling`. Prebuilt wheels are available for Linux, macOS and
+Windows (Python 3.11+, pydantic 2.11+). No C++ toolchain is needed. Every use case has
 two entry points: `solve(problem, ...)` for a problem built in Python, and
 `solve_request(request)` for a pydantic request (JSON in, JSON out).
 

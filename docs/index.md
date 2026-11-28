@@ -10,9 +10,9 @@ header-only C++17 and ships compiled in the wheel.
 pip install optimaru
 ```
 
-One package with every use case as a subpackage — `optimaru.vehicle_routing`,
-`optimaru.school_timetabling`, … — compiled for Linux, macOS and Windows
-(Python 3.11+). No C++ toolchain is needed.
+Each use case has a subpackage, such as `optimaru.vehicle_routing` and
+`optimaru.school_timetabling`. Prebuilt wheels are available for Linux, macOS and
+Windows (Python 3.11+). No C++ toolchain is needed.
 
 ```python
 from optimaru import vehicle_routing as vrp
