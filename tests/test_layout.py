@@ -47,6 +47,17 @@ def test_cpp_draws_are_portable():
             if banned.search(code):
                 hits.append(f"{path}:{number}")
     assert not hits, f"draw through optimaru/utils/random.hpp instead: {hits}"
+    # Two draws in one call's arguments come in the compiler's order. A rough check, line by
+    # line: two draws on one line of code, which is how such a call usually looks.
+    draw = re.compile(r"\brandom_\w+\(|\.next_\w+\(|\brng\(\)")
+    doubled = []
+    for path in tracked.stdout.splitlines():
+        if not path.endswith((".cpp", ".hpp")) or path == "core/optimaru/utils/random.hpp":
+            continue
+        for number, line in enumerate((ROOT / path).read_text().splitlines(), 1):
+            if len(draw.findall(line.split("//", 1)[0])) >= 2:
+                doubled.append(f"{path}:{number}")
+    assert not doubled, f"two draws on one line: draw them in two statements: {doubled}"
 
 
 def test_the_engine_top_level_holds_the_solver_and_folders():

@@ -19,16 +19,24 @@ namespace optimaru {
 // and std::shuffle are implementation-defined: libstdc++ (the Linux wheels)
 // and libc++ (the macOS ones) turn the same generator output into different
 // numbers, so a seeded solve would end differently on each. These are written
-// out by hand and give the same numbers everywhere. tests/test_layout.py keeps
-// the std:: ones out of core/ and the use cases' C++.
+// out by hand and give the same numbers everywhere (tests/engine pins their
+// first outputs). tests/test_layout.py keeps the std:: ones out of core/ and
+// the use cases' C++.
+//
+// What they guarantee is the draws. Floating-point arithmetic on top of them
+// can still differ between platforms in the last bit: std::exp and std::log
+// are not correctly rounded on every libm, and a compiler may fuse a * b + c
+// into one instruction on one architecture and not on another.
 
-// Uniform in [0, n), for n > 0: the bounded draw the moves, the ruins and the
-// selection schemes share.
+// Uniform in [0, n): the bounded draw the moves, the ruins and the selection
+// schemes share; 0 when n <= 0. One draw and a modulo: the bias is about
+// n / 2^64, and a rejection loop would change every seeded result.
 inline int random_index(std::mt19937_64& rng, int n) {
+    if (n <= 0) return 0;
     return static_cast<int>(rng() % static_cast<std::uint64_t>(n));
 }
 
-// Uniform in [lo, hi], for lo <= hi.
+// Uniform in [lo, hi], for lo <= hi and hi - lo < INT_MAX.
 inline int random_int(std::mt19937_64& rng, int lo, int hi) {
     return lo + random_index(rng, hi - lo + 1);
 }
@@ -75,10 +83,7 @@ public:
     explicit PortableRandom(std::uint64_t seed) : engine_(seed) {}
 
     // Uniform in [0, bound); 0 when bound <= 0.
-    int next_int(int bound) {
-        if (bound <= 0) return 0;
-        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
-    }
+    int next_int(int bound) { return random_index(engine_, bound); }
 
     // Uniform in [0, bound); 0 when bound <= 0.
     std::int64_t next_long(std::int64_t bound) {

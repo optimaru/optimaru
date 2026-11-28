@@ -36,6 +36,7 @@
 #include "optimaru/solver_config.hpp"
 #include "optimaru/utils/worker_threads.hpp"
 #include "optimaru/testing/check.hpp"
+#include "optimaru/utils/random.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 
 using optimaru::Score;
@@ -1144,6 +1145,26 @@ TspSolution buildRandomTsp(int routeCount, int cityCount) {
 
 // nothing_placed: what a use case asks before it sets what only suits a
 // start from the construction.
+// The portable draws give these numbers for seed 42 on every platform: CI runs
+// this on Linux (libstdc++) and macOS (libc++), so a change to a primitive, or
+// a platform that draws differently, fails here before it moves any result.
+void testPortableDraws() {
+    std::printf("== utils/random.hpp: portable draws ==\n");
+    std::mt19937_64 rng(42);
+    std::vector<int> indices;
+    for (int i = 0; i < 4; ++i) indices.push_back(optimaru::random_index(rng, 1000));
+    check(indices == std::vector<int>{406, 824, 450, 662}, "random_index");
+    const double u1 = optimaru::random_unit(rng);
+    const double u2 = optimaru::random_unit(rng);
+    check(u1 == 0.90326896642837828 && u2 == 0.094068311762837031, "random_unit");
+    std::vector<int> shuffled{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    optimaru::random_shuffle(shuffled.begin(), shuffled.end(), rng);
+    check(shuffled == std::vector<int>{7, 4, 5, 0, 2, 1, 3, 8, 9, 6}, "random_shuffle");
+    check(optimaru::random_int(rng, -5, 5) == -3, "random_int");
+    check(!optimaru::random_bool(rng, 0.5), "random_bool");
+    check(optimaru::random_index(rng, 0) == 0, "random_index of an empty range is 0");
+}
+
 void testNothingPlaced() {
     std::printf("== construction: nothing placed ==\n");
     TaskAssignment tasks = buildTaskInstance();
@@ -2864,6 +2885,7 @@ int main() {
     testOperatorPools();
     testHistoryGrowth(separableOptimum);
     testHistoryGrowthOnAWarmStart(optimum);
+    testPortableDraws();
     testNothingPlaced();
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();

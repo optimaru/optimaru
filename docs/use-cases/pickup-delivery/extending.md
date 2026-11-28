@@ -546,7 +546,7 @@ for label, picked in (("default path", None), ("assembly", get_constraints())):
     print(f"{label:14s} {steps / seconds / 1e3:5.1f} k steps/s  {plan.score}")
 ```
 
-Both lines end on the same score, `0hard/0medium/-16066soft`: same seed, same steps,
+Both lines end on the same score, `0hard/0medium/-15501soft`: same seed, same steps,
 same scoring. If they differ after a change, the two paths no longer score alike.
 Each figure below is the median of three runs of the script, each the median of three
 solves. On a shared machine one solve can come out much slower than the others (75 against

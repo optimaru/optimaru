@@ -2,13 +2,17 @@
 
 ## Unreleased
 
-- **Seeded results are the same on every platform; every seeded result changes once.** The
+- **The random draws are the same on every platform; every seeded result changes once.** The
   engine and the use cases drew through the `std::` distributions and `std::shuffle`, which
   libstdc++ (the Linux wheels, the API) and libc++ (the macOS wheels) implement differently, so
   the same seed and step limit could end differently on each, and the API's result could differ
   from a local solve on a Mac. Every draw now goes through `core/optimaru/utils/random.hpp`
   (`random_index`, `random_int`, `random_unit`, `random_real`, `random_bool`, `random_normal`,
-  `random_shuffle`), written out by hand, and `tests/test_layout.py` keeps the `std::` ones out.
+  `random_shuffle`), written out by hand; `tests/test_layout.py` keeps the `std::` ones out and
+  the engine test pins their first outputs. Floating-point arithmetic on top of the draws
+  (`std::exp` in simulated annealing, fused multiply-adds) can still differ in the last bit
+  between architectures. `random_index` of an empty range is 0, as `PortableRandom::next_int`'s
+  was, instead of a division by zero.
   Five calls that drew twice in their arguments, whose order is the compiler's, draw in two
   statements: the meeting-scheduling room pick, and demo data (vehicle routing, pickup and
   delivery, employee scheduling, flight crew). The search is the same; its random numbers are
