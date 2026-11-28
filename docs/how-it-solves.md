@@ -60,7 +60,7 @@ construction's. The best is kept as a snapshot apart from the solution the searc
 works on, so a step that makes things worse never loses it, and it is put back
 when the solve ends.
 
-- Code: the start of `Solver::run`, and `SolutionSnapshot` in
+- Code: the start of `Solver::run` in [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp), and `SolutionSnapshot` in
   [`core/optimaru/model/snapshot.hpp`](../core/optimaru/model/snapshot.hpp).
 - Settings: `config.run.on_new_best` hears every new best.
 
@@ -88,7 +88,7 @@ configured trigger. Every kick doubles the wait, up to 4096 times the trigger, a
 best resets it, so the wait grows only while kicks find nothing. Where late acceptance runs in stages of growing history, a stall can
 start the next stage instead of a kick.
 
-- Code: the `patience` and `stalled` lines of `Solver::run`, and `HistoryStages`
+- Code: the `patience` and `stalled` lines of `Solver::run` in [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp), and `HistoryStages`
   in [`core/optimaru/search/accept/history_stages.hpp`](../core/optimaru/search/accept/history_stages.hpp).
 - Settings: `config.alns_trigger` (`enabled`, `unimproved_steps`). The stages are
   `AcceptanceSettings::history_growth` in C++, which a use case sets in its
@@ -211,7 +211,7 @@ was never applied).
 If the current solution is better than the best, it becomes the best (the snapshot
 is taken again) and the stall counters start over. Then the next step begins.
 
-- Code: the end of the step in `Solver::run`.
+- Code: the end of the step in `Solver::run`, in [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp).
 
 ## After the loop
 
