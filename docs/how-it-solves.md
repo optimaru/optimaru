@@ -155,7 +155,8 @@ acceptor judges like any other.
 
 If the use case adds moves of its own, then on a set share of the steps left an
 adaptive selector picks one of them or the move mix, by what each has found so
-far.
+far. (Box sizing lets them take turns evenly instead: its moves on the set of sizes
+are turned down most of the time and are still the only ones that reach another set.)
 
 - Code: `Solver::choose_move` and `Solver::custom_operators_get_a_turn` in
   [`core/optimaru/solver.hpp`](../core/optimaru/solver.hpp); the interface,

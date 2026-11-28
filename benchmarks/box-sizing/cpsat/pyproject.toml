@@ -1,0 +1,31 @@
+[project]
+name = "box-sizing-cpsat"
+version = "0.1.0"
+description = "OR-Tools CP-SAT model for the box-sizing use case and its comparison with the engine."
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "cpsat-plugins",
+    "optimaru",
+    "ortools>=9.10",
+    "pydantic>=2",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[project.scripts]
+box-sizing-compare = "box_sizing_cpsat.benchmark:main"
+
+[tool.uv.sources]
+optimaru = { path = "../../..", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+
+[tool.setuptools]
+packages = ["box_sizing_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

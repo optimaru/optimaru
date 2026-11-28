@@ -17,6 +17,7 @@ taken as the result.
 | [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB, 30–50 facilities (33, engine only) + generated, 6 to 25 facilities (20) |
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 (Otto et al.), five per data set |
 | [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated, 5 sizes (20) |
+| [box-sizing](box-sizing) | OR-Tools CP-SAT | the demo instance + generated, 5 sizes (20) |
 | [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | the demo conference + generated, 2 to 5 days (20) |
 | [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated), 5 sizes (20) |
 | [facility-location](facility-location) | OR-Tools CP-SAT | generated, 5 sizes (20) |
@@ -35,10 +36,12 @@ taken as the result.
 The CP-SAT models come from
 [external-solver](https://github.com/optimaru/external-solver), installed from
 its GitHub release tag (`external_solver.<subpackage>`); the models and their
-own tests live there. Two benchmarks are set up differently: school-timetabling
+own tests live there. Three benchmarks are set up differently: school-timetabling
 keeps its CP-SAT model (`teacher_scheduling`) and its parity test in
 [`school-timetabling/cpsat`](school-timetabling/cpsat), the project that also holds its
-comparison (`school_timetabling_cpsat`, `school-timetabling-compare`), and vehicle-routing is
+comparison (`school_timetabling_cpsat`, `school-timetabling-compare`), box-sizing keeps its
+model (`box_sizing_cpsat.model`) and the model's tests in [`box-sizing/cpsat`](box-sizing/cpsat)
+and does not install external-solver, and vehicle-routing is
 the single `uv` project [`vehicle-routing`](vehicle-routing), which runs the
 OR-Tools Routing solver. Every other comparison is a `uv` project in
 `benchmarks/<slug>/cpsat` that installs `optimaru` from this checkout (an
@@ -180,7 +183,10 @@ Homberger) were measured in the same session, two single-threaded runs side by
 side (`--jobs 2`), once the CP-SAT jobs had ended. The pickup-delivery CP-SAT
 rows were measured on the CP-SAT model the benchmark carries since 0.7.0 (#140,
 with the horizon of #144), the engine's rows of the same tables on 0.6.0; 0.7.0
-changes no search of a published benchmark.
+changes no search of a published benchmark. The box-sizing table came with the use
+case, on 2026-11-28 (the checkout that added it, after 0.8.0): the engine's 20 runs first,
+then CP-SAT's, on 4 workers where the other tables give it 8, with nothing else timed
+beside them.
 
 How far a number repeats differs by use case. Against the tables this run
 replaced (2026-11-10 to 2026-11-12, optimaru 0.5.0 to 0.5.1):

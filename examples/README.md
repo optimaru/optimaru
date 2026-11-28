@@ -12,13 +12,15 @@ jupyter lab
 ```
 
 Requires Python 3.11+ and optimaru 0.5.1 or later; the vehicle-routing and pickup-delivery notebooks
-need 0.6.0 or later, which takes depots and travel profiles, and the last section of the order-picking
-notebook ("Another warehouse") needs a release newer than 0.8.0, which takes the layout. Each notebook stands alone, so you can
-download a single file and run it.
+need 0.6.0 or later, which takes depots and travel profiles, the last section of the order-picking
+notebook ("Another warehouse") needs a release newer than 0.8.0, which takes the layout, and the box-sizing
+notebook needs the first release that has `optimaru.box_sizing` (also the one after 0.8.0). Each notebook
+stands alone, so you can download a single file and run it.
 
 Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
 depending on your machine. The saved outputs come from optimaru 0.5.1 (the two routing notebooks: 0.6.0;
-the last section of the order-picking notebook: the first version with layouts) on macOS (Apple silicon).
+the last section of the order-picking notebook: the first version with layouts; box sizing: the checkout
+that added it, after 0.8.0) on macOS (Apple silicon).
 Regenerate them there, so that a re-run changes only what the engine changed. On another platform the
 same seed can take a different path, even in a solve with a step limit.
 
@@ -80,6 +82,7 @@ explained notebook, and the others follow the same outline:
 | --- | --- |
 | [Bed allocation](bed-allocation.ipynb) | Which bed does each patient get for their stay? |
 | [Bin packing](bin-packing.ipynb) | What is the smallest number of bins that holds every item? |
+| [Box sizing](box-sizing.ipynb) | Which few box sizes should a warehouse stock, so that it ships the least air? |
 | [Knapsack](knapsack.ipynb) | Which items give the most value within a weight limit? |
 | [Assembly-line balancing](assembly-line-balancing.ipynb) | How do you split ordered tasks across as few stations as possible? |
 | [Quadratic assignment](quadratic-assignment.ipynb) | Where should each facility go, so that heavy flows travel short distances? |

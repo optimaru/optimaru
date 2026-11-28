@@ -1,6 +1,6 @@
 # Contributing to optimaru
 
-Most contributions add a **move** or a **constraint** to one of the 22 use
+Most contributions add a **move** or a **constraint** to one of the 23 use
 cases. Neither needs a change to the engine: both plug in from the use case.
 This page is the short version; [`docs/extending.md`](docs/extending.md) is the
 step-by-step guide with real code to copy from.
@@ -18,7 +18,7 @@ ctest --test-dir build --output-on-failure   # the engine tests and <uc>'s C++ t
 ```
 
 `<uc>` is the subpackage name, such as `vehicle_routing` or `bin_packing`. Leave
-`OPTIMARU_USE_CASES` unset to build all 22, and keep it exported while you test:
+`OPTIMARU_USE_CASES` unset to build all 23, and keep it exported while you test:
 uv rebuilds when it changes, and the three contract tests
 (`tests/test_solve_contract.py`, `tests/test_solver_config_contract.py`,
 `tests/test_constraints_contract.py`) and `tests/test_api.py` skip only the use cases it

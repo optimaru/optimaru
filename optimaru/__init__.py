@@ -30,6 +30,7 @@ __all__ = [
     "assembly_line_balancing",
     "bed_allocation",
     "bin_packing",
+    "box_sizing",
     "conference_scheduling",
     "employee_scheduling",
     "facility_location",
