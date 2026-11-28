@@ -25,7 +25,7 @@ from `cost`, which a use case reads itself (`stop` is of type `Limits` there).
 | --- | --- | --- |
 | [1. Construction](#1-construction) | `construct/construction.hpp` | [Construction instead of search](extending.md#construction-instead-of-search) |
 | [2. Current and best](#2-current-and-best) | `solver.hpp`, `model/snapshot.hpp` | |
-| [3. Stop condition](#3-stop-condition) | `stop/stop_condition.hpp` | |
+| [3. Stop condition](#3-stop-condition) | `stop/stop_condition.hpp` | `Solver::add_stop_criterion` |
 | [4. Search stalled?](#4-search-stalled) | `solver.hpp`, `accept/history_stages.hpp` | |
 | [5. Ruin and recreate kick](#5-ruin-and-recreate-kick) | `search/ruin_recreate/` | [A ruin instead of a move](extending.md#a-ruin-instead-of-a-move) |
 | [6. Built-in strategy](#6-built-in-strategy) | `search/strategies.hpp`, `search/moves/` | an engine change |
@@ -79,11 +79,18 @@ solve. Long strategies ask the same condition between batches of evaluations, so
 one move cannot run far past the time limit.
 
 - Code: `StopCondition::should_stop` in
-  [`core/optimaru/stop/stop_condition.hpp`](../core/optimaru/stop/stop_condition.hpp);
-  the throttle long moves use is in
+  [`core/optimaru/stop/stop_condition.hpp`](../core/optimaru/stop/stop_condition.hpp),
+  which assembles the criteria of `config.stop`, one file each in the same folder:
+  `max_runtime.hpp`, `no_improvement_time.hpp`, `max_steps.hpp`,
+  `no_improvement_steps.hpp`, `target_score.hpp`, `stop_requested.hpp` (all read the
+  `StopState` of `stop_state.hpp`); the throttle long moves use is in
   [`stop/stop_throttle.hpp`](../core/optimaru/stop/stop_throttle.hpp).
 - Settings: `config.stop` (`time_limit_seconds`, `step_limit`,
   `unimproved_time_limit_seconds`, `unimproved_step_limit`, `target_score`).
+- A stop rule of a use case's own: a `StopCriterion` (`stop/stop_criterion.hpp`)
+  registered with `Solver::add_stop_criterion`, asked after the built-in ones. The
+  factory makes one per solve and per start of a multi-start run, so it is called
+  concurrently there.
 
 ### 4. Search stalled?
 

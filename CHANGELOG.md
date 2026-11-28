@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Source layout: one file per stop criterion; a use case's own.** `stop/` holds each
+  built-in criterion in a file of its own: `max_runtime.hpp` (`MaxRuntime`),
+  `no_improvement_time.hpp`, `max_steps.hpp`, `no_improvement_steps.hpp`, `target_score.hpp`
+  and `stop_requested.hpp`, all reading the `StopState` of `stop_state.hpp`.
+  `StopCondition` assembles them from `Limits` in the order it always checked, still samples
+  the clock in batches, and takes the time fraction or the step fraction, whichever is
+  further, along with the progress of any added criterion, as the progress of the solve. `Solver::add_stop_criterion` adds a `StopCriterion`
+  (`stop/stop_criterion.hpp`) of the use case's own, asked after the built-in ones, made fresh
+  for every solve and every start of a multi-start run. Every seeded solve gives the same
+  result as before. `StopCondition` can no longer be copied (it may own added criteria).
 - **Source layout: one file per construction heuristic; a use case's own construction.**
   `construct/first_fit.hpp` (assignment shape: first fit, first fit decreasing with a
   difficulty order) and `construct/cheapest_insertion.hpp` (sequence shape) hold the two
