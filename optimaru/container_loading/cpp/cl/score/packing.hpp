@@ -143,7 +143,8 @@ public:
 
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
-    // (sizes, rotations, the support ratio) are not the ones the kept decodes
+    // (sizes, rotations, the support ratio, and the weights, load limits and
+    // unloading orders the kept costs read) are not the ones the kept decodes
     // were made for. The facts are compared through a 64-bit hash,
     // which is trusted: a collision (practically impossible) would keep
     // decodes made for other facts.
@@ -165,8 +166,8 @@ public:
 private:
     struct Slots {
         Packing slot[kSlots];
-        bool valid[kSlots] = {false, false, false};
-        std::uint64_t used[kSlots] = {0, 0, 0};
+        bool valid[kSlots] = {};
+        std::uint64_t used[kSlots] = {};
         int pinned = -1;
         bool pinNext = false;      // pin `pending` once it is decoded
         std::vector<int> pending;  // the list pin() asked for that no slot held yet

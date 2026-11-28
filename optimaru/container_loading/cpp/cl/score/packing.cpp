@@ -278,6 +278,9 @@ std::int64_t stackingExcess(const ContainerLoadingProblem& problem, const Packin
             below.emplace_back(other, area);
             contact += area;
         }
+        // The decoder never places an item above the floor without support;
+        // the guard keeps this function from relying on that.
+        if (contact <= 0.0) continue;
         for (const auto& [other, area] : below) load[other] += passed * area / contact;
     }
     std::int64_t excess = 0;

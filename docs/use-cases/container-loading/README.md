@@ -227,7 +227,8 @@ What the raw costs mean exactly:
 - **Container weight** counts the whole list, an unplaced item included: what the solve
   gave to a container belongs to it. `loaded_weight` is the weight of the placed items
   only, so a container whose `loaded_weight` is within `max_weight` can still cost here
-  when it has `unplaced_items`.
+  when it has `unplaced_items`. An item too large for every container therefore also
+  adds its weight to the list that holds it.
 - **Used container.** A container whose list holds only unplaced items is not in use.
 - **The hard costs are in different units.** `unplaced_item_cost` counts items,
   `unloading_order_cost` counts pairs, and `container_weight_cost` and
