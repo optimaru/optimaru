@@ -23,6 +23,9 @@
   `examples/container-loading.ipynb`. `benchmarks/container-loading` compares it, on instances
   whose fewest containers is known, with a CP-SAT model that places items freely; that model is
   kept in the benchmark project, and both answers are scored from where the items stand.
+- **Engine: one ruin-count helper.** `clamp_ruin_count` in `search/ruin_recreate/ruin_count.hpp`
+  now draws the ruin count of the destroy-repair move and the iterated local search;
+  `kick_ruin_count` moved there from `kick.hpp`, which still includes it. Seeded results unchanged.
 - **New use case: box sizing (`optimaru.box_sizing`), the 23rd.** Which box sizes should a
   warehouse stock? Every parcel (the packed content of one shipment, by its bounding size, with
   the number of shipments that had it) ships in one of the candidate boxes, at most

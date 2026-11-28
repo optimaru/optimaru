@@ -16,6 +16,7 @@
 #include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"
+#include "optimaru/search/ruin_recreate/ruin_count.hpp"
 #include "optimaru/search/moves/granular_local_search.hpp"
 #include "optimaru/search/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
@@ -108,7 +109,7 @@ public:
                 Snapshot::for_each_changed_list(
                         solution, after_, [&](int l) { local_search_.mark_list(solution, l); });
                 const int span = max_ruin_ - min_ruin_ + 1;
-                const int ruin_count = std::clamp(min_ruin_ + random_index(rng, span), 1, n - 1);
+                const int ruin_count = clamp_ruin_count(min_ruin_ + random_index(rng, span), n);
                 drawn_ruin_ = ruin_selector_.select(rng);
                 std::vector<int> ruined =
                         ruins_[drawn_ruin_]->select_ruin_set(ctx, ruin_count, rng);
