@@ -16,7 +16,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/construct/construction.hpp"
+#include "optimaru/construct/first_fit.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/search/moves/preview_evaluation.hpp"
@@ -37,7 +37,6 @@ namespace optimaru {
 template <typename Solution>
 class GreedyRepair {
     using Traits = SolutionTraits<Solution>;
-    using ConstructionHeuristic = Construction<Solution>;
 
 public:
     // `unassigned_list` (sequence shape, -1 = none) is the list the repair never
@@ -132,7 +131,7 @@ public:
             // range is enumerated in full anyway.
             (void)exclude_list;
             const int value_count = Traits::value_count(solution);
-            for (int e : ruined) ConstructionHeuristic::place_best_value(editor, e, value_count);
+            for (int e : ruined) optimaru::place_best_value(editor, e, value_count);
         } else {
             recreate_list(editor, std::move(ruined), rng, exclude_list);
         }

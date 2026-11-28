@@ -13,6 +13,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numeric>
 #include <set>
 #include <stdexcept>
@@ -1181,6 +1182,74 @@ void testNothingPlaced() {
     check(optimaru::nothing_placed(tour), "sequence shape: every list empty");
     tour.routes[1].push_back(3);
     check(!optimaru::nothing_placed(tour), "one element in a list: something is placed");
+}
+
+// Solver::set_construction: a use case's own construction runs in place of the
+// built-in one, once per solve, before the search, and every start of a
+// multi-start run uses it.
+void testCustomConstruction() {
+    std::printf("== construction: a use case's own ==\n");
+    std::atomic<int> calls{0};
+    std::vector<std::uint64_t> seeds;
+    std::mutex seeds_mutex;
+    const auto mine = [&](optimaru::Editor<TaskAssignment>& editor,
+                          const optimaru::ConstructionSettings&, std::uint64_t seed) {
+        {
+            std::lock_guard<std::mutex> lock(seeds_mutex);
+            seeds.push_back(seed);
+        }
+        ++calls;
+        // Places only what the caller left unplaced, as the contract asks.
+        TaskAssignment& s = editor.solution();
+        for (int t = 0; t < static_cast<int>(s.assignment.size()); ++t) {
+            if (s.assignment[t] < 0) editor.assign(t, 0);
+        }
+    };
+    {
+        optimaru::Settings config;
+        config.stop.step_limit = 1;
+        TaskAssignment s = buildTaskInstance();
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.set_construction(mine);
+        TaskAssignmentCalculator calculator;
+        solver.solve(s, calculator);
+        check(calls == 1, "it runs once per solve");
+        int moved = 0;
+        for (int v : s.assignment) moved += v != 0 ? 1 : 0;
+        // One step is one move of the mix (a kick needs a stall first), and a
+        // move changes at most two tasks.
+        check(moved <= 2, "the search starts from what it built (one step moves at most two)");
+    }
+    {  // A warm start keeps what the caller placed: the construction fills the rest.
+        calls = 0;
+        optimaru::Settings config;
+        config.stop.step_limit = 1;
+        config.moves.change_weight = 0.0;  // the one step swaps, so one task still holds 3
+        TaskAssignment s = buildTaskInstance();
+        s.assignment[1] = 3;
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.set_construction(mine);
+        TaskAssignmentCalculator calculator;
+        solver.solve(s, calculator);
+        int threes = 0;
+        for (int v : s.assignment) threes += v == 3 ? 1 : 0;
+        check(calls == 1 && threes == 1, "a warm start keeps its placement");
+    }
+    {
+        calls = 0;
+        seeds.clear();
+        optimaru::Settings config;
+        config.stop.step_limit = 2000;
+        config.run.seed = 40;
+        config.run.parallel_starts = 3;
+        TaskAssignment s = buildTaskInstance();
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.set_construction(mine);
+        solver.solve_multistart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        check(calls == 3, "every start of a multi-start run uses it");
+        std::sort(seeds.begin(), seeds.end());
+        check(seeds == std::vector<std::uint64_t>{40, 41, 42}, "each with its start's seed");
+    }
 }
 
 void testNearbyAndLnsOnRandomTsp() {
@@ -2887,6 +2956,7 @@ int main() {
     testHistoryGrowthOnAWarmStart(optimum);
     testPortableDraws();
     testNothingPlaced();
+    testCustomConstruction();
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();
     testCustomMoveShareInLaterStages();

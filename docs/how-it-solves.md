@@ -48,12 +48,14 @@ Sequence shape: cheapest insertion, the best list and position for each element.
 
 - Code: `Construction<Solution>::run` in
   [`core/optimaru/construct/construction.hpp`](../core/optimaru/construct/construction.hpp),
-  called by `Solver::solve` before `Solver::run`.
+  called by `Solver::solve` before `Solver::run`; the heuristics one file each in the
+  same folder: `first_fit.hpp` (assignment) and `cheapest_insertion.hpp` (sequence).
 - Settings: `config.construction` (where the use case has it, such as
   `first_fit_decreasing`). In C++, `ConstructionSettings::difficulty` orders the
   entities (first fit decreasing).
-- To change it for one use case: a difficulty order or a constructor of the use
-  case's own ([Construction instead of search](extending.md#construction-instead-of-search)).
+- To change it for one use case: a difficulty order, or a construction of the use
+  case's own registered with `Solver::set_construction`
+  ([Construction instead of search](extending.md#construction-instead-of-search)).
 
 ### 2. Current and best
 
