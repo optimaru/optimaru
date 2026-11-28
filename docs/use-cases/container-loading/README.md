@@ -229,6 +229,14 @@ What the raw costs mean exactly:
   only, so a container whose `loaded_weight` is within `max_weight` can still cost here
   when it has `unplaced_items`.
 - **Used container.** A container whose list holds only unplaced items is not in use.
+- **The hard costs are in different units.** `unplaced_item_cost` counts items,
+  `unloading_order_cost` counts pairs, and `container_weight_cost` and
+  `stacking_load_cost` count weight units (grams in the guide's examples). With the
+  default weights one gram over a limit weighs as much as one unplaced item, and a 10 kg
+  box on an item with `max_load_on_top=0` as much as 10,000 unplaced items. A solve that
+  cannot reach hard 0 therefore leaves boxes out rather than overload a container or crush
+  one. To trade differently, reweight in the `constraints` of `solve`: e.g.
+  `UnplacedItemCost(weight=1000)` makes one unplaced item weigh as much as a kilogram over.
 - **Group split** counts where the lists put the items, placed or not.
 
 ### Parameters and their costs
@@ -403,6 +411,14 @@ number of items per container that sets the speed, more than the number of items
 | 20 x 25 | 500 | 12 |
 | 40 x 50 | 2000 | 3 |
 
+One container holding hundreds of items is the slow case: each corner the decoder tries
+is checked against every box already placed, and a decode of a list resumes only from
+where the list changes. On two containers of 1200 x 800 x 2000 cut into boxes (10% slack,
+one spare, 3,000 steps, one run each, the time including the construction), about 45
+items per container ran at 7,500 steps per second, 90 at 3,300, 180 at 640 and 360 at
+340. For a trailer of several hundred small parcels, give the solve time accordingly or
+group the parcels into larger units first.
+
 Against an exact model: [`benchmarks/container-loading`](../../../benchmarks/container-loading)
 compares the engine with a CP-SAT model that places items freely, 30 s each. On the twelve
 instances of up to 15 items CP-SAT proves the optimum and the engine reaches it. On the
@@ -447,7 +463,8 @@ A solved model is itself a starting point: `to_core()` loads the `items` (and
 `cl.calculate_score(solved.to_core())` is the score it carries when everything is placed.
 An unplaced item does not keep its place in the order: it is loaded back after the placed
 ones, which stand where they stood, so such a model can only come back with fewer unplaced
-items than the solve reported. `initial_items` is read only where a container has no
+items than the solve reported, though not necessarily with a lower hard score: an item
+placed now may stand on a fragile item or in front of an earlier stop. `initial_items` is read only where a container has no
 `items` yet.
 
 ## C++

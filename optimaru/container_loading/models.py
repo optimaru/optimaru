@@ -140,7 +140,8 @@ class ContainerModel(StrictModel):
         Where an unplaced item stood in the order is not kept: it is tried again after the
         placed ones, which stand where they stood. So a solved model in which everything is
         placed is exactly the solution it was; one with unplaced items can only come back
-        with fewer of them."""
+        with fewer of them, though not necessarily with a lower hard score: an item placed
+        now may stand on a fragile item or in front of an earlier stop."""
         if self.items is None:
             return list(self.initial_items)
         return [*self.items, *(self.unplaced_items or [])]

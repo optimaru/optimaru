@@ -317,7 +317,8 @@ void verifyDecoderProperties() {
             ++common;
         Packing fresh;
         decode(p, 0, other, fresh);
-        for (std::size_t keep : {common, common / 2, std::size_t{0}}) {
+        for (std::size_t keep :
+             {common, common / 2, static_cast<std::size_t>(rng() % (common + 1)), std::size_t{0}}) {
             Packing resumed = base;
             decode(p, 0, other, resumed, static_cast<int>(keep));
             if (!sameBoxes(resumed, fresh) || freePoints(resumed) != freePoints(fresh))

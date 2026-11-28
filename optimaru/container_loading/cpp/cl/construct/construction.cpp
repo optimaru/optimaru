@@ -89,7 +89,8 @@ void constructLoading(ContainerLoadingProblem& problem) {
     std::vector<std::int64_t> weight(containerCount, 0);
     std::vector<std::int64_t> volume(containerCount, 0);  // of the placed items
     std::vector<int> unplaced(containerCount, 0);
-    std::vector<std::int64_t> broken(containerCount, 0);  // stacking excess + unloading blocks
+    std::vector<std::int64_t> excess(containerCount, 0);  // stacking excess
+    std::vector<std::int64_t> blocks(containerCount, 0);  // unloading blocks
     for (std::size_t c = 0; c < containerCount; ++c) {
         const Container& container = problem.containers[c];
         for (int item : container.items)
@@ -98,7 +99,8 @@ void constructLoading(ContainerLoadingProblem& problem) {
         const Packing& packing = cache.packing(problem, static_cast<int>(c), container.items);
         unplaced[c] = packing.unplaced();
         volume[c] = packing.loadedVolume;
-        broken[c] = stackingExcess(problem, packing) + unloadingBlocks(problem, packing);
+        excess[c] = stackingExcess(problem, packing);
+        blocks[c] = unloadingBlocks(problem, packing);
     }
     // The empty containers, cheapest per volume first.
     std::vector<int> byPrice(containerCount);
@@ -149,9 +151,9 @@ void constructLoading(ContainerLoadingProblem& problem) {
             trial.insert(trial.begin() + insertPosition(problem, trial, item), item);
             const Packing& packing = cache.packing(problem, c, trial);
             if (packing.unplaced() > unplaced[index]) continue;
-            if (stackingExcess(problem, packing) + unloadingBlocks(problem, packing) >
-                broken[index])
-                continue;
+            // Each kind of violation on its own: no trading one for the other.
+            if (stackingExcess(problem, packing) > excess[index]) continue;
+            if (unloadingBlocks(problem, packing) > blocks[index]) continue;
             chosen = c;
             break;
         }
@@ -172,7 +174,8 @@ void constructLoading(ContainerLoadingProblem& problem) {
         weight[home] += box.weight;
         volume[home] = packing.loadedVolume;
         unplaced[home] = packing.unplaced();
-        broken[home] = stackingExcess(problem, packing) + unloadingBlocks(problem, packing);
+        excess[home] = stackingExcess(problem, packing);
+        blocks[home] = unloadingBlocks(problem, packing);
     }
 }
 

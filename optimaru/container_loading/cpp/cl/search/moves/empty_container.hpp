@@ -101,7 +101,8 @@ public:
         if (plan_.size() < containerCount) plan_.resize(containerCount);
         planned_.assign(containerCount, 0);
         unplaced_.assign(containerCount, -1);
-        broken_.assign(containerCount, 0);
+        excess_.assign(containerCount, 0);
+        blocks_.assign(containerCount, 0);
         moved_.clear();
         for (int item : members_) {
             const Item& box = problem.items[static_cast<std::size_t>(item)];
@@ -122,8 +123,8 @@ public:
                 if (unplaced_[index] < 0) {
                     const Packing& before = cache_.packing(problem, c, plan_[index]);
                     unplaced_[index] = before.unplaced();
-                    broken_[index] =
-                            stackingExcess(problem, before) + unloadingBlocks(problem, before);
+                    excess_[index] = stackingExcess(problem, before);
+                    blocks_[index] = unloadingBlocks(problem, before);
                 }
                 trial_ = plan_[index];
                 const int position = insertPosition(problem, trial_, item);
@@ -132,10 +133,13 @@ public:
                 // The item itself has to find a place, and nothing else lose its own.
                 if (after.boxOf[static_cast<std::size_t>(position)] < 0) continue;
                 if (after.unplaced() > unplaced_[index]) continue;
-                const std::int64_t broken =
-                        stackingExcess(problem, after) + unloadingBlocks(problem, after);
-                if (broken > broken_[index]) continue;
-                broken_[index] = broken;
+                // Each kind of violation on its own: no trading one for the other.
+                const std::int64_t excess = stackingExcess(problem, after);
+                if (excess > excess_[index]) continue;
+                const std::int64_t blocks = unloadingBlocks(problem, after);
+                if (blocks > blocks_[index]) continue;
+                excess_[index] = excess;
+                blocks_[index] = blocks;
                 unplaced_[index] = after.unplaced();
                 plan_[index].swap(trial_);
                 volume_[index] += static_cast<double>(box.volume());
@@ -188,7 +192,8 @@ private:
     std::vector<std::vector<int>> plan_;
     std::vector<char> planned_;
     std::vector<int> unplaced_;
-    std::vector<std::int64_t> broken_;
+    std::vector<std::int64_t> excess_;  // per target: stacking excess of its plan
+    std::vector<std::int64_t> blocks_;  // per target: unloading blocks of its plan
     std::vector<int> trial_;
     std::vector<int> moved_;
     std::vector<int> remaining_;
