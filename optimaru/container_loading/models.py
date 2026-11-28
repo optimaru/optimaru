@@ -414,10 +414,11 @@ class ContainerLoadingProblemModel(StrictModel):
         container_ids = [container.id for container in self.containers]
         if len(container_ids) != len(set(container_ids)):
             raise ValueError("container ids must be unique")
+        names = container_ids + [tag for container in self.containers for tag in container.tags]
         for container in self.containers:
-            if not container.single and any(other.startswith(container.id + "#") for other in container_ids):
+            if not container.single and any(name.startswith(container.id + "#") for name in names):
                 raise ValueError(
-                    f"container ids must not look like the copies of {container.id!r} ({container.id}#1, ...)"
+                    f"container ids and tags must not look like the copies of {container.id!r} ({container.id}#1, ...)"
                 )
         item_ids = [item.id for item in self.items]
         known = set(item_ids)
@@ -747,8 +748,12 @@ def with_initial_solution(problem, solution):
 
     `solution` is a solved problem model or a dict of the same shape. Containers and items
     are matched by id: each container's `initial_items` becomes the `items` it has in the
-    solution (its placed items, in loading order), replacing what `problem` had; a container
-    the solution leaves out starts empty. Items the solution placed nowhere are constructed
+    solution (its placed items, in loading order), replacing what `problem` had; a type with a
+    quantity other than 1 takes its `instances`' items as `initial_instances` (those beyond its
+    quantity are left out, and their items constructed again). A container whose quantity
+    changed between the two is carried over in the problem's shape: a single container takes
+    the instances' orders one after the other, a type a single container's order as its first
+    instance. A container the solution leaves out starts empty. Items the solution placed nowhere are constructed
     around the seeded loading orders before the search starts. The copy carries no outputs.
 
     Raises ValueError on an unknown container or item, or an item listed twice.
@@ -757,7 +762,8 @@ def with_initial_solution(problem, solution):
         solution = solution.model_dump(mode="json")
     if not isinstance(solution, dict) or not isinstance(solution.get("containers"), list):
         raise ValueError("solution must be a problem model or a dict with a 'containers' list")
-    known_containers = {container.id for container in problem.containers}
+    by_id = {container.id: container for container in problem.containers}
+    known_containers = set(by_id)
     known_items = {item.id for item in problem.items}
     orders: dict[str, list[str]] = {}
     instance_orders: dict[str, list[list[str]]] = {}
@@ -780,12 +786,19 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"solution references unknown container: {container_id!r}")
         if container_id in orders or container_id in instance_orders:
             raise ValueError(f"solution lists container {container_id!r} more than once")
-        if entry.get("instances") is not None:
-            instance_orders[container_id] = [
-                checked(container_id, instance.get("items") or []) for instance in entry["instances"]
-            ]
+        instances = entry.get("instances")
+        if instances is not None:
+            if not isinstance(instances, list) or not all(isinstance(instance, dict) for instance in instances):
+                raise ValueError(f"container {container_id!r}: 'instances' must be a list of objects")
+            given = [checked(container_id, instance.get("items") or []) for instance in instances]
         else:
-            orders[container_id] = checked(container_id, entry.get("items") or [])
+            given = [checked(container_id, entry.get("items") or [])]
+        # The shape the problem has now: one container takes the instances' orders one after the
+        # other, a type with a quantity takes a single container's order as its first instance.
+        if by_id[container_id].single:
+            orders[container_id] = [item_id for order in given for item_id in order]
+        else:
+            instance_orders[container_id] = [order for order in given if order]
     return _without_outputs(problem, orders, instance_orders)
 
 
@@ -810,13 +823,9 @@ def _without_outputs(problem: ContainerLoadingProblemModel, orders: dict[str, li
                 axle_groups=[axle.model_copy() for axle in container.axle_groups],
                 quantity=container.quantity,
                 initial_items=orders.get(container.id, []) if container.single else [],
-                initial_instances=(
-                    []
-                    if container.single
-                    else [order for order in instance_orders.get(container.id, []) if order][: container.quantity]
-                    if container.quantity is not None
-                    else [order for order in instance_orders.get(container.id, []) if order]
-                ),
+                initial_instances=[]
+                if container.single
+                else instance_orders.get(container.id, [])[: container.quantity],
             )
             for container in problem.containers
         ],

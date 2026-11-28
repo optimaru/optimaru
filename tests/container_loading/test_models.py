@@ -465,9 +465,7 @@ def test_a_type_with_a_quantity_is_its_copies_and_reports_the_used_ones():
     box = solved.containers[0]
     assert (solved.score_hard, solved.containers_used) == (0, 3)
     assert box.items is None and box.quantity == 4
-    assert [len(instance.items) for instance in box.instances] == [2, 2, 1] or sorted(
-        len(instance.items) for instance in box.instances
-    ) == [1, 2, 2]
+    assert sorted(len(instance.items) for instance in box.instances) == [1, 2, 2]
     assert {item.container for item in solved.items} == {instance.id for instance in box.instances}
     # A solved model goes on from its instances, and with_initial_solution carries them over.
     again = cl.solve(solved, config=cl.SolverConfig(stop={"time_limit_seconds": 0}))
@@ -503,3 +501,30 @@ def test_listing_copies_still_works_and_allowed_containers_name_a_type():
     by_id = {item.id: item for item in solved.items}
     assert solved.score_hard == 0
     assert by_id["milk"].container == "cold-1" and by_id["flour"].container.startswith("dry#")
+
+
+def test_a_warm_start_follows_a_change_of_quantity():
+    """A solve with a quantity seeds a problem that lists the type once, and the other way round."""
+    solved = cl.solve(_cartons(4), time_limit_seconds=0.5, random_seed=0)
+    single = _cartons(1)
+    seeded = with_initial_solution(single, solved)
+    assert sorted(seeded.containers[0].initial_items) == sorted(item.id for item in solved.items if item.container)
+    flat = cl.solve(single, time_limit_seconds=0.2, random_seed=0)
+    as_type = with_initial_solution(_cartons(3), flat)
+    assert as_type.containers[0].initial_instances == [flat.containers[0].items]
+    with pytest.raises(ValueError, match="'instances' must be a list of objects"):
+        with_initial_solution(_cartons(3), {"containers": [{"id": "box", "instances": ["c1"]}]})
+
+
+def test_the_instances_carry_their_axle_loads():
+    model = _cartons(
+        3,
+        axle_groups=[
+            {"id": "front", "position": -2, "max_load": 1000},
+            {"id": "rear", "position": 10, "max_load": 1000},
+        ],
+    )
+    solved = cl.solve(model, time_limit_seconds=0.5, random_seed=0)
+    box = solved.containers[0]
+    assert box.axle_loads is None and box.instances
+    assert all(instance.axle_loads and instance.axle_loads[0].after_stop is None for instance in box.instances)

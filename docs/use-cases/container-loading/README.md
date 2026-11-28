@@ -175,8 +175,10 @@ volume of the items that fit the type needs, or twice those their weight needs a
 `max_weight`, whichever is more, plus one, and never more than one per such item. Unused
 copies cost nothing (`used_container_cost` counts containers holding a placed item), but
 each is a list the search may move items into, so give a quantity where you know the
-number. A solved model goes on from its `instances` (`solve(solved)`), and
-`with_initial_solution` turns them into `initial_instances`. The quantity is the JSON
+number: each `quantity: null` type adds up to one list per item it can hold. A solved
+model goes on from its `instances` (`solve(solved)`), and `with_initial_solution` turns them
+into `initial_instances`. The bound for `null` is a rule of thumb (it counts the full
+height, not a `max_stack_height`). The quantity is the JSON
 model's: a compiled problem (`cl.Container`) is the copies themselves.
 
 ### Ways to use it
@@ -694,7 +696,9 @@ three:
 `ContainerLoadingProblemModel` whose search starts from `solution`, a solved model or the
 same thing as a JSON dict. Containers and items are matched by id: each container's
 `initial_items` becomes the `items` it has in the solution, replacing what the problem
-had, and a container the solution leaves out starts empty. Items the solution placed
+had (a type with a quantity takes its `instances` as `initial_instances`; a container whose
+quantity changed takes them in the problem's shape), and a container the solution leaves
+out starts empty. Items the solution placed
 nowhere are constructed around the seeded loading orders; with
 `time_limit_seconds=0` a complete solution comes back as it went in. An unknown container
 or item, or an item listed twice, raises `ValueError`.
