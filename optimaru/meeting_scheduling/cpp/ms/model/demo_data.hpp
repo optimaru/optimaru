@@ -13,11 +13,11 @@
 #include <random>
 
 #include "ms/model/domain.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace ms {
 
-// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+// Seeded, platform-independent draws (see optimaru/utils/random.hpp).
 using DemoRandom = optimaru::PortableRandom;
 
 namespace demo_detail {

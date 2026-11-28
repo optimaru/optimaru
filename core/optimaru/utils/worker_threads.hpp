@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_WORKER_THREADS_HPP
-#define OPTIMARU_WORKER_THREADS_HPP
+#ifndef OPTIMARU_UTILS_WORKER_THREADS_HPP
+#define OPTIMARU_UTILS_WORKER_THREADS_HPP
 
 #include <atomic>
 #include <cstddef>
@@ -68,4 +68,4 @@ void run_worker_threads(int count, std::atomic<bool>& stop, const Work& work) {
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_WORKER_THREADS_HPP
+#endif  // OPTIMARU_UTILS_WORKER_THREADS_HPP

@@ -9,7 +9,7 @@
 
 #include "ks/construct/construction.hpp"
 #include "ks/model/domain.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace ks {

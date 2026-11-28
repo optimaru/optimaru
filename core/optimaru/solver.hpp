@@ -34,7 +34,7 @@
 #include "optimaru/select/schemes.hpp"
 #include "optimaru/search/strategies.hpp"
 #include "optimaru/stop/stop_condition.hpp"
-#include "optimaru/worker_threads.hpp"
+#include "optimaru/utils/worker_threads.hpp"
 
 namespace optimaru {
 

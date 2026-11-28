@@ -49,7 +49,7 @@
 #include "es/score/score_calculator.hpp"
 #include "es/solver.hpp"
 #include "optimaru/model/editor.hpp"
-#include "optimaru/worker_threads.hpp"
+#include "optimaru/utils/worker_threads.hpp"
 #include "optimaru/python/names.hpp"
 #include "optimaru/testing/check.hpp"
 

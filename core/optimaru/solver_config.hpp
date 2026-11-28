@@ -37,7 +37,7 @@
 
 #include "optimaru/score/score.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
+#include "optimaru/utils/worker_threads.hpp"
 
 namespace optimaru {
 

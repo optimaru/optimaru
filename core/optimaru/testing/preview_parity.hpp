@@ -13,7 +13,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/model/editor.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru::testing {
 

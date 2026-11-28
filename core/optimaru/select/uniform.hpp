@@ -7,7 +7,7 @@
 #include <random>
 
 #include "optimaru/select/scheme.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace optimaru {
 

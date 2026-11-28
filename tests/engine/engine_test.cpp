@@ -34,7 +34,7 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/solver_config.hpp"
-#include "optimaru/worker_threads.hpp"
+#include "optimaru/utils/worker_threads.hpp"
 #include "optimaru/testing/check.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 

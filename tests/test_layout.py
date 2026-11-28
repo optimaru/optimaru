@@ -210,7 +210,7 @@ def test_a_cpp_bench_generates_no_data():
     assert len(benches) == 4
     for bench in benches:
         text = bench.read_text()
-        for banned in ("<random>", "portable_random.hpp", "demo_data.hpp"):
+        for banned in ("<random>", "utils/random.hpp", "demo_data.hpp"):
             assert banned not in text, f"{bench.relative_to(ROOT)} includes {banned}: generate the data in Python"
         assert "std::ifstream" in text, bench
         slug = bench.parents[1].name

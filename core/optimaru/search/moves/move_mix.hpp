@@ -12,7 +12,7 @@
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/solution_traits.hpp"
-#include "optimaru/portable_random.hpp"
+#include "optimaru/utils/random.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/search/moves/list_move.hpp"
