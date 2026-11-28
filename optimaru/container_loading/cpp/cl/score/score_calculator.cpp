@@ -99,6 +99,12 @@ void validate(const ContainerLoadingProblem& problem) {
                                         std::to_string(kMaxLength));
         }
     }
+    for (const Container& container : problem.containers) {
+        for (const std::string& tag : container.tags) {
+            if (tag.empty())
+                throw std::invalid_argument("container '" + container.id + "': an empty tag");
+        }
+    }
     for (const Item& item : problem.items) {
         for (const std::string& name : item.allowedContainers) {
             bool known = false;

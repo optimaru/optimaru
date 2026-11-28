@@ -850,6 +850,20 @@ void verifyCostsByHand() {
         p.segregationRules = {{"hazmat", "hazmat", std::nullopt}};
         check(ScoreCalculator::calculateTotals(p).segregationCost == 1,
               "segregation: a class kept from itself");
+        // Two rules for one pair of classes: "not in one container" holds,
+        // whichever comes first; a class kept from itself counts each pair once.
+        p.containers[0].items = {0, 1, 2};
+        for (const auto& rules : {std::vector<SegregationRule>{{"hazmat", "food", 100},
+                                                               {"food", "hazmat", std::nullopt}},
+                                  std::vector<SegregationRule>{{"food", "hazmat", std::nullopt},
+                                                               {"hazmat", "food", 100}}}) {
+            p.segregationRules = rules;
+            check(ScoreCalculator::calculateTotals(p).segregationCost == 2,
+                  "segregation: the rule without a distance wins in either order");
+        }
+        p.segregationRules = {{"hazmat", "hazmat", 1}, {"hazmat", "hazmat", 100}};
+        check(ScoreCalculator::calculateTotals(p).segregationCost == 1,
+              "segregation: of two distances the larger, each pair once");
         p.segregationRules.clear();
         check(ScoreCalculator::calculateTotals(p).segregationCost == 0,
               "segregation: no rule, no cost");

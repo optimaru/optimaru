@@ -115,7 +115,7 @@ public:
             for (auto target = used_.rbegin(); target != used_.rend(); ++target) {
                 const int c = target->container;
                 const auto index = static_cast<std::size_t>(c);
-                if (c == source) continue;
+                if (c == source || !problem.allowed(item, c)) continue;
                 const Container& container = problem.containers[index];
                 if (volume_[index] + static_cast<double>(box.volume()) >
                     static_cast<double>(container.volume()))

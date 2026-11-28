@@ -22,7 +22,7 @@ constraint selections, and the defaults are the C++ components'
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -110,7 +110,7 @@ class ItemModel(StrictModel):
             "unplaced_item_cost, and its weight does not count against max_weight."
         ),
     )
-    allowed_containers: list[str] = Field(
+    allowed_containers: list[Annotated[str, Field(min_length=1)]] = Field(
         default_factory=list,
         description="The containers it may go in, by id or by one of their tags; [] = any.",
     )
@@ -169,8 +169,9 @@ class ContainerModel(StrictModel):
             "of half the width. None = no limit."
         ),
     )
-    tags: list[str] = Field(
-        default_factory=list, description="Names an item's allowed_containers may use besides the id."
+    tags: list[Annotated[str, Field(min_length=1)]] = Field(
+        default_factory=list,
+        description="Names an item's allowed_containers may use besides the id (ids and tags are one namespace).",
     )
     initial_items: list[str] = Field(
         default_factory=list,
@@ -267,7 +268,11 @@ class ContainerLoadingProblemModel(StrictModel):
         default_factory=list, description="How the items of a group are loaded: all or none, in one container."
     )
     segregation_rules: list[SegregationRuleModel] = Field(
-        default_factory=list, description="Pairs of segregation classes kept apart (segregation_cost)."
+        default_factory=list,
+        description=(
+            "Pairs of segregation classes kept apart (segregation_cost). A class no item has is accepted "
+            "(a standing catalog of rules) and keeps nothing apart."
+        ),
     )
     score_hard: int | None = Field(
         default=None,

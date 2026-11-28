@@ -152,8 +152,8 @@ struct Packing {
     mutable int balancePerMille = -1;
     mutable std::int64_t stackingViolations = -1;
     mutable std::int64_t balanceExcess = -1;
-    // Only with optional items or priorities (unplacedCost < 0 = not yet).
     mutable std::int64_t segregationPairs = -1;
+    // Only with optional items or priorities (unplacedCost < 0 = not yet).
     mutable std::int64_t unplacedCost = -1;
     mutable std::int64_t optionalCost = 0;
     mutable std::int64_t optionalWeight = 0;
@@ -253,8 +253,9 @@ public:
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
     // (sizes, rotations, the support ratio, the stack heights, bottomOnly, the
-    // layer limits and stacking rules, and the weights, load limits, unloading
-    // orders and balance limits the decode and the kept costs read) are not the ones
+    // layer limits and stacking rules, the allowed containers, the segregation
+    // classes and distances, and the weights, load limits, unloading orders and
+    // balance limits the decode and the kept costs read) are not the ones
     // the kept decodes were made for. The facts are compared through a
     // 64-bit hash, which is trusted: a collision (practically impossible)
     // would keep decodes made for other facts.

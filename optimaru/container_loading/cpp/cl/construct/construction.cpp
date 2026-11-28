@@ -171,7 +171,8 @@ void constructLoading(ContainerLoadingProblem& problem) {
             break;
         }
         if (chosen < 0) {
-            // The one with the most free volume, of those it may go in when there are any.
+            // The one with the most free volume, of those it may go in (always some once the
+            // problem is validated: every allowed name is some container's; kept as a guard).
             bool anyAllowed = false;
             for (std::size_t c = 0; c < containerCount; ++c)
                 anyAllowed = anyAllowed || problem.allowed(item, static_cast<int>(c));

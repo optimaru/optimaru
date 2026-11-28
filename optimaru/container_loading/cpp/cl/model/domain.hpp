@@ -233,7 +233,7 @@ struct ContainerLoadingProblem {
     std::vector<int> segregationOf;
     int segregationClassCount = 0;
     std::vector<int> apart;
-    bool anySegregation = false;    // some rule names the classes of two items
+    bool anySegregation = false;    // some item has a class a rule names
     bool anyApartDistance = false;  // ... with a distance
 
     bool allowed(int item, int container) const {

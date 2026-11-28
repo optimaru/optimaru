@@ -74,7 +74,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `items` | list of `ItemModel` | the boxes |
 | `min_support_ratio` | float in (0, 1], 0.8 | share of an item's base that must rest on the floor or on other items |
 | `group_rules` | list of `GroupRuleModel`, [] | how the items of a group are loaded: `{"id": "order-17", "all_or_none": true, "single_container": true}` = every item whose `group` is `order-17` or none of them, and all in one container; `id` must be some item's `group`, each once |
-| `segregation_rules` | list of `SegregationRuleModel`, [] | classes kept apart: `{"a": "hazmat", "b": "food"}` = items of the two classes not in one container; with `"distance": 1000`, at least 1000 apart in the floor plane instead; `a` may equal `b` |
+| `segregation_rules` | list of `SegregationRuleModel`, [] | classes kept apart: `{"a": "hazmat", "b": "food"}` = items of the two classes not in one container; with `"distance": 1000`, at least 1000 apart in the floor plane instead; `a` may equal `b`; a class no item has is accepted and keeps nothing apart (a standing catalog of rules) |
 | `stacking_rules` | list of `StackingRuleModel`, [] | pairs of stack groups: `{"top": "chemicals", "bottom": "food"}` = an item whose `stack_group` is `chemicals` may not stand on one whose `stack_group` is `food`; anything not listed may stand on anything |
 | `score_hard`, `score_soft` | output | the score (hard 0 = feasible) |
 | `containers_used` | output, int | containers that hold a placed item |
@@ -89,7 +89,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `max_weight` | int or None, None | weight it may hold; None = no limit |
 | `cost` | float >= 0, 1.0 | what using this container costs (1 = count containers) |
 | `max_stack_height` | int or None, None | how high the load may reach (a hand's height): the decoder fills up to the lower of it and `height`; None = up to `height` |
-| `tags` | list of str, [] | names an item's `allowed_containers` may use besides the id (`reefer`, a vehicle type) |
+| `tags` | list of non-empty str, [] | names an item's `allowed_containers` may use besides the id (`reefer`, a vehicle type); ids and tags are one namespace: a name matches a container whose id or tag it is |
 | `max_offset_length`, `max_offset_width` | float in [0, 1] or None, None | how far the placed load's centre of gravity may lie from the container's centre, as a share of half the length (width); None = no limit |
 | `initial_items` | list of item ids, [] | warm start: the loading order to start from |
 | `items` | output, list of ids | the placed items, in loading order |
