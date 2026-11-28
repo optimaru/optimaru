@@ -28,6 +28,7 @@ MODEL_USE_CASES = {
     "assembly-line-balancing": "AssemblyLineBalancingProblemModel",
     "bed-allocation": "BedPlanModel",
     "bin-packing": "BinPackingProblemModel",
+    "box-sizing": "BoxSizingProblemModel",
     "conference-scheduling": "ConferenceScheduleModel",
     "facility-location": "FacilityLocationProblemModel",
     "flight-crew-scheduling": "FlightCrewScheduleModel",

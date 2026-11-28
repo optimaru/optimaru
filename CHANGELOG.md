@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **New use case: box sizing (`optimaru.box_sizing`), the 23rd.** Which box sizes should a
+  warehouse stock? Every parcel (the packed content of one shipment, by its bounding size, with
+  the number of shipments that had it) ships in one of the candidate boxes, at most
+  `max_box_types` distinct boxes are in use, and the least air is shipped. A parcel fits a box
+  when its sorted sides are each at most the box's (any rotation), and when it is not heavier
+  than the box's `max_weight`. Six constraints: `parcel_fit_cost`, `box_weight_cost` and
+  `box_type_limit_cost` (hard), `void_volume_cost` and `box_cost` (soft), and `box_type_cost`
+  (soft, weight 0: picked with a weight, it is the fixed cost of stocking one more size). A box
+  can be `required` (already stocked: it counts as in use), a parcel that fits no candidate is
+  refused by name, and the solved model carries `box_types_used`, `void_volume`, `fill_ratio`
+  and the shipments per box. The search works on the set of sizes: a greedy construction
+  (`time_limit_seconds=0` returns it), the moves `CloseBoxMove`, `OpenBoxMove` and
+  `SwapBoxMove` (`custom_moves.close_box`, `open_box`, `swap_box`), and late acceptance that
+  starts over from just below its best when it stalls (`acceptance.reheat`). On the API the
+  use case is `box-sizing`. With it come the guide (`docs/use-cases/box-sizing/`), the notebook
+  `examples/box-sizing.ipynb`, and `benchmarks/box-sizing`, whose CP-SAT model lives in that
+  directory (`box_sizing_cpsat.model`) and which does not install external-solver.
 - **Order picking on any warehouse layout.** The layout was one fixed grid (columns A..E, shelving
   rows 1..3, rows 0..10 on a side); it is now input, in one of two kinds, and a request or solution
   without either solves exactly as before (same seeded results).

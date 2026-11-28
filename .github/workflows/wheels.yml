@@ -92,7 +92,7 @@ jobs:
       fail-fast: false
       # One job per OS x CPython version (and per libc on Linux), so the
       # builds run side by side instead of one after another in a single job.
-      # Each job still compiles its 22 extensions in parallel (setup.py
+      # Each job still compiles its 23 extensions in parallel (setup.py
       # ParallelCompile uses every core of the runner).
       matrix:
         # Native runners per architecture: no QEMU emulation, no cross-compiling.

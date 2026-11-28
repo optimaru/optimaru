@@ -59,6 +59,7 @@ BENCHMARKS = ROOT / "benchmarks"
 #: (``cpsat_plugins.benchmark``), in the order of the homepage.
 COMPARED = (
     "bed-allocation",
+    "box-sizing",
     "conference-scheduling",
     "employee-scheduling",
     "facility-location",

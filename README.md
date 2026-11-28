@@ -1,7 +1,7 @@
 # optimaru
 
 A metaheuristic optimization engine for real-world routing, scheduling,
-timetabling and allocation, with 22 ready-to-use models you call from Python.
+timetabling and allocation, with 23 ready-to-use models you call from Python.
 
 This repository contains the free, open-source edition. The Enterprise edition
 hosts the same engine as the optimaru API. To switch an existing Python program
@@ -162,7 +162,7 @@ measured at each stage.
 
 ## Use cases
 
-[`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 22 use cases
+[`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 23 use cases
 and the constraint contract they share. Each use case's guide in
 `docs/use-cases/<slug>/` has a short usage example, and `extending.md` beside it
 adds a constraint step by step in that use case's files.
@@ -171,11 +171,11 @@ Routing and logistics: vehicle routing (CVRPTW), pickup & delivery (PDPTW),
 order picking, facility location. Scheduling: employee shifts, flight crew,
 maintenance, project-job (RCPSP), semiconductor fab, food packaging, task
 assigning, meeting. Timetabling: school timetabling, conference, sports league,
-tournament. Allocation and packing: bed allocation, bin packing, knapsack,
-assembly-line balancing, quadratic assignment, max-cut.
+tournament. Allocation and packing: bed allocation, bin packing, box sizing,
+knapsack, assembly-line balancing, quadratic assignment, max-cut.
 
 ```sh
-uv sync                                    # editable install; builds all 22 extensions in place
+uv sync                                    # editable install; builds all 23 extensions in place
 uv run pytest                              # every Python test
 export OPTIMARU_USE_CASES=knapsack         # or build only the use cases you work on
 uv sync && uv run pytest tests/knapsack    # (uv rebuilds when the variable changes)
@@ -264,7 +264,7 @@ optimaru/                          the Python package (pip install optimaru)
 ├── _models.py                     what the use cases' pydantic models share
 ├── _api.py                        solving on the optimaru API: the key, the request, the job
 ├── cpp/optimaru/                  the engine (header-only C++17), below
-└── <use case>/                    22 subpackages, e.g. vehicle_routing/
+└── <use case>/                    23 subpackages, e.g. vehicle_routing/
     ├── __init__.py, models.py,    the Python API: solve, pydantic models,
     │   constraints.py, _core.pyi  constraint specs, stubs of the extension
     └── cpp/

@@ -32,6 +32,7 @@ EVERY_USE_CASE_WITH_COSTS = [name for name in optimaru.__all__ if name not in CO
 SCORES_WITH_PICKS = {
     "assembly_line_balancing",
     "bin_packing",
+    "box_sizing",
     "knapsack",
     "max_cut",
     "quadratic_assignment",

@@ -51,7 +51,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # the C++ tests in tests/<use case>/cpp/ and, where there is one, the quality
     # bench in benchmarks/<slug>/cpp/.
     set(OPTIMARU_ALL_USE_CASES
-        assembly_line_balancing bed_allocation bin_packing conference_scheduling
+        assembly_line_balancing bed_allocation bin_packing box_sizing conference_scheduling
         employee_scheduling facility_location flight_crew_scheduling food_packaging
         knapsack maintenance_scheduling max_cut meeting_scheduling order_picking
         pickup_delivery project_job_scheduling quadratic_assignment school_timetabling
