@@ -180,10 +180,27 @@ is the whole problem: ten parcels for three stops in one van):
 - An item for which no point works is **unplaced**. It stays in its list, changes nothing
   for the items after it, and `unplaced_item_cost` counts it. The search moves it to
   another container or to another place in the order.
-- The decode reads the sizes, the rotations and `min_support_ratio`, and nothing else:
-  weight limits, stacking limits, the unloading order and groups are costs computed on
-  its result. So a hard cost of 0 means every one of them holds, and a solve that cannot
-  reach 0 still returns a loading, with what is broken counted.
+- **Unloading orders and load limits.** When items set an `unload_order` or a
+  `max_load_on_top`, a place is also judged by what it would break. It *blocks* when the
+  item would stand in the way of a placed item that leaves earlier (between it and the
+  door, or above it), or have a placed item that leaves later in its own way; it
+  *overloads* when the item's weight, passed down through what it stands on, would put
+  more on a placed item than its `max_load_on_top`. The item goes to the first point where
+  an orientation does neither; if there is none, to the first that only blocks; if there
+  is none either, to the first feasible point, as without them. So an item is never left
+  out for an order or a limit, and a list in stop blocks (what leaves last first) comes
+  out with each stop in front of the later ones wherever the room allows. An item with an
+  `unload_order` also takes, of the orientations feasible at its point, the shallowest
+  along x first (then the one that divides the room best), so that a stop builds a thin
+  wall across the space and not a long row. This follows the items' facts, whether or not
+  `unloading_order_cost` and `stacking_load_cost` are in the selection; a model that sets
+  `unload_order` or `max_load_on_top` without its cost is refused anyway
+  ([Parameters and their costs](#parameters-and-their-costs)).
+- The decode reads the sizes, the rotations, `min_support_ratio`, the unloading orders,
+  the weights and the load limits, and nothing of the containers' weight limits or the
+  groups. Whatever it does, every constraint is a cost computed on its result. So a hard
+  cost of 0 means every one of them holds, and a solve that cannot reach 0 still returns a
+  loading, with what is broken counted.
 
 `calculate_score(problem)` decodes every container, scores at the default weights and
 writes the derived fields (`update_placements(problem)` writes them without scoring): per item
@@ -321,7 +338,7 @@ cl.solve(problem, constraints=[
 
 First fit decreasing by decode builds the start; late acceptance then works on the
 loading orders with the engine's sequence moves (relocate, swap, Or-opt, 2-opt), its
-adaptive ruin-and-recreate kicks, and three moves of the domain
+adaptive ruin-and-recreate kicks, and four moves of the domain
 (`optimaru/container_loading/cpp/cl/search/moves/`).
 
 - **Construction** (`construction.first_fit_decreasing`,
@@ -361,6 +378,23 @@ adaptive ruin-and-recreate kicks, and three moves of the domain
   order, over several opened cheapest first while together they cost no more than the one
   that is left. It is how a load reaches a cheaper carton, or two small ones in place of
   a large one.
+- **`StopOrderMove`** (`custom_moves.stop_order`; used only when at least two items set
+  an `unload_order`, also for a single container). A vehicle load is one container with
+  items for many stops, and the engine's sequence moves know nothing of stops: a relocate
+  or a swap mixes the stop blocks, and once mixed a load is rarely put back in order one
+  item at a time. This move takes a container whose list holds items with an order, puts
+  them back in stop blocks, the latest stop first (items without an order keep their
+  places), and makes one change inside one stop's block: an item moved or two swapped,
+  or the block ordered afresh by volume, height, base area, depth or at random. A
+  container mixed by other moves comes back in blocks; one in blocks tries another way to
+  build one stop's wall.
+- **Nearby selection by stop** (`selection.nearby_probability`, 0.8, and
+  `selection.nearby_size`, 20; used only when at least half the items set an
+  `unload_order`, as in a vehicle load). An
+  item's nearby items are those of its own stop and the stops next to it, then the
+  closest in volume. The move mix relocates and swaps an item next to them most of the
+  time, which keeps the blocks, and a ruin-and-recreate kick tries only the places next to
+  them where it would otherwise try every place of every list (a decode each).
 - **The decode is the cost of a step.** A move changes one or two lists, and each is
   decoded again from the place it changes: item k's place depends on items 0 .. k - 1
   only, so a decode keeps what it needs to go on from any position
@@ -412,13 +446,49 @@ number of items per container that sets the speed, more than the number of items
 | 20 x 25 | 500 | 12 |
 | 40 x 50 | 2000 | 3 |
 
-One container holding hundreds of items is the slow case: each corner the decoder tries
-is checked against every box already placed, and a decode of a list resumes only from
-where the list changes. On two containers of 1200 x 800 x 2000 cut into boxes (10% slack,
-one spare, 3,000 steps, one run each, the time including the construction), about 45
-items per container ran at 7,500 steps per second, 90 at 3,300, 180 at 640 and 360 at
-340. For a trailer of several hundred small parcels, give the solve time accordingly or
-group the parcels into larger units first.
+One container holding hundreds of items is the slow case: a decode of a list resumes only
+from where the list changes, and each corner the decoder tries is checked against the
+boxes near it (the boxes are filed by the height of their tops for the support check, and
+along the length once a list has 32 items or more). On two containers of
+1200 x 800 x 2000 cut into boxes (10% slack, one spare, 3,000 steps, one run each, the
+time including the construction), about 45 items per container ran at 11,600 steps per
+second, 90 at 4,500, 180 at 1,500 and 360 at 630 (9,400, 2,800, 770 and 350 before
+the decoder filed the boxes). For a trailer of several hundred small parcels, give the
+solve time accordingly or group the parcels into larger units first.
+
+**Vehicle loads.** One cargo space, every box's `unload_order` its stop
+([`container-loading-vehicle-loads`](../../../benchmarks/container-loading/README.md#vehicle-loads)).
+Two kinds of truck: *catalog* trucks carry cartons drawn from nine sizes (a few
+pallet-sized crates among them), 85% upright, a tenth with a `max_load_on_top`; whether
+every order and limit can be met is not known, but without the orders the engine places
+every box of the first four rows. *Cut* trucks are the cargo space cut into one slab per
+stop, each slab cut into boxes and half the volume taken out again from the top: the
+positions they were cut into meet every order and limit, so hard 0 is reachable. Three
+seeds per row, one thread of an Apple M4 Max, the default weights; "pairs" is
+`unloading_order_cost`, "unplaced" `unplaced_item_cost`, both per truck, the mean of the
+three; before is 0.9.0:
+
+| truck | budget | hard 0 | pairs left | unplaced | first hard 0 (s) |
+| --- | --- | --- | --- | --- | --- |
+| catalog 2.5t, 12 stops, 120 boxes | 10 s | 0/3 → 1/3 | 338 → 0 | 9.0 → 3.0 | 1.7 |
+| catalog 5t, 15 stops, 200 boxes | 10 s | 0/3 → 3/3 | 1003 → 0 | 1.7 → 0 | 2.1/0.3/5.9 |
+| catalog 5t, 20 stops, 250 boxes | 30 s | 0/3 → 0/3 | 1401 → 15 | 13.0 → 10.7 | |
+| catalog 5t, 25 stops, 220 boxes | 30 s | 0/3 → 0/3 | 1171 → 26 | 4.0 → 11.3 | |
+| catalog 5t, 20 stops, 300 boxes | 30 s | 0/3 → 0/3 | 1269 → 151 | 41.7 → 54.7 | |
+| cut 2.5t, 10 stops (about 115 boxes) | 10 s | 0/3 → 3/3 | 212 → 0 | 18.3 → 0 | 0.2/0.0/0.3 |
+| cut 5t, 15 stops (about 200 boxes) | 30 s | 0/3 → 1/3 | 672 → 186 | 30.3 → 16.3 | 18.4 |
+| cut 5t, 20 stops (about 300 boxes) | 30 s | 0/3 → 0/3 | 1729 → 255 | 63.0 → 40.7 | |
+
+With the weights a warehouse system sends (an unplaced item 1,000, an unloading pair 10,
+stacking 1 per gram, `load_balance_cost` 1e-4 and `used_length_cost` 1e-6) the same rows
+meet every constraint as often (8 of 24 trucks at 30 s, none before). An unplaced item
+then costs as much as 100 pairs, so where not everything fits the solve trades pairs
+for a box more in the truck, and more pairs are left than at the default weights. Where
+hard 0 comes, it comes within seconds: the construction leaves tens to hundreds of pairs, and the
+stop-block moves clear them, at several times 0.9.0's speed (on the catalog trucks, 120
+boxes ran at 1,340 steps per second where 0.9.0 ran at 480, 200 boxes at 370 for 125,
+300 boxes at 215 for 34). What is left is density: a stop's front is ragged, every later stop has to stay
+behind it, and on the larger trucks the room runs out before the last stops are in.
 
 Against an exact model: [`benchmarks/container-loading`](../../../benchmarks/container-loading)
 compares the engine with a CP-SAT model that places items freely, 30 s each. On the twelve

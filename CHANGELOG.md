@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- **Container loading: vehicle loads in stop order.** A cargo space with items for many stops
+  often came back with hundreds of unloading-order pairs left. Four changes:
+  - The decoder judges a place by what it would break when items set `unload_order` or
+    `max_load_on_top`: an item goes to the first point where it stands in no earlier stop's way,
+    has no later stop in its own way and overloads no item below it (its weight passed down
+    through what it stands on); failing that, to the first point that only breaks an order; failing
+    that, to the first feasible point, as before. An item with an `unload_order` takes the
+    shallowest orientation along the length first, so a stop builds a thin wall. Without orders
+    and load limits the decoder places every item where it did.
+  - A new move, `StopOrderMove` (`custom_moves.stop_order`, on by default when at least two
+    items set `unload_order`, also for a single container): a loading order put back in stop blocks, latest
+    stop first, with one change inside one stop's block.
+  - Nearby selection by stop (`selection.nearby_probability`, 0.8, and `selection.nearby_size`,
+    20, only when at least half the items have an unloading order): the move mix moves an item next to items of its own and the
+    neighbouring stops, and a ruin-and-recreate kick tries only those places instead of every
+    place of the list.
+  - A faster decode for every use: the placed boxes are indexed along the length and by the height
+    of their tops, and every free corner keeps how far the room reaches from it, so most corners
+    are ruled out without a scan.
+
+  On generated trucks of 10 to 25 stops and 110 to 300 boxes (one thread, three seeds per row,
+  `container-loading-vehicle-loads`), the trucks that met every order and limit after 30 s went
+  from none of 24 to 8 of 24, at the default weights and at the weights a warehouse system sends,
+  and the pairs left at the default weights (the mean of three seeds per kind of truck) from
+  151–1,729 to 0–255. Loads without unloading orders or stacking limits are decoded exactly as
+  before (the benchmarks give the same results), at about the same speed, and twice as fast with
+  hundreds of items per container. With stacking limits the decode now also keeps weight off
+  them where it can. The guide's "How good, how fast" has the numbers.
+
 ## 0.9.0
 
 **From 0.8.0.** Two new use cases, box sizing (`optimaru.box_sizing`, the 23rd) and container

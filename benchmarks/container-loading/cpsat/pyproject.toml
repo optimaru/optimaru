@@ -8,6 +8,7 @@ dependencies = ["optimaru", "cpsat-plugins>=0.1.0", "ortools>=9.15,<10", "pydant
 [project.scripts]
 container-loading-compare = "container_loading_cpsat.benchmark:main"
 container-loading-known-optimum = "container_loading_cpsat.known_optimum:main"
+container-loading-vehicle-loads = "container_loading_cpsat.vehicle_loads:main"
 
 [dependency-groups]
 dev = ["pytest"]

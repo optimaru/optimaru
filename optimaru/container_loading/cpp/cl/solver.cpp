@@ -1,7 +1,9 @@
 #include "cl/solver.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <utility>
 
@@ -10,6 +12,7 @@
 #include "cl/score/score_calculator.hpp"
 #include "cl/search/moves/empty_container.hpp"
 #include "cl/search/moves/repack_pair.hpp"
+#include "cl/search/moves/stop_order.hpp"
 #include "cl/search/moves/switch_container.hpp"
 #include "optimaru/search/operators.hpp"
 #include "optimaru/settings.hpp"
@@ -24,6 +27,8 @@ namespace {
 // write it in search/moves/ and register it here, behind a switch of the Config.
 void registerMoves(optimaru::Solver<ContainerLoadingProblem>& engine, const Solver::Config& config,
                    const ContainerLoadingProblem& problem) {
+    if (config.stop_order_moves && StopOrderMove::applies(problem))
+        engine.add_move_operator(std::make_unique<StopOrderMove>());
     if (problem.containers.size() < 2) return;  // nowhere to move a load to
     if (config.empty_container_moves) {
         engine.add_move_operator(
@@ -50,6 +55,34 @@ void runEngine(const Solver::Config& config, ContainerLoadingProblem& problem,
     engineConfig.moves.list_swap_weight = config.list_swap_weight;
     engineConfig.moves.two_opt_weight = config.two_opt_weight;
     engineConfig.moves.or_opt_weight = config.or_opt_weight;
+    // Only for loads that are mostly ordered (vehicle loads): where most items
+    // have no order, the distance would be volume alone, and a kick would try
+    // only the places next to the items closest in volume.
+    std::size_t ordered = 0;
+    for (const Item& item : problem.items) ordered += item.unloadOrder ? 1 : 0;
+    if (2 * ordered >= problem.items.size() && config.nearby_probability > 0.0) {
+        // Close = the same stop, then the stops next to it; among equals,
+        // the closest in volume. An item without an order is far from every
+        // item with one (it has no block to keep).
+        // The engine lives in this function, so the problem outlives it.
+        const ContainerLoadingProblem* facts = &problem;
+        engineConfig.selection.nearby.distance = [facts](int a, int b) {
+            const Item& x = facts->items[static_cast<std::size_t>(a)];
+            const Item& y = facts->items[static_cast<std::size_t>(b)];
+            const double volumes =
+                    std::abs(static_cast<double>(x.volume()) - static_cast<double>(y.volume())) /
+                    (static_cast<double>(std::max(x.volume(), y.volume())) + 1.0);
+            // Farther than any two stops can be (two ints differ by less).
+            constexpr double kOtherKind = 1e12;
+            if (x.unloadOrder.has_value() != y.unloadOrder.has_value()) return kOtherKind + volumes;
+            if (!x.unloadOrder) return volumes;
+            return static_cast<double>(
+                           std::abs(static_cast<std::int64_t>(*x.unloadOrder) - *y.unloadOrder)) +
+                   volumes;
+        };
+        engineConfig.selection.nearby.size = std::max(1, config.nearby_size);
+        engineConfig.selection.nearby.probability = config.nearby_probability;
+    }
 
     optimaru::Solver<ContainerLoadingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);

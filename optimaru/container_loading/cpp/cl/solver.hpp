@@ -14,7 +14,7 @@ namespace cl {
 // domain construction (first fit decreasing by decode,
 // cl/construct/construction.hpp), then optimaru::Solver<ContainerLoadingProblem>
 // with late acceptance over the built-in sequence moves, the domain's
-// EmptyContainerMove, RepackPairMove and SwitchContainerMove
+// EmptyContainerMove, RepackPairMove, SwitchContainerMove and StopOrderMove
 // (cl/search/moves/) and the engine's adaptive ruin-and-recreate (ALNS).
 //
 // The search works on loading orders. Where the items stand is derived from
@@ -74,6 +74,22 @@ public:
         // (cl/search/moves/switch_container.hpp). Registered only when the
         // containers differ.
         bool switch_container_moves = true;
+
+        // StopOrderMove: one container's loading order put back in stop
+        // blocks (latest stop first), with one change inside one stop's
+        // block (cl/search/moves/stop_order.hpp). Registered only when at
+        // least two items set an unloadOrder, also for a single container.
+        bool stop_order_moves = true;
+
+        // Nearby selection, only when at least half the items set an
+        // unloadOrder (a vehicle load): an item's nearby items are those of
+        // the same stop and the stops next to it (then the closest in
+        // volume). The move mix then relocates
+        // and swaps an item next to them, which keeps the stops in blocks,
+        // and a ruin-and-recreate kick tries only the places next to them,
+        // where it would try every place of every list. 0 = off.
+        double nearby_probability = 0.8;
+        int nearby_size = 20;
     };
 
     Solver() = default;

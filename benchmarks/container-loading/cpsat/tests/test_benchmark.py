@@ -2,7 +2,7 @@ import sys
 
 import pytest
 
-from container_loading_cpsat import benchmark, evaluator, instances, known_optimum
+from container_loading_cpsat import benchmark, evaluator, instances, known_optimum, vehicle_loads
 from container_loading_cpsat import model as cpsat
 from container_loading_cpsat.evaluator import constraints as pricing
 from optimaru import container_loading
@@ -112,3 +112,35 @@ def test_the_known_optimum_table_runs(capsys):
     assert lines[0].startswith("| cut containers x boxes") and len(lines) == 3
     assert lines[0].split(" | ")[4:] == ["volume needs", "construction", "solve |"]
     assert lines[2].startswith("| 4 x 15 | 0% | fixed | 60 | 4 |")
+
+
+def test_a_cut_truck_has_a_loading_that_meets_every_order_and_limit():
+    """The positions a cut truck was cut into, scored from the positions: a valid loading with
+    no unloading pair, no stacking excess and nothing left out. So hard 0 is reachable."""
+    stops = 6
+    model = vehicle_loads.cut_load(3, "2.5t", stops, 50)
+    placed = vehicle_loads.cut_witness(3, "2.5t", stops, 50)
+    assert model == vehicle_loads.cut_load(3, "2.5t", stops, 50)
+    assert {item.unload_order for item in model.items} == set(range(1, stops + 1))
+    assert any(item.max_load_on_top is not None for item in model.items)
+    by_id = {item.id: item for item in model.items}
+    order = sorted(range(len(placed)), key=lambda i: (placed[i][0][0], placed[i][0][2], placed[i][0][1]))
+    for sequence, i in enumerate(order):
+        (x, y, z), (length, width, height), _ = placed[i]
+        item = by_id[f"b{i + 1}"]
+        item.container, item.sequence, item.x, item.y, item.z = "truck", sequence, x, y, z
+        item.placed_length, item.placed_width, item.placed_height = length, width, height
+    model.containers[0].items = [f"b{i + 1}" for i in order]
+    model.containers[0].unplaced_items = []
+    assert evaluator.loading_faults(model) == []
+    costs = evaluator.raw_costs(model)
+    assert costs["unloading_order_cost"] == [0] and costs["stacking_load_cost"] == [0]
+    assert costs["unplaced_item_cost"] == [0]
+
+
+def test_the_vehicle_loads_table_runs(capsys):
+    loads = vehicle_loads.catalog_load(1, "2.5t", 12, 40)
+    assert len(loads.items) == 40 and loads == vehicle_loads.catalog_load(1, "2.5t", 12, 40)
+    assert vehicle_loads.main(["--seconds", "0.2", "--families", "1", "--workers", "1"]) == 0
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[0].startswith("| truck | budget | hard 0") and len(lines) == 3

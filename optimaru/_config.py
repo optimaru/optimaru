@@ -128,6 +128,7 @@ FIELDS: dict[str, tuple[str, str]] = {
     "smart_change_candidate_count": ("custom_moves", "smart_change_candidate_count"),
     "smart_class_swap_moves": ("custom_moves", "smart_class_swap"),
     "smart_class_swap_candidates": ("custom_moves", "smart_class_swap_candidates"),
+    "stop_order_moves": ("custom_moves", "stop_order"),
     "swap_box_moves": ("custom_moves", "swap_box"),
     "swap_facility_moves": ("custom_moves", "swap_facility"),
     "switch_container_moves": ("custom_moves", "switch_container"),

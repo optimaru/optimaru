@@ -1,6 +1,7 @@
 """solve(): the samples, the engine knobs and the callbacks."""
 
 import json
+import random
 from pathlib import Path
 
 import pytest
@@ -92,6 +93,76 @@ def test_the_van_is_loaded_last_stop_first():
     )
 
 
+def test_a_truck_with_many_stops_comes_out_in_stop_order():
+    """Twelve stops, 96 cartons of four sizes drawn at random, a third of the cargo space: the
+    construction alone loads every stop clear of the later ones, and a short search keeps it."""
+    rng = random.Random(4)
+    sizes = [(600, 400, 400), (400, 300, 300), (500, 400, 300), (300, 200, 200)]
+    items = []
+    for i in range(96):
+        length, width, height = rng.choice(sizes)
+        items.append(
+            cl.Item(
+                f"p{i}",
+                length,
+                width,
+                height,
+                weight=rng.randint(1000, 15000),
+                rotations=cl.Rotation.UPRIGHT,
+                unload_order=1 + rng.randrange(12),
+            )
+        )
+    truck = cl.Container("truck", 4300, 1800, 1900)
+    zero = cl.SolverConfig(stop={"time_limit_seconds": 0})
+    constructed = cl.solve(cl.ContainerLoadingProblem([truck], items), config=zero)
+    assert constructed.score.hard == 0
+    problem = cl.ContainerLoadingProblem([truck], items)
+    cl.solve(problem, config=cl.SolverConfig(stop={"step_limit": 2000}, run={"random_seed": 1}))
+    assert problem.score.hard == 0 and problem.unplaced_items() == []
+
+
+def test_nearby_selection_by_stop_can_be_switched_off():
+    """The setting reaches the engine: 0 turns nearby selection off, and the same seeded solve then
+    takes another path through the same truck (other improvements, at other steps). On a load
+    that is mostly without orders it is not used."""
+    rng = random.Random(7)
+    sizes = [(600, 400, 400), (400, 300, 300), (500, 400, 300), (300, 200, 200)]
+    items = [
+        cl.Item(f"p{i}", *rng.choice(sizes), unload_order=1 + rng.randrange(8), rotations=cl.Rotation.UPRIGHT)
+        for i in range(40)
+    ]
+    truck = [cl.Container("truck", 3000, 1500, 1500)]
+    picks = replace_default(get_constraints(), "used_length_cost", UsedLengthCost(weight=1.0))
+
+    def path(load: list, nearby: float) -> list:
+        config = cl.SolverConfig(stop={"step_limit": 3000}, run={"random_seed": 3})
+        config.selection.nearby_probability = nearby
+        assert config.selection.nearby_probability == nearby
+        steps = []
+        cl.solve(
+            cl.ContainerLoadingProblem(truck, load),
+            config=config,
+            constraints=picks,
+            on_new_best=lambda step, score: steps.append((step, score.hard, score.soft)),
+        )
+        return steps
+
+    assert path(items, 0.8) != path(items, 0.0)
+    # Where fewer than half the items have an order, the setting is not used at all.
+    mostly_free = [
+        cl.Item(
+            item.id,
+            item.length,
+            item.width,
+            item.height,
+            rotations=cl.Rotation.UPRIGHT,
+            unload_order=item.unload_order if i < 10 else None,
+        )
+        for i, item in enumerate(items)
+    ]
+    assert path(mostly_free, 0.8) == path(mostly_free, 0.0)
+
+
 def test_the_cheapest_cartons_that_hold_an_order_are_chosen():
     """A catalog of three carton sizes, two copies each: the order fits the medium one, which
     costs less than the large one and less than two small ones."""
@@ -162,7 +233,7 @@ def test_without_first_fit_decreasing_the_engine_inserts():
     assert sorted(i for order in problem.loading() for i in order) == list(range(16))
 
 
-@pytest.mark.parametrize("move", ["empty_container", "repack", "switch_container"])
+@pytest.mark.parametrize("move", ["empty_container", "repack", "switch_container", "stop_order"])
 def test_the_custom_moves_can_be_switched_off(move):
     problem = cl.generate_demo_data()
     config = cl.SolverConfig(stop={"step_limit": 2000}, run={"random_seed": 1})
