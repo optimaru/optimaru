@@ -162,8 +162,8 @@ and `constraint_info()` their defaults.
 - Source, docs and benchmarks against OR-Tools: <https://github.com/optimaru/optimaru>
 - Example notebooks, one per use case: <https://github.com/optimaru/optimaru/tree/main/examples>
 
-optimaru comes in a free, open-source edition (this package, Apache-2.0) and
-an Enterprise edition, the optimaru API: the same engine as a hosted service.
+This package is the free, open-source edition (Apache-2.0). The Enterprise
+edition hosts the same engine as the optimaru API.
 
 ## License
 
