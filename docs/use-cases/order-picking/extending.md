@@ -104,8 +104,9 @@ and you write one function, `cost(solution, unit, members)`: the raw cost of tro
 arguments, and never the derived fields of a `PickTask` (`trolleyIndex`,
 `previousPickTask`, `nextPickTask`): those describe the lists as they were last
 scored, and a preview asks about lists that do not exist yet. A pick knows its
-order (`PickTask::orderIndex`), its volume and its location; `calculateDistance()` in
-`domain.hpp` gives the warehouse distance between two locations. A constraint that does not
+order (`PickTask::orderIndex`), its volume and its location;
+`calculateDistance(solution.warehouse, a, b)` in `domain.hpp` gives the distance between two
+locations in the solution's layout. A constraint that does not
 decompose per trolley is a `OpGlobalConstraint`; [step 4](#4-make-it-cheaper-per-move)
 says what that costs the assembly.
 

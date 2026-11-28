@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- **Order picking on any warehouse layout.** The layout was one fixed grid (columns A..E, shelving
+  rows 1..3, rows 0..10 on a side); it is now input, in one of two kinds, and a request or solution
+  without either solves exactly as before (same seeded results).
+  - A grid of any size: `warehouse` on `OrderPickingRequest` (`WarehouseModel`: `column_count` 5,
+    `shelving_row_count` 3, `shelving_width` 2, `shelving_height` 10, `shelving_padding` 3, whole
+    meters), `op.Warehouse(...)` on the compiled side. A location's `column` is written as
+    spreadsheet columns are (`A`..`Z`, `AA`, ... `ZZZ`).
+  - Named locations with a walking-distance table, for a building that is no such grid:
+    `locations` (ids) and `distances` (`{from: {to: meters}}`) on the request, where the
+    `location` of a trolley or an order item is then an id; `op.Warehouse.from_distances(ids,
+    table)` and `warehouse.location(id)` on the compiled side. The table may be asymmetric, a pair
+    given one way only is as long the other way, and a pair given neither way is refused.
+  - One request uses one kind; mixing them is refused. `OrderPickingSolution` takes a fourth
+    argument, `warehouse`, and has the property of that name; `calculate_distance` takes a third.
+    `PickStop.location` is a `LocationModel` or an id, as the request gave it.
+  - A solve reads its distances from one location-to-location table for both kinds instead of
+    computing each one (a grid: up to 2048 distinct locations in use), which makes the default
+    layout faster: about 1.1x the steps per second on the demo and 1.4x on the demo at four
+    times the size, same results.
+  - `WarehouseLocation(column, shelving_row, side, row)` no longer checks its numbers against the
+    default grid (it cannot know the warehouse): a location outside the grid is refused by
+    `OrderPickingSolution(...)` and by `solve`, with a `ValueError` naming the trolley or pick
+    task. `LocationModel.column` is a string of 1 to 3 capital letters instead of a literal
+    `A`..`E`, and `shelving_row` and `row` have no upper bound of their own: the request checks
+    them against its grid.
+  - **Breaking (C++):** `op::Warehouse` is an object (`OrderPickingSolution::warehouse`) and no
+    longer a set of constants (`Warehouse::COLUMN_COUNT` is `Warehouse::DEFAULT_COLUMN_COUNT`,
+    and so on); `calculateDistance(warehouse, start, end)` measures in a layout, the two-argument
+    form in the default grid; `calculateDistanceToTravel` returns `std::int64_t`. New:
+    `op/model/layout.hpp` (`makeGridWarehouse`, `makeNamedWarehouse`, `checkLayout`,
+    `ActiveDistances`).
+  - The CP-SAT reference (external-solver) knows the default grid only, so the comparison in
+    `benchmarks/order-picking` stays on it and another layout is engine-only for now.
 - **The random draws are the same on every platform; every seeded result changes once.** The
   engine and the use cases drew through the `std::` distributions and `std::shuffle`, which
   libstdc++ (the Linux wheels, the API) and libc++ (the macOS wheels) implement differently, so

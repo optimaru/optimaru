@@ -1,11 +1,15 @@
 """Order picking — C++ core with Python helpers.
 
-`Side`, `WarehouseLocation`, `Order`, `PickTask`, `Trolley`,
+`Side`, `Warehouse`, `WarehouseLocation`, `Order`, `PickTask`, `Trolley`,
 `OrderPickingSolution`, `Score`, `ConstraintInfo`, `Solver`, `SolverConfig`
 and the module functions come from the compiled C++ core (`_core`). Each
 trolley's ordered `pick_task_indices` list is the decision; `trolley_index` /
 `previous_pick_task` / `next_pick_task` on a pick task are derived from the
 lists.
+
+The layout is the solution's `warehouse`: a grid of shelvings of any size (by default
+5 columns x 3 shelving rows), or named locations with a walking-distance table
+(`Warehouse.from_distances`).
 
 Score convention (hard / soft), at the default weights:
   hard = -(missing trolley buckets)                     # trolley_capacity_cost
@@ -42,6 +46,7 @@ from ._core import (
     Solver,
     SolverConfig,
     Trolley,
+    Warehouse,
     WarehouseLocation,
     build_demo_data,  # the name before 0.5.1
     calculate_distance,
@@ -68,6 +73,7 @@ __all__ = [
     "Solver",
     "SolverConfig",
     "Trolley",
+    "Warehouse",
     "WarehouseLocation",
     "calculate_distance",
     "calculate_score",

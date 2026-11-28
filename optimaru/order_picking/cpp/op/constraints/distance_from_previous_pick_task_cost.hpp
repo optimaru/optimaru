@@ -18,11 +18,12 @@ struct DistanceFromPreviousPickTaskCost final : OpUnitConstraint {
         : OpUnitConstraint("distanceFromPreviousPickTaskCost", weight, kDefaultLevel) {}
     double cost(const OrderPickingSolution& solution, int unit,
                 const std::vector<int>& members) const override {
+        const Warehouse& warehouse = solution.warehouse;
         const WarehouseLocation* previous = &solution.trolleys[unit].location;
         std::int64_t distance = 0;
         for (int pickIndex : members) {
             const WarehouseLocation& location = solution.pickTasks[pickIndex].location;
-            distance += calculateDistance(*previous, location);
+            distance += calculateDistance(warehouse, *previous, location);
             previous = &location;
         }
         return static_cast<double>(distance);

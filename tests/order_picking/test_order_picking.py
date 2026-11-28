@@ -286,12 +286,22 @@ def test_duplicate_ids_rejected():
 
 
 def test_invalid_location_rejected():
+    """A location outside the default grid is refused where the warehouse is known: by the solution."""
+    origin = location(*ORIGIN_ARGS)
+
+    def solution_at(place):
+        return op.OrderPickingSolution(
+            [op.Order("o")], [op.Trolley("1", 1, 10, origin)], [op.PickTask("p", 0, 1, place)]
+        )
+
+    with pytest.raises(ValueError, match="column 5 is outside"):
+        solution_at(op.WarehouseLocation(column=5, shelving_row=0, side=op.Side.LEFT, row=0))
+    with pytest.raises(ValueError, match="shelving_row 3 is outside"):
+        solution_at(op.WarehouseLocation(column=0, shelving_row=3, side=op.Side.LEFT, row=0))
+    with pytest.raises(ValueError, match="row 11 is outside"):
+        solution_at(op.WarehouseLocation(column=0, shelving_row=0, side=op.Side.LEFT, row=11))
     with pytest.raises(ValueError):
-        op.WarehouseLocation(column=5, shelving_row=0, side=op.Side.LEFT, row=0)
-    with pytest.raises(ValueError):
-        op.WarehouseLocation(column=0, shelving_row=3, side=op.Side.LEFT, row=0)
-    with pytest.raises(ValueError):
-        op.WarehouseLocation(column=0, shelving_row=0, side=op.Side.LEFT, row=11)
+        op.WarehouseLocation(column=-1, shelving_row=0, side=op.Side.LEFT, row=0)
 
 
 def test_a_raising_on_new_best_stops_every_parallel_worker():

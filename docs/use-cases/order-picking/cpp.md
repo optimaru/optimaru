@@ -6,9 +6,15 @@ and its C++ tests are in [`tests/order_picking/cpp/`](../../../tests/order_picki
 Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0; see the repository NOTICE).
 Only the domain and constraints are implemented here, on top of the generic engine (`core/optimaru`, header-only).
 
-- `op/model/domain.hpp` — warehouse layout (5 shelf columns x 3 rows, left/right sides, rows 0-10),
-  `calculateDistance`, domain structs, the sequence-shape `SolutionTraits` specialization
+- `op/model/domain.hpp` — the warehouse layout (`Warehouse`, the solution's `warehouse`: a grid of
+  shelvings, by default 5 shelf columns x 3 rows, left/right sides, rows 0-10; or named locations with a
+  `DistanceTable`), `calculateDistance(warehouse, start, end)` (two arguments: the default grid),
+  domain structs, the sequence-shape `SolutionTraits` specialization
   (the trolley's `pickTaskIndices` is the decision: the ordered list of pick tasks it visits).
+- `op/model/layout.hpp` — `makeGridWarehouse` and `makeNamedWarehouse` (a layout with its numbers checked),
+  `checkLayout` (every location inside the solution's warehouse) and `ActiveDistances`, the table of
+  location-to-location distances a solve reads instead of computing (`Warehouse::active`; both kinds
+  of layout, a grid up to 2048 distinct locations in use).
 - `op/score/score_calculator.hpp` — full recompute + derived values
   (`trolleyIndex`/`previousPickTask`/`nextPickTask`) recalculation + per-constraint totals
   (`ConstraintTotals`, members named after the registry names, at the components'
@@ -30,7 +36,7 @@ Only the domain and constraints are implemented here, on top of the generic engi
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=order_picking
 cmake --build build -j4
-./build/order_picking/op_test         # per-constraint hand checks + incremental==full + ScoreChecks::Full solve
+./build/order_picking/op_test         # per-constraint hand checks + incremental==full + ScoreChecks::Full solve + layouts
 ./build/order_picking/op_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
 ./build/order_picking/op_demo         # 10 s solve of the demo warehouse, reaches feasible (hard 0)
 ```

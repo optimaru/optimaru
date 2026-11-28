@@ -14,6 +14,7 @@
 #include "op/constraints.hpp"
 #include "op/model/demo_data.hpp"
 #include "op/model/domain.hpp"
+#include "op/model/layout.hpp"
 #include "op/score/incremental_calculator.hpp"
 #include "op/score/score_calculator.hpp"
 #include "op/solver.hpp"
@@ -34,13 +35,13 @@ PYBIND11_MODULE(_core, m) {
             .value("RIGHT", Side::RIGHT);
 
     py::class_<WarehouseLocation>(m, "WarehouseLocation", py::module_local())
+            // A grid location. Whether it is inside the grid is the solution's
+            // to say, which knows the warehouse (OrderPickingSolution, solve).
             .def(py::init([](int column, int shelvingRow, Side side, int row) {
-                     if (column < 0 || column >= Warehouse::COLUMN_COUNT)
-                         throw py::value_error("column must be 0..4 (shelving columns A..E)");
-                     if (shelvingRow < 0 || shelvingRow >= Warehouse::ROW_COUNT)
-                         throw py::value_error("shelving_row must be 0..2 (shelving rows 1..3)");
-                     if (row < 0 || row > Warehouse::SHELVING_HEIGHT)
-                         throw py::value_error("row must be 0..10");
+                     if (column < 0) throw py::value_error("column must not be negative");
+                     if (shelvingRow < 0)
+                         throw py::value_error("shelving_row must not be negative");
+                     if (row < 0) throw py::value_error("row must not be negative");
                      WarehouseLocation location;
                      location.column = column;
                      location.shelvingRow = shelvingRow;
@@ -53,12 +54,72 @@ PYBIND11_MODULE(_core, m) {
             .def_readonly("shelving_row", &WarehouseLocation::shelvingRow)
             .def_readonly("side", &WarehouseLocation::side)
             .def_readonly("row", &WarehouseLocation::row)
-            // The shelving id, e.g. "(A,1)".
+            // The index of a named location (Warehouse.location(id)); -1 on a grid.
+            .def_property_readonly("index", [](const WarehouseLocation& l) { return l.node; })
+            // The shelving id of a grid location, e.g. "(A,1)".
             .def_property_readonly("shelving_id", &WarehouseLocation::shelvingId)
             .def("__repr__", [](const WarehouseLocation& l) {
+                if (l.node >= 0)
+                    return "<WarehouseLocation named, index " + std::to_string(l.node) + ">";
                 return "<WarehouseLocation " + l.shelvingId() +
                        (l.side == Side::LEFT ? " LEFT" : " RIGHT") + " row " +
                        std::to_string(l.row) + ">";
+            });
+
+    py::class_<Warehouse>(m, "Warehouse", py::module_local())
+            .def(py::init(&makeGridWarehouse),
+                 py::arg("column_count") = Warehouse::DEFAULT_COLUMN_COUNT,
+                 py::arg("shelving_row_count") = Warehouse::DEFAULT_SHELVING_ROW_COUNT,
+                 py::arg("shelving_width") = Warehouse::DEFAULT_SHELVING_WIDTH,
+                 py::arg("shelving_height") = Warehouse::DEFAULT_SHELVING_HEIGHT,
+                 py::arg("shelving_padding") = Warehouse::DEFAULT_SHELVING_PADDING)
+            .def_static("from_distances", &makeNamedWarehouse, py::arg("location_ids"),
+                        py::arg("distances"),
+                        "A warehouse of named locations: distances[i][j] is the whole meters "
+                        "from location_ids[i] to location_ids[j].")
+            .def_property_readonly("is_grid", &Warehouse::isGrid)
+            .def_readonly("column_count", &Warehouse::columnCount)
+            .def_readonly("shelving_row_count", &Warehouse::shelvingRowCount)
+            .def_readonly("shelving_width", &Warehouse::shelvingWidth)
+            .def_readonly("shelving_height", &Warehouse::shelvingHeight)
+            .def_readonly("shelving_padding", &Warehouse::shelvingPadding)
+            .def_property_readonly("location_ids",
+                                   [](const Warehouse& w) {
+                                       return w.isGrid() ? std::vector<std::string>()
+                                                         : w.locations->ids;
+                                   })
+            .def(
+                    "location",
+                    [](const Warehouse& w, const std::string& id) {
+                        if (w.isGrid())
+                            throw py::value_error(
+                                    "a grid warehouse has no named locations: use "
+                                    "WarehouseLocation(column, shelving_row, side, row)");
+                        const std::vector<std::string>& ids = w.locations->ids;
+                        for (std::size_t i = 0; i < ids.size(); ++i) {
+                            if (ids[i] == id) return WarehouseLocation::named(static_cast<int>(i));
+                        }
+                        throw py::value_error("unknown location '" + id + "'");
+                    },
+                    py::arg("id"), "The named location with this id.")
+            .def(
+                    "location_id",
+                    [](const Warehouse& w, const WarehouseLocation& location) {
+                        if (!w.isGrid() && !w.locations->holds(location.node))
+                            throw py::value_error("not a location of this warehouse");
+                        return locationLabel(w, location);
+                    },
+                    py::arg("location"),
+                    "What the location is called: the id of a named location, the shelving id "
+                    "of a grid one.")
+            .def("__repr__", [](const Warehouse& w) {
+                if (!w.isGrid())
+                    return "<Warehouse of " + std::to_string(w.locations->size) +
+                           " named locations>";
+                return "<Warehouse grid " + std::to_string(w.columnCount) + " columns x " +
+                       std::to_string(w.shelvingRowCount) + " shelving rows, shelvings " +
+                       std::to_string(w.shelvingWidth) + " x " + std::to_string(w.shelvingHeight) +
+                       " m, padding " + std::to_string(w.shelvingPadding) + " m>";
             });
 
     py::class_<Order>(m, "Order", py::module_local())
@@ -116,7 +177,7 @@ PYBIND11_MODULE(_core, m) {
 
     py::class_<OrderPickingSolution>(m, "OrderPickingSolution", py::module_local())
             .def(py::init([](std::vector<Order> orders, std::vector<Trolley> trolleys,
-                             std::vector<PickTask> pickTasks) {
+                             std::vector<PickTask> pickTasks, const Warehouse* warehouse) {
                      for (const PickTask& task : pickTasks) {
                          if (task.orderIndex < 0 ||
                              task.orderIndex >= static_cast<int>(orders.size()))
@@ -124,12 +185,19 @@ PYBIND11_MODULE(_core, m) {
                                                    "' has an out-of-range order_index");
                      }
                      OrderPickingSolution solution;
+                     if (warehouse != nullptr) solution.warehouse = *warehouse;
                      solution.orders = std::move(orders);
                      solution.trolleys = std::move(trolleys);
                      solution.pickTasks = std::move(pickTasks);
+                     // Every location inside the warehouse (std::invalid_argument:
+                     // ValueError).
+                     checkLayout(solution);
                      return solution;
                  }),
-                 py::arg("orders"), py::arg("trolleys"), py::arg("pick_tasks"))
+                 py::arg("orders"), py::arg("trolleys"), py::arg("pick_tasks"),
+                 py::arg("warehouse") = static_cast<const Warehouse*>(nullptr))
+            // The layout: the default grid unless one was given.
+            .def_readonly("warehouse", &OrderPickingSolution::warehouse)
             .def_readonly("orders", &OrderPickingSolution::orders)
             .def_readwrite("trolleys", &OrderPickingSolution::trolleys)
             .def_readonly("pick_tasks", &OrderPickingSolution::pickTasks)
@@ -146,8 +214,22 @@ PYBIND11_MODULE(_core, m) {
                 return out;
             });
 
-    m.def("calculate_distance", &calculateDistance, py::arg("start"), py::arg("end"),
-          "Distance in meters between two warehouse locations.");
+    m.def(
+            "calculate_distance",
+            [](const WarehouseLocation& start, const WarehouseLocation& end,
+               const Warehouse* warehouse) {
+                const Warehouse layout = warehouse != nullptr ? *warehouse : Warehouse{};
+                if (!layout.isGrid() &&
+                    (!layout.locations->holds(start.node) || !layout.locations->holds(end.node)))
+                    throw py::value_error("not a location of this warehouse");
+                if (layout.isGrid() && (start.node >= 0 || end.node >= 0))
+                    throw py::value_error("a named location needs its warehouse");
+                return calculateDistance(layout, start, end);
+            },
+            py::arg("start"), py::arg("end"),
+            py::arg("warehouse") = static_cast<const Warehouse*>(nullptr),
+            "Distance in meters between two locations of the warehouse (the default grid "
+            "when none is given).");
 
     m.def(
             "distance_to_travel",

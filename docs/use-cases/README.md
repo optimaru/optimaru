@@ -477,7 +477,8 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | profile `preferred_visits` ([]) | `profile_preferred_visit_cost` |
 
 Facility location, food packaging and order picking check nothing: every field a cost
-reads there is required. Some fields are read by nothing at all, so no selection can
+reads there is required (order picking's layout has a default, and its response reports
+the meters walked from it whatever the constraints). Some fields are read by nothing at all, so no selection can
 give them an effect: food packaging's job `min_start_time` and `priority`, meeting
 scheduling's `entire_group_meeting`, school timetabling's `subject_ids`,
 `homeroom_class_id` and `grade`, and facility location's map corners.

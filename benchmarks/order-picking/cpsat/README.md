@@ -13,6 +13,11 @@ moves a term to the soft / hard level on both solvers, and `level="medium"` is r
 on both (`this use case has no medium level`). Like every CP-SAT reference,
 `exponent != 1` and non-integer weights are rejected.
 
+The model measures in the default warehouse (5 columns x 3 shelving rows of shelvings 2 m x
+10 m, 3 m apart). The engine also takes a grid of another size and named locations with a
+distance table (`warehouse`, `locations` and `distances` on the request); the pinned
+external-solver does not read those fields, so the comparison stays on the default layout.
+
 A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own
 terms with its own knobs, its level included. Every plugin adds one term per trolley,
