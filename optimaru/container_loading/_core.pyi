@@ -13,8 +13,10 @@ caller's unit.
 Score (hard/soft, lexicographic), at the default weights: hard = -(items that found no
 place + weight above a container's max_weight + weight on an item above its
 max_load_on_top + stacking rules and layer limits broken + pairs where a later item
-blocks an earlier one + centre of gravity beyond its limits, in percent), soft = -(cost of the
-containers in use + containers a group is in beyond its first). The weights are the C++
+blocks an earlier one + centre of gravity beyond its limits, in percent + all-or-none groups
+loaded in part + one-container groups in several), soft = -(cost of the containers in use +
+optional items left out + containers a group is in beyond its first). An unplaced item counts
+its priority. The weights are the C++
 components' defaults (constraint_info()); the problem carries none.
 """
 
@@ -41,7 +43,7 @@ class Rotation(Enum):
     """As given."""
 
 class Item:
-    """One box. The fields after `stack_group` are derived: `calculate_score` and every solve write them."""
+    """One box. The fields after `optional` are derived: `calculate_score` and every solve write them."""
 
     def __init__(
         self,
@@ -57,6 +59,8 @@ class Item:
         bottom_only: bool = False,
         max_stack_layers: int | None = None,
         stack_group: str | None = None,
+        priority: int = 1,
+        optional: bool = False,
     ) -> None: ...
     id: str
     length: int
@@ -78,6 +82,12 @@ class Item:
     """At most this many items in a column through it, itself included (>= 1). None = no limit."""
     stack_group: str | None
     """The group the problem's stacking_rules name."""
+    priority: int
+    """What leaving it out costs: an unplaced item counts its priority (1 to 1,000,000)."""
+    optional: bool
+    """Loaded where there is room: left out, it counts in optional_item_cost (soft), not in
+    unplaced_item_cost, its weight does not count against max_weight, and the decoder leaves it
+    out where it would put the placed weight above max_weight."""
     @property
     def container(self) -> int:
         """Index of the container it stands in; -1 = not placed."""
@@ -160,8 +170,9 @@ class ContainerLoadingProblem:
     ValueError for what the engine refuses: a min_support_ratio outside (0, 1], a repeated
     id, a size outside 1..1,000,000, a weight outside 0..1,000,000,000, a negative limit
     or cost, a max_stack_layers outside 1..1,000,000,000, a max_stack_height outside 1..1,000,000, an offset
-    limit outside 0..1, a stacking rule with an empty group, an item listed twice, or items
-    without a container."""
+    limit outside 0..1, a stacking rule with an empty group, a priority outside
+    1..1,000,000, a group rule for no item's group or a group ruled twice, an item listed
+    twice, or items without a container."""
 
     def __init__(
         self,
@@ -169,6 +180,7 @@ class ContainerLoadingProblem:
         items: list[Item],
         min_support_ratio: float = 0.8,
         stacking_rules: list[tuple[str, str]] = ...,
+        group_rules: list[tuple[str, bool, bool]] = ...,
     ) -> None: ...
     containers: list[Container]
     items: list[Item]
@@ -177,6 +189,9 @@ class ContainerLoadingProblem:
     stacking_rules: list[tuple[str, str]]
     """(top, bottom): items whose stack_group is top may not stand on items whose stack_group
     is bottom. Anything not listed is allowed."""
+    group_rules: list[tuple[str, bool, bool]]
+    """(group, all_or_none, single_container): load the items whose group is `group` all or
+    none, and in one container."""
     @property
     def score(self) -> Score: ...
     def loading(self) -> list[list[int]]:
@@ -386,8 +401,9 @@ class Solver:
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
     unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
-    unloading_order_cost, balance_limit_cost, used_container_cost, used_length_cost,
-    load_balance_cost, group_split_cost.
+    unloading_order_cost, balance_limit_cost, used_container_cost, optional_item_cost,
+    used_length_cost, load_balance_cost, group_split_cost, incomplete_group_cost,
+    single_container_cost.
     The same names optimaru.container_loading.constraints uses."""
 
 def constraint_costs(
@@ -397,9 +413,11 @@ def constraint_costs(
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. The nine per-container
-    constraints list one cost per container, an empty one included; group_split_cost
-    (global) lists the one total. None = the default constraints; a pick list (as for
+    "default_weight": float, "default_level": str}}. The ten per-container
+    constraints list one cost per container, an empty one included (the scoped
+    stacking_rule_cost, balance_limit_cost and optional_item_cost also name the containers
+    they evaluate, `units`); the three globals (group_split_cost, incomplete_group_cost,
+    single_container_cost) list their one total. None = the default constraints; a pick list (as for
     solve) scores exactly those picks, each entry carrying its pick's knobs, the k-th
     pick of a name keyed "<name>#<k>" from the second on.
     optimaru.container_loading.constraints.score() turns it into a score. Raises
@@ -418,6 +436,8 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order:
     unplaced_item_cost, container_weight_cost, stacking_load_cost, stacking_rule_cost,
-    unloading_order_cost and balance_limit_cost (hard, 1), used_container_cost (soft, 1), used_length_cost and
+    unloading_order_cost and balance_limit_cost (hard, 1), used_container_cost and
+    optional_item_cost (soft, 1), used_length_cost and
     load_balance_cost (soft, 0: opt-in, default_enabled False), group_split_cost
-    (soft, 1); all flippable, none a reward."""
+    (soft, 1, global), incomplete_group_cost and single_container_cost (hard, 1, global);
+    all flippable, none a reward."""

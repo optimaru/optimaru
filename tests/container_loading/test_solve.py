@@ -304,6 +304,60 @@ def test_stacking_rules_and_layers_are_met_where_there_is_room():
         assert not (item.stack_group == "chem" and below is not None and below.stack_group == "food")
 
 
+def _cubes(count, **fields):
+    return [
+        cl.Item(f"{fields.get('group', 'c')}-{i}", 4, 4, 4, rotations=cl.Rotation.FIXED, **fields) for i in range(count)
+    ]
+
+
+def test_the_highest_priorities_are_loaded_where_room_runs_short():
+    """Room for two of three cubes: the one left out is the one of priority 1."""
+    items = _cubes(1, priority=10) + _cubes(1, priority=1, group="low") + _cubes(1, priority=10, group="high")
+    problem = cl.ContainerLoadingProblem([cl.Container("c", 8, 4, 4)], items)
+    cl.solve(problem, time_limit_seconds=0.5, random_seed=1)
+    assert problem.score.hard == -1
+    assert [problem.items[i].id for i in problem.unplaced_items()] == ["low-0"]
+
+
+def test_optional_items_are_left_out_softly():
+    """Room for two: two required cubes and an optional one. Hard 0; the optional cube costs 1 soft."""
+    problem = cl.ContainerLoadingProblem(
+        [cl.Container("c", 8, 4, 4)], _cubes(2) + _cubes(1, optional=True, group="extra")
+    )
+    cl.solve(problem, time_limit_seconds=0.5, random_seed=1)
+    assert (problem.score.hard, problem.score.soft) == (0, -2.0)
+    assert [problem.items[i].id for i in problem.unplaced_items()] == ["extra-0"]
+
+
+def test_an_all_or_none_group_is_left_out_whole_rather_than_split():
+    """Two spaces with room for three cubes each, five required cubes and an optional group of two
+    that must go all or none: one cube has to stay out, so the whole group does."""
+    items = _cubes(5) + _cubes(2, optional=True, group="g")
+    problem = cl.ContainerLoadingProblem(
+        [cl.Container("a", 12, 4, 4), cl.Container("b", 12, 4, 4)], items, group_rules=[("g", True, False)]
+    )
+    cl.solve(problem, time_limit_seconds=1.0, random_seed=1)
+    assert problem.score.hard == 0
+    assert sorted(problem.items[i].id for i in problem.unplaced_items()) == ["g-0", "g-1"]
+
+
+def test_a_single_container_group_takes_the_dearer_container_that_holds_it():
+    """A group of three cubes: two small containers (room for two, cost 1) or one large (room for
+    four, cost 5). Split, the group costs a soft 1; with single_container the split is hard."""
+
+    def solved(rules):
+        containers = [cl.Container("s1", 8, 4, 4), cl.Container("s2", 8, 4, 4), cl.Container("big", 16, 4, 4, cost=5)]
+        problem = cl.ContainerLoadingProblem(containers, _cubes(3, group="g"), group_rules=rules)
+        cl.solve(problem, time_limit_seconds=1.0, random_seed=1)
+        return problem
+
+    split = solved([])
+    assert (split.score.hard, split.score.soft) == (0, -3.0)
+    whole = solved([("g", False, True)])
+    assert (whole.score.hard, whole.score.soft) == (0, -5.0)
+    assert {whole.items[i].container for i in range(3)} == {2}
+
+
 def test_the_constraints_path_scores_with_the_picks():
     """used_length_cost at a weight: the soft score carries the loading length, and the
     search packs towards the closed end."""

@@ -14,6 +14,9 @@ namespace cl {
 // An unplaced item stays in its list. The search moves it to another
 // container or to another place in the order, where the decoder may find
 // room for it.
+//
+// An item counts its priority (1 by default, so the cost is the count); an
+// optional item counts in optionalItemCost instead.
 struct UnplacedItemCost final : detail::PackedConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
@@ -24,7 +27,7 @@ struct UnplacedItemCost final : detail::PackedConstraint {
     double cost(const ContainerLoadingProblem& problem, int unit,
                 const std::vector<int>& members) const override {
         if (members.empty()) return 0.0;
-        return static_cast<double>(packing(problem, unit, members).unplaced());
+        return static_cast<double>(unplacedCost(problem, packing(problem, unit, members)));
     }
 };
 

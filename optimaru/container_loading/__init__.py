@@ -12,8 +12,12 @@ Score, at the default weights (1 each; the two opt-in costs at 0):
            + weight on an item above max_load_on_top    # stacking_load_cost
            + stacking rules and layer limits broken     # stacking_rule_cost
            + items blocking one that leaves earlier     # unloading_order_cost
-           + centre of gravity beyond its limits)       # balance_limit_cost
+           + centre of gravity beyond its limits        # balance_limit_cost
+           + all-or-none groups loaded in part          # incomplete_group_cost
+           + one-container groups in several)           # single_container_cost
+  (an unplaced item counts its priority, an optional one in optional_item_cost)
   soft = -(cost of the containers in use                # used_container_cost
+           + optional items left out                    # optional_item_cost
            + containers a group is in beyond its first) # group_split_cost
            (+ used_length_cost, load_balance_cost when given a weight)
 hard 0 == feasible. The problem carries no weights: change one through a constraint
@@ -128,7 +132,7 @@ def solve(
 
     ``constraints`` picks the cost function directly (see
     `optimaru.container_loading.constraints`). Only the listed constraints are scored, a
-    name picked several times once per pick; None uses all ten default constraints at
+    name picked several times once per pick; None uses all thirteen default constraints at
     their default weights. With constraints the solve is single-start
     (``parallel_solver_count`` is ignored)::
 

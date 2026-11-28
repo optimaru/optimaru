@@ -16,7 +16,8 @@ here with the one the engine reported itself.
 Two of the constraints are outside the CP-SAT model (stacking loads and unloading
 order); they are scored here all the same, so an instance that uses them is still
 compared correctly for the engine and refused by the model. The stacking rules, layer
-limits, `bottom_only`, stack heights and balance limits are not scored here: no instance
+limits, `bottom_only`, stack heights, balance limits, priorities, optional items and group
+rules are not scored here: no instance
 of the comparison sets them, and a model that does is refused (ValueError).
 """
 
@@ -147,7 +148,11 @@ def _refuse_unscored_inputs(model: ContainerLoadingProblemModel) -> None:
     unscored = [
         f"item {item.id}"
         for item in model.items
-        if item.bottom_only or item.max_stack_layers is not None or item.stack_group is not None
+        if item.bottom_only
+        or item.max_stack_layers is not None
+        or item.stack_group is not None
+        or item.priority != 1
+        or item.optional
     ] + [
         f"container {container.id}"
         for container in model.containers
@@ -157,8 +162,13 @@ def _refuse_unscored_inputs(model: ContainerLoadingProblemModel) -> None:
     ]
     if model.stacking_rules:
         unscored.append("the problem's stacking_rules")
+    if model.group_rules:
+        unscored.append("the problem's group_rules")
     if unscored:
-        raise ValueError(f"the evaluator does not score stacking rules, layers or balance limits: {unscored[:3]}")
+        raise ValueError(
+            "the evaluator does not score stacking rules, layers, balance limits, priorities, optional "
+            f"items or group rules: {unscored[:3]}"
+        )
 
 
 def raw_costs(model: ContainerLoadingProblemModel) -> dict[str, list[float]]:
@@ -180,6 +190,7 @@ def raw_costs(model: ContainerLoadingProblemModel) -> dict[str, list[float]]:
         costs["stacking_rule_cost"].append(0)  # refused above when anything could break one
         costs["unloading_order_cost"].append(_unloading_blocks(boxes))
         costs["balance_limit_cost"].append(0)
+        costs["optional_item_cost"].append(0)
         costs["used_container_cost"].append(container.cost if boxes else 0.0)
         costs["used_length_cost"].append(max((box.x + box.placed_length for box in boxes), default=0))
         costs["load_balance_cost"].append(_balance(container, boxes))
@@ -187,6 +198,8 @@ def raw_costs(model: ContainerLoadingProblemModel) -> dict[str, list[float]]:
             if by_id[item_id].group is not None:
                 containers_of_group.setdefault(by_id[item_id].group, set()).add(container.id)
     costs["group_split_cost"] = [sum(len(places) - 1 for places in containers_of_group.values())]
+    costs["incomplete_group_cost"] = [0]  # refused above when a group rule is set
+    costs["single_container_cost"] = [0]
     return costs
 
 

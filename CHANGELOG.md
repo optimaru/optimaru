@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Container loading: priorities, optional items and group rules.** New inputs, off by default:
+  item `priority` (1 to 1,000,000, default 1: an unplaced item counts its priority in
+  `unplaced_item_cost`), item `optional` (left out at a soft cost, the new `optional_item_cost`,
+  its weight out of the load; the decoder leaves it out where it would take the placed weight
+  over `max_weight`), and the problem's `group_rules` (`{"id", "all_or_none",
+  "single_container"}`), scored by the new hard globals `incomplete_group_cost` and
+  `single_container_cost`. The construction loads optional items after the others and higher
+  priorities first.
 - **Box sizing: board area and shipping cost by billed weight.** Two opt-in soft costs, both at
   weight 0 by default, so every request that was valid before solves exactly as before:
   - `board_area_cost` (`BoardAreaCost`): per box, `quantity x 2 (lw + lh + wh)`, the board of

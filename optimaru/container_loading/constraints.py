@@ -1,6 +1,6 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`cl.solve(problem)`) scores all ten constraints at their default
+The default path (`cl.solve(problem)`) scores all thirteen constraints at their default
 weights, two of them opt-in at weight 0. This module is how a call changes that: pick
 constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
@@ -44,8 +44,8 @@ Every spec takes five knobs:
                one (cost 0) included — lowers the penalty. With an offset it is
                refused on hard, because hard 0 must mean no violation.
 
-`GroupSplitCost` is the one global constraint: its knobs shape the single total, not a
-cost per container.
+`GroupSplitCost`, `IncompleteGroupCost` and `SingleContainerCost` are the global
+constraints: their knobs shape the single total, not a cost per container.
 
 The same constraint may be picked several times; each pick is scored on its own with
 its own knobs and the picks add up. ``cl.constraint_costs(problem, picks)`` keys a
@@ -68,9 +68,12 @@ __all__ = [
     "Constraint",
     "ContainerWeightCost",
     "GroupSplitCost",
+    "IncompleteGroupCost",
     "Level",
     "LoadBalanceCost",
+    "OptionalItemCost",
     "Score",
+    "SingleContainerCost",
     "StackingLoadCost",
     "StackingRuleCost",
     "UnloadingOrderCost",
@@ -81,8 +84,11 @@ __all__ = [
     "container_weight_cost",
     "get_constraints",
     "group_split_cost",
+    "incomplete_group_cost",
     "load_balance_cost",
+    "optional_item_cost",
     "score",
+    "single_container_cost",
     "stacking_load_cost",
     "stacking_rule_cost",
     "unloading_order_cost",
@@ -256,6 +262,27 @@ class UsedContainerCost(Constraint):
     )
 
 
+class OptionalItemCost(Constraint):
+    """Optional items left out. Default: soft, weight 1.
+
+    An item with `optional=True` is loaded where there is room; left out, it counts its
+    `priority` here (and nothing in `UnplacedItemCost`)."""
+
+    name = "optional_item_cost"
+    label_en = "Optional items left out"
+    label_ko = "싣지 못한 선택 물품"
+    description_en = (
+        "For each container, the priorities of the optional items of its loading order that "
+        "found no place (1 each by default). One unit of cost is one optional item of priority 1 "
+        "left out; 0 means every optional item is loaded (or there is none)."
+    )
+    description_ko = (
+        "컨테이너마다 적재 순서에 있지만 자리를 찾지 못한 선택 물품(optional)의 priority를 "
+        "더합니다(기본 1). priority 1인 선택 물품 하나가 빠지면 비용 1이며, 0이면 모든 선택 "
+        "물품이 실렸습니다(또는 선택 물품이 없습니다)."
+    )
+
+
 class UsedLengthCost(Constraint):
     """How far each load reaches from the closed end. Default: soft, weight 0 (opt-in).
 
@@ -302,8 +329,8 @@ class LoadBalanceCost(Constraint):
 class GroupSplitCost(Constraint):
     """Groups spread over several containers. Default: soft, weight 1.
 
-    Items with the same `group` (the items of an order) belong in one container. The one
-    global constraint: a single total, not a cost per container."""
+    Items with the same `group` (the items of an order) belong in one container. A global
+    constraint: a single total, not a cost per container."""
 
     name = "group_split_cost"
     label_en = "Split groups"
@@ -320,6 +347,49 @@ class GroupSplitCost(Constraint):
     )
 
 
+class IncompleteGroupCost(Constraint):
+    """Groups loaded in part although their rule asks for all or none. Default: hard, weight 1.
+
+    For each group whose `group_rules` entry sets `all_or_none`, the smaller of its placed
+    items and the items left out: what it takes to load it whole or not at all. A global
+    constraint: a single total."""
+
+    name = "incomplete_group_cost"
+    label_en = "Groups loaded in part"
+    label_ko = "일부만 실린 그룹"
+    description_en = (
+        "For each group whose rule asks for all or none, the smaller of the number of its items "
+        "that are placed and the number that are left out. A group of five with three placed "
+        "costs 2; 0 means every such group is loaded whole or not at all."
+    )
+    description_ko = (
+        "전량 아니면 제외(all_or_none) 규칙이 있는 그룹마다, 실린 물품 수와 빠진 물품 수 중 "
+        "작은 값을 더합니다. 다섯 개 중 세 개가 실린 그룹은 2입니다. 0이면 그런 그룹이 모두 "
+        "전부 실렸거나 하나도 실리지 않았습니다."
+    )
+
+
+class SingleContainerCost(Constraint):
+    """Groups that must ship in one container spread over several. Default: hard, weight 1.
+
+    For each group whose `group_rules` entry sets `single_container`, the containers holding a
+    placed item of the group beyond the first. A global constraint: a single total."""
+
+    name = "single_container_cost"
+    label_en = "Groups in one container"
+    label_ko = "한 컨테이너에 실을 그룹"
+    description_en = (
+        "For each group whose rule asks for one container, the number of containers that hold a "
+        "placed item of the group, beyond the first. Items left out do not count. 0 means every "
+        "such group stands in one container."
+    )
+    description_ko = (
+        "한 컨테이너(single_container) 규칙이 있는 그룹마다, 그 그룹의 물품이 놓인 컨테이너 수에서 "
+        "1을 뺀 값을 더합니다. 빠진 물품은 세지 않습니다. 0이면 그런 그룹이 모두 한 컨테이너에 "
+        "있습니다."
+    )
+
+
 #: Ready-made default instances (``unplaced_item_cost`` is ``UnplacedItemCost()``).
 unplaced_item_cost = UnplacedItemCost()
 container_weight_cost = ContainerWeightCost()
@@ -328,11 +398,14 @@ stacking_rule_cost = StackingRuleCost()
 unloading_order_cost = UnloadingOrderCost()
 balance_limit_cost = BalanceLimitCost()
 used_container_cost = UsedContainerCost()
+optional_item_cost = OptionalItemCost()
 used_length_cost = UsedLengthCost()
 load_balance_cost = LoadBalanceCost()
 group_split_cost = GroupSplitCost()
+incomplete_group_cost = IncompleteGroupCost()
+single_container_cost = SingleContainerCost()
 
-# The default set, in list_constraints() order (the unit constraints, then the global one).
+# The default set, in list_constraints() order (the unit constraints, then the globals).
 _DEFAULTS = (
     unplaced_item_cost,
     container_weight_cost,
@@ -341,14 +414,17 @@ _DEFAULTS = (
     unloading_order_cost,
     balance_limit_cost,
     used_container_cost,
+    optional_item_cost,
     used_length_cost,
     load_balance_cost,
     group_split_cost,
+    incomplete_group_cost,
+    single_container_cost,
 )
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """Return the cost function. Without arguments, all ten default constraints.
+    """Return the cost function. Without arguments, all thirteen default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored::

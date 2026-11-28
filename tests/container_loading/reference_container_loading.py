@@ -219,6 +219,7 @@ def raw_costs(model) -> dict[str, list[float]]:
             "unloading_order_cost",
             "balance_limit_cost",
             "used_container_cost",
+            "optional_item_cost",
             "used_length_cost",
             "load_balance_cost",
         )
@@ -227,9 +228,12 @@ def raw_costs(model) -> dict[str, list[float]]:
     for container in model.containers:
         boxes = _placed(model, container)
         given = [*container.items, *container.unplaced_items]
-        weight = sum(by_id[item_id].weight for item_id in given)
+        left_out = [by_id[item_id] for item_id in container.unplaced_items]
+        # An unplaced optional item is out of the load: its weight does not count.
+        weight = sum(by_id[item_id].weight for item_id in given) - sum(i.weight for i in left_out if i.optional)
         limit = container.max_weight
-        costs["unplaced_item_cost"].append(len(container.unplaced_items))
+        costs["unplaced_item_cost"].append(sum(item.priority for item in left_out if not item.optional))
+        costs["optional_item_cost"].append(sum(item.priority for item in left_out if item.optional))
         costs["container_weight_cost"].append(max(0, weight - limit) if limit is not None else 0)
         costs["stacking_load_cost"].append(_stacking_excess(boxes))
         costs["stacking_rule_cost"].append(_stacking_violations(model, boxes))
@@ -242,4 +246,15 @@ def raw_costs(model) -> dict[str, list[float]]:
             if by_id[item_id].group is not None:
                 containers_of_group.setdefault(by_id[item_id].group, set()).add(container.id)
     costs["group_split_cost"] = [sum(len(places) - 1 for places in containers_of_group.values())]
+    incomplete = single = 0
+    for rule in model.group_rules:
+        members = [item for item in model.items if item.group == rule.id]
+        listed = [item for item in members if any(item.id in [*c.items, *c.unplaced_items] for c in model.containers)]
+        placed = [item for item in listed if item.container is not None]
+        if rule.all_or_none:
+            incomplete += min(len(placed), len(listed) - len(placed))
+        if rule.single_container:
+            single += max(0, len({item.container for item in placed}) - 1)
+    costs["incomplete_group_cost"] = [incomplete]
+    costs["single_container_cost"] = [single]
     return costs

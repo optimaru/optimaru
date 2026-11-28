@@ -36,6 +36,9 @@ constexpr int kMaxLength = 1'000'000;
 constexpr std::int64_t kMaxWeight = 1'000'000'000;
 // The largest Item::maxStackLayers (the JSON model's bound).
 constexpr int kMaxLayers = 1'000'000'000;
+// The largest Item::priority: an unplaced item's cost stays far below the
+// engine's limit for one contribution however many there are.
+constexpr int kMaxPriority = 1'000'000;
 
 // Which of an item's orientations the decoder may use.
 //   All      the six axis-parallel orientations
@@ -78,6 +81,15 @@ struct Item {
     std::optional<int> maxStackLayers;
     // The group the stacking rules name (ContainerLoadingProblem::stackingRules).
     std::optional<std::string> stackGroup;
+    // What leaving it out costs: unplacedItemCost (optionalItemCost for an
+    // optional item) counts an unplaced item `priority` times. 1 to 1'000'000.
+    int priority = 1;
+    // Loaded where there is room, left out freely: an unplaced optional item
+    // is not an unplacedItemCost but an optionalItemCost (soft), and its
+    // weight does not count against its container's maxWeight. The decoder
+    // also leaves it out where its weight would put the items placed so far
+    // above that limit.
+    bool optional = false;
 
     // --- derived by ScoreCalculator::updateDerived (calculate_score, solve) ---
     int container = -1;  // index into containers; -1 = not placed
@@ -136,6 +148,14 @@ struct Container {
     }
 };
 
+// How the items of one group (Item::group) are to be loaded: all of them or
+// none (incompleteGroupCost), and all in one container (singleContainerCost).
+struct GroupRule {
+    std::string id;
+    bool allOrNone = false;
+    bool singleContainer = false;
+};
+
 // One stacking rule: items whose stackGroup is `top` may not stand on items
 // whose stackGroup is `bottom` (rest on them, base on top). Anything not
 // forbidden is allowed.
@@ -154,6 +174,7 @@ struct ContainerLoadingProblem {
     // items, in (0, 1].
     double minSupportRatio = 0.8;
     std::vector<StackingRule> stackingRules;
+    std::vector<GroupRule> groupRules;
 
     Score score;
 
@@ -175,6 +196,14 @@ struct ContainerLoadingProblem {
     int stackGroupCount = 0;
     std::vector<char> forbidden;
     bool anyStackRule = false;  // some rule names the groups of two items
+    bool anyOptional = false;   // some item is optional
+    bool anyPriority = false;   // some item has a priority other than 1
+    // Per group (groupOf): whether its rule asks for all or none, and for one
+    // container.
+    std::vector<char> groupAllOrNone;
+    std::vector<char> groupSingleContainer;
+    bool anyAllOrNone = false;
+    bool anySingleContainer = false;
 
     // Whether item `top` standing on item `bottom` breaks a stacking rule.
     bool forbids(int top, int bottom) const {

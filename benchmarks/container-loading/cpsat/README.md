@@ -25,7 +25,7 @@ catalog: it has one objective, the default constraint set.
 | `used_container_cost` | the `cost` of every container that holds an item (a whole number of thousandths) |
 | `group_split_cost` | per group, the containers that hold one of its items beyond the first |
 | `stacking_load_cost`, `unloading_order_cost` | **not modelled**: an instance that sets `max_load_on_top` or `unload_order` is refused with `ValueError` |
-| `stacking_rule_cost`, `balance_limit_cost` | **not modelled**: an instance that sets `stacking_rules`, a `stack_group`, `max_stack_layers`, `bottom_only`, `max_stack_height` or a `max_offset_*` is refused with `ValueError` (by the evaluator too) |
+| `stacking_rule_cost`, `balance_limit_cost`, `optional_item_cost`, `incomplete_group_cost`, `single_container_cost` | **not modelled**: an instance that sets `stacking_rules`, a `stack_group`, `max_stack_layers`, `bottom_only`, `max_stack_height`, a `max_offset_*`, a `priority` other than 1, `optional` or `group_rules` is refused with `ValueError` (by the evaluator too) |
 | `used_length_cost`, `load_balance_cost` | weight 0 by default, so not in the objective |
 
 Containers that are alike are used in their order, and a container's items must fit its
@@ -48,7 +48,7 @@ proves the optimum up to about 15 items.
 **The evaluator.** [`container_loading_cpsat/evaluator`](container_loading_cpsat/evaluator/__init__.py)
 scores a solved model from its positions alone, for both solvers: it first checks that
 the positions are a loading, then computes every constraint's raw cost from them (the
-two outside the model included; it refuses the inputs of `stacking_rule_cost` and
-`balance_limit_cost`, which no instance here sets) and prices them with the engine's
+two outside the model included; it refuses the inputs of the constraints in the row
+above, which no instance here sets) and prices them with the engine's
 `constraints.score`. `tests/test_benchmark.py` checks that it gives the engine's answers
 the raw costs the engine reports, and that it refuses positions that are no loading.

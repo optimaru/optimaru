@@ -16,7 +16,10 @@
 #include "cl/constraints/common.hpp"
 #include "cl/constraints/container_weight_cost.hpp"
 #include "cl/constraints/group_split_cost.hpp"
+#include "cl/constraints/incomplete_group_cost.hpp"
 #include "cl/constraints/load_balance_cost.hpp"
+#include "cl/constraints/optional_item_cost.hpp"
+#include "cl/constraints/single_container_cost.hpp"
 #include "cl/constraints/stacking_load_cost.hpp"
 #include "cl/constraints/stacking_rule_cost.hpp"
 #include "cl/constraints/unloading_order_cost.hpp"
@@ -38,12 +41,15 @@ namespace cl {
 //   unloadingOrderCost    hard, weight 1
 //   balanceLimitCost      hard, weight 1
 //   usedContainerCost     soft, weight 1
+//   optionalItemCost      soft, weight 1
 //   usedLengthCost        soft, weight 0 (opt-in)
 //   loadBalanceCost       soft, weight 0 (opt-in)
 //   groupSplitCost        soft, weight 1 (global)
+//   incompleteGroupCost   hard, weight 1 (global)
+//   singleContainerCost   hard, weight 1 (global)
 //
 // Units come before the globals in list_constraints() / constraint_info(), so
-// groupSplitCost is listed last. This assembly is what a solve without a
+// the three globals are listed last. This assembly is what a solve without a
 // selection scores with, and the domain's constraint catalog:
 // constraint_info() reads the defaults off it, so they live in the component
 // constructors and nowhere else. ScoreCalculator::score computes the same
@@ -69,9 +75,12 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<UnloadingOrderCost>();
     assembly.emplace<BalanceLimitCost>();
     assembly.emplace<UsedContainerCost>();
+    assembly.emplace<OptionalItemCost>();
     assembly.emplace<UsedLengthCost>();
     assembly.emplace<LoadBalanceCost>();
     assembly.emplace<GroupSplitCost>();
+    assembly.emplace<IncompleteGroupCost>();
+    assembly.emplace<SingleContainerCost>();
     return assembly;
 }
 

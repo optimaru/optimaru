@@ -14,8 +14,11 @@ from optimaru.container_loading.constraints import (
     BalanceLimitCost,
     ContainerWeightCost,
     GroupSplitCost,
+    IncompleteGroupCost,
     Level,
     LoadBalanceCost,
+    OptionalItemCost,
+    SingleContainerCost,
     StackingLoadCost,
     StackingRuleCost,
     UnloadingOrderCost,
@@ -26,8 +29,11 @@ from optimaru.container_loading.constraints import (
     container_weight_cost,
     get_constraints,
     group_split_cost,
+    incomplete_group_cost,
     load_balance_cost,
+    optional_item_cost,
     score,
+    single_container_cost,
     stacking_load_cost,
     stacking_rule_cost,
     unloading_order_cost,
@@ -46,11 +52,15 @@ NAMES = [
     "unloading_order_cost",
     "balance_limit_cost",
     "used_container_cost",
+    "optional_item_cost",
     "used_length_cost",
     "load_balance_cost",
     "group_split_cost",
+    "incomplete_group_cost",
+    "single_container_cost",
 ]
-PER_CONTAINER = NAMES[:-1]  # one raw cost per container; group_split_cost is the one global
+GLOBALS = ("group_split_cost", "incomplete_group_cost", "single_container_cost")
+PER_CONTAINER = [name for name in NAMES if name not in GLOBALS]  # one raw cost per container
 CLASSES = (
     UnplacedItemCost,
     ContainerWeightCost,
@@ -59,9 +69,12 @@ CLASSES = (
     UnloadingOrderCost,
     BalanceLimitCost,
     UsedContainerCost,
+    OptionalItemCost,
     UsedLengthCost,
     LoadBalanceCost,
     GroupSplitCost,
+    IncompleteGroupCost,
+    SingleContainerCost,
 )
 
 # The balance of hand()'s two loads, in thousandths of the half-diagonal sqrt(29) of a 10 x 4 floor:
@@ -121,9 +134,12 @@ def test_list_constraints_matches_the_spec_names():
         unloading_order_cost,
         balance_limit_cost,
         used_container_cost,
+        optional_item_cost,
         used_length_cost,
         load_balance_cost,
         group_split_cost,
+        incomplete_group_cost,
+        single_container_cost,
     ]
     assert [type(spec) for spec in get_constraints()] == list(CLASSES)
 
@@ -156,9 +172,12 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("hard", 1.0, True, False, True),
         ("hard", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
+        ("soft", 1.0, True, False, True),
         ("soft", 0.0, True, False, False),
         ("soft", 0.0, True, False, False),
         ("soft", 1.0, True, False, True),
+        ("hard", 1.0, True, False, True),
+        ("hard", 1.0, True, False, True),
     ]
 
 
@@ -173,19 +192,23 @@ def test_constraint_costs_are_the_raw_costs_by_hand():
         "unloading_order_cost": [1, 0],
         "balance_limit_cost": [0, 0],
         "used_container_cost": [2, 1],
+        "optional_item_cost": [0, 0],
         "used_length_cost": [8, 4],
         "load_balance_cost": BALANCE,
         "group_split_cost": [1],
+        "incomplete_group_cost": [0],
+        "single_container_cost": [0],
     }
     for row in cl.constraint_info():
         entry = raw[row.name]
         assert (entry["weight"], entry["level"]) == (row.default_weight, row.default_level)
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
-        assert entry["global"] is (row.name == "group_split_cost")
+        assert entry["global"] is (row.name in GLOBALS)
         assert (entry["name"], entry["label"]) == (row.name, "")
         assert "medium_fold" not in entry  # no medium level in this domain
     # The two scoped constraints evaluate no container here: nothing sets their inputs.
     assert raw["stacking_rule_cost"]["units"] == [] and raw["balance_limit_cost"]["units"] == []
+    assert raw["optional_item_cost"]["units"] == []
     assert "units" not in raw["stacking_load_cost"]
 
 
