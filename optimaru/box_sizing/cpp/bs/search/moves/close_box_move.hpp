@@ -27,7 +27,8 @@ public:
                std::vector<int>& entities) override {
         census(ctx.editor.solution());
         if (closable_.empty()) return false;
-        const int closing = closable_[rng() % closable_.size()];
+        const int closing =
+                closable_[optimaru::random_index(rng, static_cast<int>(closable_.size()))];
         planned_[closing] = 0;
         return commit(ctx, entities, closing);
     }

@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "bs/model/domain.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/solver_config.hpp"
 

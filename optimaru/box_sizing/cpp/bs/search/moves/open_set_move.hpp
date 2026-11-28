@@ -9,6 +9,7 @@
 #include "bs/model/domain.hpp"
 #include "bs/model/pricing.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/utils/random.hpp"
 
 namespace bs {
 

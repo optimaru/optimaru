@@ -37,8 +37,8 @@
 #include "bs/search/moves/swap_box_move.hpp"
 #include "bs/solver.hpp"
 #include "bs_fixtures.hpp"
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace bs;

@@ -28,7 +28,7 @@
 #include "bs/score/score_calculator.hpp"
 #include "bs/solver.hpp"
 #include "bs_fixtures.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace bs;

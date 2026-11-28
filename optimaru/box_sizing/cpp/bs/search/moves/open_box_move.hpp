@@ -28,7 +28,7 @@ public:
         const BoxSizingProblem& problem = ctx.editor.solution();
         census(problem);
         if (closed_.empty() || atLimit(problem)) return false;
-        planned_[closed_[rng() % closed_.size()]] = 1;
+        planned_[closed_[optimaru::random_index(rng, static_cast<int>(closed_.size()))]] = 1;
         return commit(ctx, entities, -1);
     }
 };

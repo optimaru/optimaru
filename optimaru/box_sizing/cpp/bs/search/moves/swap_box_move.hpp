@@ -41,9 +41,9 @@ public:
         const BoxSizingProblem& problem = ctx.editor.solution();
         census(problem);
         if (closed_.empty() || closable_.empty()) return false;
-        const int opening = closed_[rng() % closed_.size()];
-        int closing = closable_[rng() % closable_.size()];
-        if (closable_.size() > 1 && rng() % kRandomClose != 0) {
+        const int opening = closed_[optimaru::random_index(rng, static_cast<int>(closed_.size()))];
+        int closing = closable_[optimaru::random_index(rng, static_cast<int>(closable_.size()))];
+        if (closable_.size() > 1 && optimaru::random_index(rng, kRandomClose) != 0) {
             closing = cheapestToClose(problem, opening);
         }
         planned_[opening] = 1;
