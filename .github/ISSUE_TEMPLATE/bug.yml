@@ -20,7 +20,7 @@ body:
     id: repro
     attributes:
       label: How to reproduce
-      description: A small script, with a fixed config.run.random_seed and a config.stop.step_limit, so the solve is the same on every run.
+      description: "A small script, with a fixed `config.run.random_seed` and a `config.stop.step_limit`, so the solve is the same on every run. A bug that only shows under a time limit is welcome too: say so."
       render: python
     validations:
       required: true

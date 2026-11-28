@@ -359,6 +359,8 @@ private:
                 Score candidate_score;
                 const int* entities = move.entities;
                 int entity_count = 0;
+                // How it solves, 9: the candidate's score, incremental, or a
+                // preview of a move not applied yet (MoveMixSampler::sample).
                 editor.begin_trial();
                 if (op == nullptr) {
                     previewed = moves.sample(editor, rng, move, candidate_score);
@@ -371,8 +373,7 @@ private:
                     entities = custom_entities.data();
                     entity_count = static_cast<int>(custom_entities.size());
                 }
-                // How it solves, 9: the candidate's score, incremental or a
-                // preview (above). How it solves, 10: the acceptor.
+                // How it solves, 10: the acceptor.
                 if (applied) {
                     const bool accepted = acceptor->accepts(
                             candidate_score, current_score, best_score, entities, entity_count,

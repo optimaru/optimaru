@@ -22,6 +22,10 @@
   single entity or element with kicks on can end differently on Linux. The same went for C++
   callers that set `alns.max_ruin_count` below 1 (Python refuses that): libstdc++ handed the
   value itself to the ruin operators, a negative count; it is now 1.
+- **Docs: how a solve runs, in the code.** `docs/how-it-solves.md` follows `Solver::run` step by
+  step, in the order of the flowchart on optimaru.com, with the file, the settings and the way to
+  extend each step; `Solver::run` marks the steps. Issue templates (a move or constraint idea, a
+  bug) and a pull request template.
 
 ## 0.8.0
 

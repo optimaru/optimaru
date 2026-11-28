@@ -50,6 +50,10 @@ Python then switches it: `config.custom_moves.my = False`.
 
 ## Where things are
 
+To place a change in the search by what it does (a move, a ruin, the acceptor, the
+stop), [How a solve runs, in the code](how-it-solves.md) follows one solve step by step
+with the engine file of each step. This table is the use case's side.
+
 For a use case `<uc>` (the subpackage name, such as `vehicle_routing`) with the
 C++ namespace `<ns>` (such as `vrp`):
 
