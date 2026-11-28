@@ -81,9 +81,10 @@ public:
         // item sets an unloadOrder, also for a single container.
         bool stop_order_moves = true;
 
-        // Nearby selection, only when some item sets an unloadOrder: an
-        // item's nearby items are those of the same stop and the stops next
-        // to it (then the closest in volume). The move mix then relocates
+        // Nearby selection, only when at least half the items set an
+        // unloadOrder (a vehicle load): an item's nearby items are those of
+        // the same stop and the stops next to it (then the closest in
+        // volume). The move mix then relocates
         // and swaps an item next to them, which keeps the stops in blocks,
         // and a ruin-and-recreate kick tries only the places next to them,
         // where it would try every place of every list. 0 = off.

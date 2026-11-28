@@ -103,9 +103,11 @@ public:
             if (list_ != current) break;
         }
         if (list_ == current) return relocateOneItem(ctx, rng, entities, saved_);
+        // Every item whose place changed, the sort back into blocks included.
+        for (std::size_t position = 0; position < list_.size(); ++position) {
+            if (list_[position] != current[position]) entities.push_back(list_[position]);
+        }
         saved_.replace(ctx, container, list_);
-        entities.insert(entities.end(), ordered_.begin() + static_cast<std::ptrdiff_t>(first),
-                        ordered_.begin() + static_cast<std::ptrdiff_t>(last));
         return true;
     }
 

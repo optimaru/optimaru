@@ -122,6 +122,35 @@ def test_a_truck_with_many_stops_comes_out_in_stop_order():
     assert problem.score.hard == 0 and problem.unplaced_items() == []
 
 
+def test_nearby_selection_by_stop_can_be_switched_off():
+    """The setting reaches the engine: 0 turns nearby selection off, and the same seeded solve then
+    takes another path through the same truck (other improvements, at other steps)."""
+    import random
+
+    rng = random.Random(7)
+    sizes = [(600, 400, 400), (400, 300, 300), (500, 400, 300), (300, 200, 200)]
+    items = [
+        cl.Item(f"p{i}", *rng.choice(sizes), unload_order=1 + rng.randrange(8), rotations=cl.Rotation.UPRIGHT)
+        for i in range(40)
+    ]
+    truck = [cl.Container("truck", 3000, 1500, 1500)]
+    picks = replace_default(get_constraints(), "used_length_cost", UsedLengthCost(weight=1.0))
+    paths = []
+    for nearby in (0.8, 0.0):
+        config = cl.SolverConfig(stop={"step_limit": 3000}, run={"random_seed": 3})
+        config.selection.nearby_probability = nearby
+        assert config.selection.nearby_probability == nearby
+        path = []
+        cl.solve(
+            cl.ContainerLoadingProblem(truck, items),
+            config=config,
+            constraints=picks,
+            on_new_best=lambda step, score, path=path: path.append((step, score.hard, score.soft)),
+        )
+        paths.append(path)
+    assert paths[0] != paths[1]
+
+
 def test_the_cheapest_cartons_that_hold_an_order_are_chosen():
     """A catalog of three carton sizes, two copies each: the order fits the medium one, which
     costs less than the large one and less than two small ones."""

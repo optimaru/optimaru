@@ -291,11 +291,11 @@ class SolverConfig:
         """``config.selection``: What the move mix moves: nearby candidates and this use case's hints."""
 
         nearby_probability: float
-        """Used only when some item sets an unload_order: how often the move mix
-        moves an item next to one of its nearby items, those of the same stop and
-        the stops next to it (then the closest in volume), which keeps the stops in
-        blocks; a ruin-and-recreate kick then tries only the places next to them
-        (0.8). 0 disables nearby selection."""
+        """Used only when at least half the items set an unload_order (a vehicle
+        load): how often the move mix moves an item next to one of its nearby items,
+        those of the same stop and the stops next to it (then the closest in volume),
+        which keeps the stops in blocks; a ruin-and-recreate kick then tries only the
+        places next to them (0.8). 0 disables nearby selection."""
         nearby_size: int
         """Size of the nearby neighbor list (20)."""
 

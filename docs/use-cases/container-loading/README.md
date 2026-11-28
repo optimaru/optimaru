@@ -386,7 +386,8 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
   container mixed by other moves comes back in blocks; one in blocks tries another way to
   build one stop's wall.
 - **Nearby selection by stop** (`selection.nearby_probability`, 0.8, and
-  `selection.nearby_size`, 20; used only when some item sets an `unload_order`). An
+  `selection.nearby_size`, 20; used only when at least half the items set an
+  `unload_order`, as in a vehicle load). An
   item's nearby items are those of its own stop and the stops next to it, then the
   closest in volume. The move mix relocates and swaps an item next to them most of the
   time, which keeps the blocks, and a ruin-and-recreate kick tries only the places next to

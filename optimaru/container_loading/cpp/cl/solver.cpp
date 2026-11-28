@@ -55,7 +55,12 @@ void runEngine(const Solver::Config& config, ContainerLoadingProblem& problem,
     engineConfig.moves.list_swap_weight = config.list_swap_weight;
     engineConfig.moves.two_opt_weight = config.two_opt_weight;
     engineConfig.moves.or_opt_weight = config.or_opt_weight;
-    if (problem.anyUnloadOrder && config.nearby_probability > 0.0) {
+    // Only for loads that are mostly ordered (vehicle loads): where most items
+    // have no order, the distance would be volume alone, and a kick would try
+    // only the places next to the items closest in volume.
+    std::size_t ordered = 0;
+    for (const Item& item : problem.items) ordered += item.unloadOrder ? 1 : 0;
+    if (2 * ordered >= problem.items.size() && config.nearby_probability > 0.0) {
         // Close = the same stop, then the stops next to it; among equals,
         // the closest in volume. An item without an order is far from every
         // item with one (it has no block to keep).

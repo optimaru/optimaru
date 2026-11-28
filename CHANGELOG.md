@@ -15,7 +15,7 @@
     `unload_order`, also for a single container): a loading order put back in stop blocks, latest
     stop first, with one change inside one stop's block.
   - Nearby selection by stop (`selection.nearby_probability`, 0.8, and `selection.nearby_size`,
-    20, only with unloading orders): the move mix moves an item next to items of its own and the
+    20, only when at least half the items have an unloading order): the move mix moves an item next to items of its own and the
     neighbouring stops, and a ruin-and-recreate kick tries only those places instead of every
     place of the list.
   - A faster decode for every use: the placed boxes are indexed along the length and by the height

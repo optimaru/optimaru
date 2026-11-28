@@ -31,13 +31,16 @@ bool over(double load, double carried) {
     return load - carried > std::max(1e-6, 1e-12 * std::max(load, carried));
 }
 
-// The loads resting on the boxes, passed down again from the boxes as they
-// stand: every box's supports were placed before it, so the boxes from last
-// to first are an order in which everything above a box comes before it.
+// The loads resting on the boxes that carry a limit, passed down again from
+// the boxes as they stand: every box's supports were placed before it, so the
+// boxes from last to first are an order in which everything above a box comes
+// before it. Only the boxes whose weight reaches a limit (bearsLimit) pass
+// anything on; the others' loads stay 0 and are never read.
 void recomputeCarried(const ContainerLoadingProblem& problem, Packing& packing) {
     const std::size_t count = packing.boxes.size();
     packing.carried.assign(count, 0.0);
     for (std::size_t b = count; b-- > 0;) {
+        if (!packing.bearsLimit[b]) continue;
         const double passed =
                 static_cast<double>(
                         problem.items[static_cast<std::size_t>(packing.boxes[b].item)].weight) +
@@ -55,10 +58,6 @@ void recomputeCarried(const ContainerLoadingProblem& problem, Packing& packing) 
 void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep) {
     std::size_t kept = packing.boxes.size();
     while (kept > 0 && packing.boxes[kept - 1].position >= keep) --kept;
-    // The boxes taken away, which may have stopped the rays of points that stay.
-    std::vector<Box> removed(packing.boxes.begin() + static_cast<std::ptrdiff_t>(kept),
-                             packing.boxes.end());
-    packing.boxes.resize(kept);
     for (std::vector<int>& cell : packing.cells) {
         while (!cell.empty() && cell.back() >= static_cast<int>(kept)) cell.pop_back();
     }
@@ -80,8 +79,10 @@ void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep
             point.died = Point::kOpen;
             stale = true;
         }
-        for (std::size_t r = 0; r < removed.size() && !stale; ++r) {
-            const Box& box = removed[r];
+        // The boxes taken away (still in `boxes` past `kept`) may have stopped
+        // the rays of points that stay.
+        for (std::size_t r = kept; r < packing.boxes.size() && !stale; ++r) {
+            const Box& box = packing.boxes[r];
             const bool inX = box.x <= point.x && point.x < box.x + box.length;
             const bool inY = box.y <= point.y && point.y < box.y + box.width;
             const bool inZ = box.z <= point.z && point.z < box.z + box.height;
@@ -91,6 +92,7 @@ void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep
         }
         if (stale) point.room[0] = -1;
     }
+    packing.boxes.resize(kept);
     if (problem.anyLoadLimit) {
         packing.supportStart.resize(packing.boxes.size() + 1);
         packing.supportBox.resize(static_cast<std::size_t>(packing.supportStart.back()));
