@@ -453,6 +453,7 @@ int floorGap(int ax, int al, int ay, int aw, int bx, int bl, int by, int bw) {
 bool tooClose(const ContainerLoadingProblem& problem, const Packing& packing, int item,
               const Point& point, const Orientation& o) {
     for (const Box& box : packing.boxes) {
+        if (problem.segregationOf[static_cast<std::size_t>(box.item)] < 0) continue;
         const int keep = problem.separation(item, box.item);
         if (keep > 0 && floorGap(point.x, o.length, point.y, o.width, box.x, box.length, box.y,
                                  box.width) < keep)
@@ -657,8 +658,11 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
         const bool ordered = problem.anyUnloadOrder && box.unloadOrder.has_value();
         const bool limited = problem.anyLoadLimit && box.weight > 0;
         const bool stacked = problem.anyStackRule || problem.anyLayerLimit;
-        const bool spaced = problem.anyApartDistance &&
-                            problem.segregationOf[static_cast<std::size_t>(item)] >= 0;
+        const int itemClass = problem.anyApartDistance
+                                      ? problem.segregationOf[static_cast<std::size_t>(item)]
+                                      : -1;
+        const bool spaced =
+                itemClass >= 0 && problem.keepsDistance[static_cast<std::size_t>(itemClass)];
         const double weight = static_cast<double>(box.weight);
         // The highest base it can have: on the floor when bottomOnly.
         const int topBase = box.bottomOnly ? 0 : space.fillHeight - smallest;

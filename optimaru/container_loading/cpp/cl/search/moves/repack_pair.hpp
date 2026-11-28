@@ -30,9 +30,10 @@ namespace cl {
 //      volume among them first; an item without a group stands for itself).
 //      A group goes whole to the first of the containers that has room for
 //      all of it: room is a drawn share of the container's volume (70 to
-//      100%) and its weight limit. A group no container has that room for is
-//      dealt item by item, largest first, each to the first with room for
-//      it, and to the last of them when none has.
+//      100%) and its weight limit, and its items may all go in it. A group
+//      no container has that room for is dealt item by item, largest first,
+//      each to the first with room for it that it may go in, and to the last
+//      it may go in when none has.
 //   2. Each container's items are put in the construction's loading order
 //      (loadsBefore: what leaves last first, what carries only a limited
 //      load last, else largest first) and decoded. What finds no place goes
@@ -127,6 +128,12 @@ public:
             const Container& to = problem.containers[static_cast<std::size_t>(target[t])];
             return volume <= room[t] && (!to.maxWeight || weight[t] + load <= *to.maxWeight);
         };
+        const auto allowsAll = [&](int t, std::size_t from, std::size_t to) {
+            for (std::size_t i = from; i < to; ++i) {
+                if (!problem.allowed(pool_[i], target[t])) return false;
+            }
+            return true;
+        };
         const auto give = [&](int t, std::size_t from, std::size_t to) {
             for (std::size_t i = from; i < to; ++i) {
                 const Item& box = problem.items[static_cast<std::size_t>(pool_[i])];
@@ -150,16 +157,25 @@ public:
             }
             int whole = -1;
             for (int t = 0; t < targets && whole < 0; ++t) {
-                if (takes(t, volume, load)) whole = t;
+                if (takes(t, volume, load) && allowsAll(t, first, last)) whole = t;
             }
             if (whole >= 0) {
                 give(whole, first, last);
             } else {
                 for (std::size_t i = first; i < last; ++i) {
                     const Item& box = problem.items[static_cast<std::size_t>(pool_[i])];
+                    // The first that has room and may take it, else the last it may go
+                    // in, else the last.
                     int single = targets - 1;
+                    for (int t = targets - 1; t >= 0; --t) {
+                        if (problem.allowed(pool_[i], target[t])) {
+                            single = t;
+                            break;
+                        }
+                    }
                     for (int t = 0; t < targets - 1; ++t) {
-                        if (takes(t, static_cast<double>(box.volume()), box.weight)) {
+                        if (problem.allowed(pool_[i], target[t]) &&
+                            takes(t, static_cast<double>(box.volume()), box.weight)) {
                             single = t;
                             break;
                         }

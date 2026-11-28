@@ -1066,6 +1066,8 @@ void verifyScoreCalculator() {
           }) && broken([](ContainerLoadingProblem& p) { p.segregationRules = {{"a", "b", 0}}; }),
           "allowed containers naming no container's id or tag, a segregation rule without a class "
           "and a distance below 1 are refused");
+    check(broken([](ContainerLoadingProblem& p) { p.containers[0].tags = {p.containers[1].id}; }),
+          "a tag that is another container's id is refused");
 
     // Two pallets, hand-built: weight above the limit, a group over both, a
     // container cost.
@@ -1374,6 +1376,27 @@ void verifyMoves() {
         harness.undo(move);
         check(listsOf(p) == lists && harness.editor.score() == before,
               "undo_last puts the lists and the score back");
+    }
+    {
+        // A group for the reefer only, half in the dry container (unplaced
+        // there): repacked, it goes whole to the reefer.
+        ContainerLoadingProblem p;
+        for (int c = 0; c < 2; ++c) addContainer(p, 10, 10, 10);
+        p.containers[1].tags = {"reefer"};
+        for (int i = 0; i < 4; ++i) {
+            const int item = addItem(p, 5, 5, 5);
+            p.items[static_cast<std::size_t>(item)].group = "chilled";
+            p.items[static_cast<std::size_t>(item)].allowedContainers = {"reefer"};
+            p.containers[static_cast<std::size_t>(i % 2)].items.push_back(item);
+        }
+        ScoreCalculator::prepare(p);
+        MoveHarness harness(p);
+        const Score before = harness.editor.score();
+        RepackPairMove move(p);
+        std::mt19937_64 rng(6);
+        check(harness.apply(move, rng) && before.hard == -2 && harness.editor.score().hard == 0 &&
+                      p.containers[0].items.empty(),
+              "RepackPairMove deals a group only to a container it may go in");
     }
     {
         // What does not fit the two containers again is left as it is: two

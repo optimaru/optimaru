@@ -103,6 +103,12 @@ void validate(const ContainerLoadingProblem& problem) {
         for (const std::string& tag : container.tags) {
             if (tag.empty())
                 throw std::invalid_argument("container '" + container.id + "': an empty tag");
+            for (const Container& other : problem.containers) {
+                if (other.id == tag) {
+                    throw std::invalid_argument("container '" + container.id + "': its tag '" +
+                                                tag + "' is another container's id");
+                }
+            }
         }
     }
     for (const Item& item : problem.items) {
@@ -321,7 +327,15 @@ void ScoreCalculator::prepare(ContainerLoadingProblem& problem) {
         problem.segregationOf[i] = found->second;
         problem.anySegregation = true;
     }
-    for (int keep : problem.apart) problem.anyApartDistance = problem.anyApartDistance || keep > 0;
+    problem.keepsDistance.assign(classCount, 0);
+    for (std::size_t a = 0; a < classCount; ++a) {
+        for (std::size_t b = 0; b < classCount; ++b) {
+            if (problem.apart[a * classCount + b] > 0) {
+                problem.keepsDistance[a] = 1;
+                problem.anyApartDistance = true;
+            }
+        }
+    }
     problem.groupAllOrNone.assign(static_cast<std::size_t>(problem.groupCount), 0);
     problem.groupSingleContainer.assign(static_cast<std::size_t>(problem.groupCount), 0);
     problem.anyAllOrNone = false;

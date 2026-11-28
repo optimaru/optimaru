@@ -171,7 +171,7 @@ class ContainerModel(StrictModel):
     )
     tags: list[Annotated[str, Field(min_length=1)]] = Field(
         default_factory=list,
-        description="Names an item's allowed_containers may use besides the id (ids and tags are one namespace).",
+        description="Names an item's allowed_containers may use besides the id; not a container's id.",
     )
     initial_items: list[str] = Field(
         default_factory=list,
@@ -304,9 +304,12 @@ class ContainerLoadingProblemModel(StrictModel):
         for group in ruled:
             if group not in groups:
                 raise ValueError(f"group rule {group!r}: no item has this group")
-        names = {container.id for container in self.containers} | {
-            tag for container in self.containers for tag in container.tags
-        }
+        ids = {container.id for container in self.containers}
+        for container in self.containers:
+            for tag in container.tags:
+                if tag in ids:
+                    raise ValueError(f"container {container.id!r}: its tag {tag!r} is another container's id")
+        names = ids | {tag for container in self.containers for tag in container.tags}
         for item in self.items:
             for name in item.allowed_containers:
                 if name not in names:
