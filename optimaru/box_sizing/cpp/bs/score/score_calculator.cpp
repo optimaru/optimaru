@@ -110,8 +110,10 @@ void ScoreCalculator::prepare(BoxSizingProblem& problem) {
     if (problem.boxes.empty()) refuse("boxes must hold at least one candidate box");
     std::unordered_set<std::string> ids;
     std::int64_t largestVolume = 0;
-    std::int64_t largestBilled = 0;  // the heaviest billed weight a shipment can have
-    bool priced = false;             // a box has a dimDivisor, or there are rate tables
+    // The heaviest billed weight a shipment can have: over every box, also
+    // those a parcel does not fit, so the bound below is on the safe side.
+    std::int64_t largestBilled = 0;
+    bool priced = false;  // a box has a dimDivisor, or there are rate tables
     problem.boxSides.clear();
     problem.boxVolume.clear();
     problem.boxArea.clear();

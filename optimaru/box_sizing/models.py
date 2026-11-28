@@ -316,7 +316,11 @@ class BoxSizingProblemModel(StrictModel):
         boxes = problem.boxes
         shipped = problem.parcels_per_box()
         rate_tables = problem.rate_tables
-        billed = problem.billed_weight_per_box() if rate_tables or any(box.dim_divisor for box in boxes) else None
+        billed = (
+            problem.billed_weight_per_box()
+            if rate_tables or any(box.dim_divisor is not None for box in boxes)
+            else None
+        )
         shipping = problem.shipping_cost_per_box() if rate_tables else None
         data = {
             "boxes": [

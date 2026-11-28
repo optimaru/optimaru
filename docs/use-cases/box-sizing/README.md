@@ -93,7 +93,9 @@ model refuses them when it is built; the engine refuses them again for a compile
 With rate tables, a repeated zone, breaks out of order, a parcel whose zone has no table
 (also when there are no tables at all) and, at solve time, a parcel that some box takes at a
 billed weight above its table's top break are refused too: past its last break a table says
-nothing, so end it with a break that covers the heaviest billed weight.
+nothing, so end it with a break that covers the heaviest billed weight. These checks run
+whatever `shipping_cost` weighs: adding rate tables that do not cover a billed weight to a
+request that solves today makes it fail, even with the shipping cost left at 0.
 
 The solved model carries the outputs: `box_types_used`, `void_volume` (the sum over the
 parcels of `quantity x (box volume - parcel volume)`), `fill_ratio` (shipped parcel volume /
@@ -215,7 +217,10 @@ exactly up to 2^53 (about 9 x 10^15). A solve refuses a problem whose shipped vo
 pass that: the summed quantities times the largest box volume. In mm that is 9 million
 shipments in a 1 m³ box; with more, use cm. A side is at most 2,000,000 and a weight at most
 10^12. Where weight is billed (a `dim_divisor` or rate tables) the summed quantities times the
-heaviest billed weight must stay below 2^53 as well, so that `billed_weight` is exact.
+heaviest billed weight must stay below 2^53 as well, so that `billed_weight` is exact. The
+board of a box can be larger than its volume (up to six times, for a box 1 unit thin), and it
+has no bound of its own: on an instance whose shipped board passes 2^53, a weight on
+`board_area_cost` is added up to the double's precision, like a fractional `cost`.
 
 The default path adds the soft level up exactly, also with a fractional `cost`. A solve
 with a constraint selection keeps one running soft total, as every use case does: a
@@ -263,7 +268,8 @@ needs no search: among the boxes that take a parcel, the cheapest is the one wit
 parcel. A shipping price depends on the parcel too (its weight and zone against the box's
 dimensional weight), so with a weight on `shipping_cost` the parcels that the same boxes take
 and that each of those boxes prices at the same break of the same table form a group, and
-each group orders its boxes by that price plus its shipping price (ties to the smaller box).
+each group orders its boxes by that price plus its shipping price, ties to the smaller box
+(without a shipping weight a tie goes to the box listed first, as before).
 
 - **Construction** (`construct/construction.cpp`): a greedy. The set starts as the
   required boxes (and the boxes a seed ships in). While a parcel is taken by no size of the
@@ -350,6 +356,30 @@ sizes against 300 candidates. The search makes 1.9 million steps per second on t
 instance, 250 thousand on 1,000 parcel sizes and 25 thousand on 8,000: a step on the set of
 sizes reads every parcel once (parcels that the same boxes take are placed together), so a
 step costs what the instance holds.
+
+**With the board and the shipping cost.** The same 20 instances, billed: every box at
+divisor 5000, the parcels in three zones (one in three each), a rate table of ten breaks up
+to 30 kg whose farther zones pay 25% and 75% more; one thread, seed 1, against CP-SAT on 4
+workers with the same objective (its model takes the two weights). Two objectives: the air
+and the box cost plus 50 x the board area plus 10^6 x the shipping cost, and the air plus
+10^7 x the shipping cost.
+
+- The search at 2 s returns its result at 10 s on 19 of the 20 instances for each objective
+  (the 20th is 0.16% and 0.03% above).
+- It ties CP-SAT's 30 s result on 10 and 11 instances (the eight smallest among them, where
+  CP-SAT proves the optimum) and is ahead on the others, by 0.04% to 17.6%; CP-SAT is ahead
+  on none.
+- The plan that ships the least air, priced by the second objective, is 1.2% worse on
+  average (up to 5.1%); it pays 1.6% more freight (up to 6.8%).
+- With a shipping weight the parcels form more groups, which costs speed: on the assembly,
+  the default constraints against the first objective, 1.0 million against 0.77 million steps
+  per second on the demo instance, 138 against 127 thousand on 1,000 parcel sizes and 15
+  against 11 thousand on 8,000; the construction takes 96 ms instead of 64 ms on 8,000
+  (both including the conversion of the model).
+
+On these instances board and dimensional weight grow with the box as the air does, so the
+first objective changes the plan of the least air on 11 of the 20 instances, by 0.2% to
+1.9% of its score.
 
 ## Starting from an existing solution
 

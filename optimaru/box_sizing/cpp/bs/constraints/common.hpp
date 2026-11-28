@@ -22,10 +22,10 @@ namespace bs {
 // Unit choice: the assignment shape's unit is the VALUE, i.e. one candidate
 // box; members are the parcels that ship in it (order irrelevant). Fit,
 // weight, void, box cost, board area and shipping cost are sums over a box's
-// parcels, so they are
-// UnitConstraints (one cost per candidate, 0 for a box no parcel takes). The two that count the
-// boxes in use, boxTypeLimitCost and boxTypeCost, are GlobalConstraints: one number for the whole
-// solution, and a required box counts without any member.
+// parcels, so they are UnitConstraints (one cost per candidate, 0 for a box
+// no parcel takes). The two that count the boxes in use, boxTypeLimitCost and
+// boxTypeCost, are GlobalConstraints: one number for the whole solution, and
+// a required box counts without any member.
 //
 // The conventions every use case shares are described once: editing an
 // assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /

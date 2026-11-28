@@ -20,7 +20,11 @@
     in every box form a group with its own order of the boxes.
   - The CP-SAT model of `benchmarks/box-sizing` takes `board_area_weight` and `shipping_weight`.
   - At the default weights the 20 benchmark instances give the published results, and
-    step-limited solves take the same steps as before on both paths.
+    step-limited solves take the same steps as before on both paths. On the same instances,
+    billed (three zones, ten breaks), the search at 2 s ties CP-SAT's 30 s result (same
+    objective, 4 workers) on 10 and 11 of 20 instances for two weightings and is ahead on the
+    others; the plan of the least air pays up to 6.8% more freight than the one the shipping
+    cost picks. A shipping weight costs 10% to 30% of the steps per second.
 - **Documentation by version.** The documentation site has a version menu: `latest/` (the newest
   release), `dev/` (`main`) and one copy per release minor since 0.4, each linking to repository files
   at its own tag. The old addresses redirect to `latest/`.
