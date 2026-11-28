@@ -480,6 +480,28 @@ void verifyCache() {
     check(cache.decodes() <= before + 1, "a repeated list is decoded once");
     cache.reset(p);
     check(cache.decodes() >= before, "a reset with the same facts keeps the decodes");
+    {
+        // pin() of a list no slot holds keeps THAT list once it is decoded,
+        // not whatever is decoded next: pin A, decode other lists, then A,
+        // then more lists than there are slots; A is still a hit.
+        PackingCache pinning;
+        pinning.reset(p);
+        std::vector<int> a = list;
+        std::vector<std::vector<int>> others;
+        for (int k = 0; k < 6; ++k) {
+            others.push_back(list);
+            std::rotate(others.back().begin(), others.back().begin() + k + 1, others.back().end());
+        }
+        pinning.pin(0, a);
+        pinning.packing(p, 0, others[0]);
+        pinning.packing(p, 0, a);
+        for (const std::vector<int>& other : others) pinning.packing(p, 0, other);
+        const std::int64_t hits = pinning.hits();
+        const std::int64_t decodes = pinning.decodes();
+        pinning.packing(p, 0, a);
+        check(pinning.hits() == hits + 1 && pinning.decodes() == decodes,
+              "a pinned list stays in its slot, also when another list was decoded first");
+    }
     p.items[0].length += 1;
     ScoreCalculator::prepare(p);
     cache.reset(p);

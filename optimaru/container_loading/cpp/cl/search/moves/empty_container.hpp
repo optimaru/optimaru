@@ -123,6 +123,7 @@ public:
                         stackingExcess(problem, after) + unloadingBlocks(problem, after);
                 if (broken > broken_[index]) continue;
                 broken_[index] = broken;
+                unplaced_[index] = after.unplaced();
                 plan_[index].swap(trial_);
                 volume_[index] += box.volume();
                 weight_[index] += box.weight;

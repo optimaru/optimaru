@@ -61,8 +61,9 @@ private:
 // The last resort of a move that finds nothing of its own to do: one random
 // item goes to another container that is in use, at the place its unloading
 // order asks for. A move that answered "nothing possible" instead would be
-// drawn again and again without ever being judged. False only when no item is
-// in a list or no other container is in use.
+// drawn again and again without ever being judged. False only when no other
+// container is in use, or when eight draws found no item that is in a list
+// (none is, or nearly none while a solution is being rebuilt).
 inline bool relocateOneItem(optimaru::OperatorContext<ContainerLoadingProblem>& ctx,
                             std::mt19937_64& rng, std::vector<int>& entities, SavedLists& saved) {
     ContainerLoadingProblem& problem = ctx.editor.solution();

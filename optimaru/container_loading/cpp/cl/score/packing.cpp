@@ -415,7 +415,7 @@ const Packing& PackingCache::packing(const ContainerLoadingProblem& problem, int
         if (!slots.valid[i] || slots.slot[i].members != members) continue;
         slots.used[i] = clock_;
         ++hits_;
-        if (slots.pinNext) {
+        if (slots.pinNext && members == slots.pending) {
             slots.pinned = i;
             slots.pinNext = false;
         }
@@ -445,7 +445,7 @@ const Packing& PackingCache::packing(const ContainerLoadingProblem& problem, int
     slots.valid[target] = true;
     slots.used[target] = clock_;
     ++decodes_;
-    if (slots.pinNext) {
+    if (slots.pinNext && members == slots.pending) {
         slots.pinned = target;
         slots.pinNext = false;
     }
@@ -461,6 +461,7 @@ void PackingCache::pin(int container, const std::vector<int>& members) {
             return;
         }
     }
+    slots.pending = members;
     slots.pinNext = true;
 }
 

@@ -198,6 +198,8 @@ def test_solve_request_is_solve_with_the_request_settings():
         (lambda data: data["containers"][0].update(cost=-1), "greater than or equal to 0"),
         (lambda data: data["containers"][0].update(cost=float("inf")), "finite number"),
         (lambda data: data["containers"][0].update(max_weight=-1), "greater than or equal to 0"),
+        (lambda data: data["containers"][0].update(max_weight=2**63), "less than or equal to 9223372036854775807"),
+        (lambda data: data["items"][0].update(max_load_on_top=2**63), "less than or equal to 9223372036854775807"),
         (lambda data: data["containers"][0].update(initial_items=["nobody"]), "unknown item 'nobody'"),
         (
             lambda data: data["containers"][0].update(initial_items=["stop1-crate", "stop1-crate"]),

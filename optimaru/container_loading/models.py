@@ -43,6 +43,8 @@ __all__ = [
 #: The largest length and the largest weight the engine takes (`_core` refuses more).
 MAX_LENGTH = 1_000_000
 MAX_WEIGHT = 1_000_000_000
+#: The largest weight limit (`max_weight`, `max_load_on_top`): what a 64-bit integer holds.
+MAX_LIMIT = 2**63 - 1
 
 _ROTATIONS = {"all": _core.Rotation.ALL, "upright": _core.Rotation.UPRIGHT, "fixed": _core.Rotation.FIXED}
 _ROTATION_NAMES = {value: name for name, value in _ROTATIONS.items()}
@@ -64,7 +66,7 @@ class ItemModel(StrictModel):
         ),
     )
     max_load_on_top: int | None = Field(
-        default=None, ge=0, description="Weight this item can carry; 0 = nothing on top. None = no limit."
+        default=None, ge=0, le=MAX_LIMIT, description="Weight this item can carry; 0 = nothing on top. None = no limit."
     )
     unload_order: int | None = Field(
         default=None,
@@ -99,7 +101,7 @@ class ContainerModel(StrictModel):
     length: int = Field(gt=0, le=MAX_LENGTH, description="Inner size along x: from the closed end to the door.")
     width: int = Field(gt=0, le=MAX_LENGTH, description="Inner size along y.")
     height: int = Field(gt=0, le=MAX_LENGTH, description="Inner size along z (up).")
-    max_weight: int | None = Field(default=None, ge=0, description="Weight it may hold. None = no limit.")
+    max_weight: int | None = Field(default=None, ge=0, le=MAX_LIMIT, description="Weight it may hold. None = no limit.")
     cost: float = Field(
         default=1.0, ge=0, allow_inf_nan=False, description="What using this container costs (1 = count containers)."
     )

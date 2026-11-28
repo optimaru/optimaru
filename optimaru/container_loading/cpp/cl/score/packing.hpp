@@ -152,7 +152,7 @@ public:
 
     // Keep the decode of `members` for this container until the next pin().
     // If no slot holds it yet, the next packing() of that list is the one
-    // kept.
+    // kept; until then the slot pinned before is free to be reused.
     void pin(int container, const std::vector<int>& members);
 
     // How many lists were decoded (in full or from a prefix) and how many
@@ -166,7 +166,8 @@ private:
         bool valid[kSlots] = {false, false, false};
         std::uint64_t used[kSlots] = {0, 0, 0};
         int pinned = -1;
-        bool pinNext = false;
+        bool pinNext = false;      // pin `pending` once it is decoded
+        std::vector<int> pending;  // the list pin() asked for that no slot held yet
     };
 
     std::vector<Slots> containers_;
