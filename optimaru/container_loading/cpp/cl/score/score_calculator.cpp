@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -96,6 +97,9 @@ void validate(const ContainerLoadingProblem& problem) {
         }
         if (item.maxLoadOnTop && *item.maxLoadOnTop < 0)
             throw std::invalid_argument(what + ": max_load_on_top must be >= 0");
+        if (item.unloadOrder && *item.unloadOrder == std::numeric_limits<int>::min())
+            throw std::invalid_argument(what + ": unload_order must be above " +
+                                        std::to_string(std::numeric_limits<int>::min()));
         if (item.maxStackLayers &&
             (*item.maxStackLayers < 1 || *item.maxStackLayers > kMaxLayers)) {
             throw std::invalid_argument(what + ": max_stack_layers must be between 1 and " +

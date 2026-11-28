@@ -63,13 +63,48 @@
   items first, and it, `EmptyContainerMove` and `RepackPairMove` keep the stacking rules as
   they keep the load limits. The CP-SAT comparison refuses instances that set the new inputs.
 
+- **Container loading: the decoder weighs what it breaks, and a stop fills its depth first.**
+  - When every place left for an item breaks an unloading order, a load limit or a stacking
+    rule, the decoder no longer takes the first one whatever it costs: it weighs the first place
+    that only blocks (the pairs it adds), the first that breaks a stacking limit (the weight
+    over each `max_load_on_top`, a rule, layer limit or segregation distance, and its pairs) and
+    leaving the item out (its `priority` times `unplaced_item_cost`'s weight, or
+    `optional_item_cost`'s for an `optional` item), by the weights of the solve's constraints, and takes the cheapest (of equal costs, placing
+    wins). At the default weights an item now stays out rather than block two earlier items or
+    put any weight on a box that carries no more; with a warehouse system's weights (an
+    unplaced item 1,000, a pair 10, 1 per gram) it still blocks up to 100 pairs, or overloads by
+    up to 1 kg, rather than stay out. The weights are those of the last solve, kept on the
+    problem for `calculate_score` (the defaults on a problem never solved).
+  - An item with an `unload_order` prefers, of the places that break nothing, one within the
+    depth its stop's items already reach, so a stop fills the cross-section it has started
+    before it goes deeper.
+  - Faster decoding of vehicle loads and stacking limits: the unloading-order check looks only
+    at the boxes of the cells that can block (each cell knows the lowest and highest stop of
+    its boxes), and the loads passed down to limited boxes are added as each box is placed
+    (and replayed in placement order when a decode resumes) instead of recomputed for every
+    box.
+
+  On the generated trucks of `container-loading-vehicle-loads` (one thread, 30 s), the share
+  that meets every constraint is unchanged at the default weights (14 of 48 trucks over six
+  seeds) and about the same at a warehouse system's (15 → 13 of 48), but what is left is much
+  less: at the default weights no stacking excess and at most a few pairs remain (#174 left
+  up to 548 pairs per truck), and the unplaced boxes on the 250- and 300-box catalog trucks
+  and the 20-stop cut trucks fall from 10.8/48.0/50.7 to 7.0/36.7/17.3 per truck; at the warehouse weights the unplaced boxes there fall by
+  40–75%. The 15-stop catalog trucks reach hard 0 within 0.2 s where they took up to 5 s.
+  Loads without unloading orders, limits or rules are decoded exactly as before (the
+  benchmarks give the same results at the same speed). The demo with stacking limits runs at
+  34,000 steps per second as with #174; 0.9.0 ran it at 46,000 (the decoder now looks past
+  places that would overload a box). The decoder's weights are not part of the JSON model: a
+  model solved under other constraints is placed again as that solve placed it by a solve of no
+  steps with the same constraints.
+
 - **Container loading: vehicle loads in stop order.** A cargo space with items for many stops
   often came back with hundreds of unloading-order pairs left. Four changes:
   - The decoder judges a place by what it would break when items set `unload_order` or
     `max_load_on_top`: an item goes to the first point where it stands in no earlier stop's way,
     has no later stop in its own way and overloads no item below it (its weight passed down
-    through what it stands on); failing that, to the first point that only breaks an order; failing
-    that, to the first feasible point, as before. An item with an `unload_order` takes the
+    through what it stands on); failing that, to the first point that only breaks an order or a
+    limit, weighed against leaving the item out (the entry above). An item with an `unload_order` takes the
     shallowest orientation along the length first, so a stop builds a thin wall. Without orders
     and load limits the decoder places every item where it did.
   - A new move, `StopOrderMove` (`custom_moves.stop_order`, on by default when at least two

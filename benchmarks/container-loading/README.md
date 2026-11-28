@@ -119,32 +119,33 @@ system sends, `vehicle_loads.warehouse_weights()`):
 
 | truck | budget | hard 0 | pairs left (mean) | unplaced (mean) | first hard 0 (s) |
 | --- | --- | --- | --- | --- | --- |
-| catalog 2.5t, 12 stops, 120 boxes | 5 s | 1/3 | 0 | 3.0 | 1.7 |
-| catalog 2.5t, 12 stops, 120 boxes | 10 s | 1/3 | 0 | 3.0 | 1.7 |
-| catalog 2.5t, 12 stops, 120 boxes | 30 s | 1/3 | 0 | 3.0 | 1.8 |
-| catalog 5t, 15 stops, 200 boxes | 5 s | 2/3 | 0 | 0.3 | 2.1/0.3 |
-| catalog 5t, 15 stops, 200 boxes | 10 s | 3/3 | 0 | 0.0 | 2.1/0.3/5.9 |
-| catalog 5t, 15 stops, 200 boxes | 30 s | 3/3 | 0 | 0.0 | 2.1/0.3/5.5 |
-| catalog 5t, 20 stops, 250 boxes | 5 s | 0/3 | 101 | 8.3 | - |
-| catalog 5t, 20 stops, 250 boxes | 10 s | 0/3 | 71 | 16.3 | - |
-| catalog 5t, 20 stops, 250 boxes | 30 s | 0/3 | 15 | 10.7 | - |
-| catalog 5t, 25 stops, 220 boxes | 5 s | 0/3 | 58 | 13.7 | - |
-| catalog 5t, 25 stops, 220 boxes | 10 s | 0/3 | 26 | 11.3 | - |
-| catalog 5t, 25 stops, 220 boxes | 30 s | 0/3 | 26 | 11.3 | - |
-| catalog 5t, 20 stops, 300 boxes | 5 s | 0/3 | 335 | 38.7 | - |
-| catalog 5t, 20 stops, 300 boxes | 10 s | 0/3 | 309 | 48.3 | - |
-| catalog 5t, 20 stops, 300 boxes | 30 s | 0/3 | 151 | 54.7 | - |
-| cut 2.5t, 10 stops | 5 s | 3/3 | 0 | 0.0 | 0.2/0.0/0.4 |
-| cut 2.5t, 10 stops | 10 s | 3/3 | 0 | 0.0 | 0.2/0.0/0.3 |
-| cut 2.5t, 10 stops | 30 s | 3/3 | 0 | 0.0 | 0.2/0.0/0.3 |
-| cut 5t, 15 stops | 5 s | 0/3 | 79 | 15.0 | - |
-| cut 5t, 15 stops | 10 s | 0/3 | 223 | 28.0 | - |
-| cut 5t, 15 stops | 30 s | 1/3 | 186 | 16.3 | 18.4 |
-| cut 5t, 20 stops | 5 s | 0/3 | 255 | 40.7 | - |
-| cut 5t, 20 stops | 10 s | 0/3 | 255 | 40.7 | - |
-| cut 5t, 20 stops | 30 s | 0/3 | 255 | 40.7 | - |
-
+| catalog 2.5t, 12 stops, 120 boxes | 5 s | 1/3 | 0 | 1.3 | 0.2 |
+| catalog 2.5t, 12 stops, 120 boxes | 10 s | 1/3 | 0 | 1.3 | 0.2 |
+| catalog 2.5t, 12 stops, 120 boxes | 30 s | 1/3 | 0 | 1.3 | 0.2 |
+| catalog 5t, 15 stops, 200 boxes | 5 s | 3/3 | 0 | 0.0 | 0.0/0.2/0.1 |
+| catalog 5t, 15 stops, 200 boxes | 10 s | 3/3 | 0 | 0.0 | 0.0/0.2/0.1 |
+| catalog 5t, 15 stops, 200 boxes | 30 s | 3/3 | 0 | 0.0 | 0.0/0.2/0.1 |
+| catalog 5t, 20 stops, 250 boxes | 5 s | 0/3 | 0 | 7.0 | - |
+| catalog 5t, 20 stops, 250 boxes | 10 s | 0/3 | 0 | 6.0 | - |
+| catalog 5t, 20 stops, 250 boxes | 30 s | 0/3 | 0 | 5.0 | - |
+| catalog 5t, 25 stops, 220 boxes | 5 s | 0/3 | 0 | 8.7 | - |
+| catalog 5t, 25 stops, 220 boxes | 10 s | 0/3 | 0 | 6.3 | - |
+| catalog 5t, 25 stops, 220 boxes | 30 s | 0/3 | 0 | 6.3 | - |
+| catalog 5t, 20 stops, 300 boxes | 5 s | 0/3 | 0 | 34.3 | - |
+| catalog 5t, 20 stops, 300 boxes | 10 s | 0/3 | 1 | 33.0 | - |
+| catalog 5t, 20 stops, 300 boxes | 30 s | 0/3 | 0 | 29.7 | - |
+| cut 2.5t, 10 stops | 5 s | 3/3 | 0 | 0.0 | 0.0/0.0/0.4 |
+| cut 2.5t, 10 stops | 10 s | 3/3 | 0 | 0.0 | 0.0/0.0/0.4 |
+| cut 2.5t, 10 stops | 30 s | 3/3 | 0 | 0.0 | 0.0/0.0/0.4 |
+| cut 5t, 15 stops | 5 s | 0/3 | 0 | 8.7 | - |
+| cut 5t, 15 stops | 10 s | 0/3 | 0 | 8.7 | - |
+| cut 5t, 15 stops | 30 s | 1/3 | 0 | 5.0 | 21.1 |
+| cut 5t, 20 stops | 5 s | 0/3 | 0 | 18.7 | - |
+| cut 5t, 20 stops | 10 s | 0/3 | 0 | 13.3 | - |
+| cut 5t, 20 stops | 30 s | 0/3 | 0 | 11.0 | -
+ |
 Measured 2026-11-28 on one Apple M4 Max Mac (16 cores), four solves at a time, while other
-jobs were running on the machine. 0.9.0 met every constraint on none of these trucks and
-left 150 to 1,730 pairs per truck after 30 s; the guide has the comparison
+jobs were running on the machine. What is left is unplaced boxes: the pairs are gone at the
+default weights. 0.9.0 met every constraint on none of these trucks and left 150 to 1,730
+pairs per truck after 30 s; the guide has the comparison
 ([How good, how fast](../../docs/use-cases/container-loading/README.md#how-good-how-fast)).

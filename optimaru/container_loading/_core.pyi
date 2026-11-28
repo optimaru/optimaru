@@ -19,7 +19,9 @@ all-or-none groups
 loaded in part + one-container groups in several), soft = -(cost of the containers in use +
 optional items left out + containers a group is in beyond its first). An unplaced item counts
 its priority. The weights are the C++
-components' defaults (constraint_info()); the problem carries none.
+components' defaults (constraint_info()); the problem carries none, except the weights
+the decoder weighs a place that would block or overload against leaving an item out: those
+of the last solve's constraints (the defaults on a problem never solved).
 """
 
 from collections.abc import Callable, Iterable
@@ -238,7 +240,10 @@ class ContainerLoadingProblem:
 
 def calculate_score(problem: ContainerLoadingProblem) -> Score:
     """Decode every container, write where each item stands and recompute the score at the
-    default weights (also stores problem.score). ValueError for a problem the engine
+    default weights (also stores problem.score). The decode weighs a place that would
+    block or overload against leaving the item out by the weights of the last solve's
+    constraints (the defaults on a problem never solved), so it places the items as that
+    solve did. ValueError for a problem the engine
     refuses (see ContainerLoadingProblem). An item in no container's list is reported by
     `unplaced_items()` but costs nothing (solve lists every item before it scores)."""
 

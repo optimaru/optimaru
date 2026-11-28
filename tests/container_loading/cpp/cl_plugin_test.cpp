@@ -318,6 +318,7 @@ void verifyRawCostsByHand() {
         const int below = addItem(p, 4, 4, 4, 3);
         const int above = addItem(p, 4, 4, 4, 8);
         itemOf(p, below).maxLoadOnTop = 5;
+        p.breakWeights.unplaced[0] = 1000.0;  // placed even where it overloads
         p.containers[0].items = {below, above};
         check(rawCosts(p, "stackingLoadCost") == std::vector<double>{3.0},
               "stackingLoadCost: 3 above what the item carries");
@@ -331,6 +332,7 @@ void verifyRawCostsByHand() {
         ContainerLoadingProblem p;
         addContainer(p, 12, 4, 4);
         std::vector<int> items;
+        p.breakWeights.unplaced[0] = 1000.0;  // placed even where they block
         for (int stop : {1, 2, 3}) {
             items.push_back(addItem(p, 4, 4, 4));
             itemOf(p, items.back()).unloadOrder = stop;

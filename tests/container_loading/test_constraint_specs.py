@@ -256,12 +256,19 @@ def test_the_default_score_by_hand():
 
 
 def test_stacking_on_top_counts_once_the_item_is_under_another():
-    """In a space that is 8 high, b goes on top of a, which carries 5 of its 7."""
+    """In a space that is 8 high, b's only place is on top of a, which carries 5 of its 7. At the
+    default weights the decoder leaves b out (2 over the limit and a pair cost more than one
+    unplaced item); once a solve has weighted an unplaced item 1,000, b goes on top and both
+    costs count it."""
     problem = hand()
     containers = problem.containers
     containers[0].height = 8
     containers[0].length = 4
     problem.containers = containers
+    raw = cl.constraint_costs(problem)
+    assert raw["stacking_load_cost"]["costs"] == [0, 0]
+    assert raw["unplaced_item_cost"]["costs"] == [1, 1]
+    engine_score(problem, replace_default(get_constraints(), "unplaced_item_cost", UnplacedItemCost(weight=1000)))
     raw = cl.constraint_costs(problem)
     assert raw["stacking_load_cost"]["costs"] == [2, 0]
     assert raw["unloading_order_cost"]["costs"] == [1, 0]  # b, a later stop, stands on a

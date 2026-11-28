@@ -232,14 +232,36 @@ is the whole problem: ten parcels for three stops in one van):
   segregation distance between their classes, or when it would make a column taller than its own
   `max_stack_layers` or that of an item under it (columns as the decode builds them: a
   box that ends under another's overhang is not seen carrying it, as for the load
-  limits, while the cost counts it). The item goes to the first point where
-  an orientation does neither; if there is none, to the first that only blocks; if there
-  is none either, to the first feasible point, as without them. So an item is never left
-  out for an order or a limit, and a list in stop blocks (what leaves last first) comes
-  out with each stop in front of the later ones wherever the room allows. An item with an
-  `unload_order` also takes, of the orientations feasible at its point, the shallowest
+  limits, while the cost counts it). The item goes to the first point where an
+  orientation does neither. An item with an `unload_order` prefers, among those, a place
+  within the depth its stop's items already reach (the largest x + length of a placed
+  item of the same stop), so that a stop fills the cross-section it has started before it
+  goes deeper; it also takes, of the orientations feasible at its point, the shallowest
   along x first (then the one that divides the room best), so that a stop builds a thin
-  wall across the space and not a long row. This follows the items' facts, whether or not
+  wall across the space and not a long row.
+- **When every place breaks something**, the decoder weighs it by the weights of the
+  solve: the first place that only blocks costs `unloading_order_cost`'s weight per pair
+  it adds; the first that breaks a stacking limit costs `stacking_load_cost`'s weight per
+  unit of weight over a `max_load_on_top`, `stacking_rule_cost`'s weight if it breaks a
+  rule or a layer limit, `segregation_cost`'s if it stands too close to another class, and
+  its pairs; leaving the item out costs `unplaced_item_cost`'s weight times its `priority`
+  (`optional_item_cost`'s for an `optional` item, a soft cost, so an optional item stays
+  out rather than break anything hard). The cheapest wins, level by level; of equal costs, blocking before a stacking
+  limit before leaving out. At the default weights an item therefore blocks one earlier
+  item rather than stay out, but stays out rather than block two or put any weight on a
+  box that carries no more; with the weights a warehouse system sends (an unplaced item
+  1,000, a pair 10, 1 per gram) it blocks up to 100 pairs, or overloads by up to 1 kg,
+  rather than stay out. A constraint left out of the selection weighs nothing; a rule,
+  layer limit or segregation distance counts once per place, however many it breaks; and
+  each pick counts as linear in its raw cost, whatever its exponent, offset or clip. The
+  weights are those of the last solve (the defaults on a problem never solved), and
+  `calculate_score` and `constraint_costs` keep them, whatever selection the latter is
+  given. They are not part of the JSON model: `to_core()` starts from the defaults, so a
+  model solved under other constraints is placed again as that solve placed it by a solve
+  of no steps with the same constraints (`time_limit_seconds=0`), not by
+  `calculate_score`. So a list in
+  stop blocks (what leaves last first) comes out with each stop in front of the later
+  ones wherever the room allows. This follows the items' facts, whether or not
   `unloading_order_cost`, `stacking_load_cost` and `stacking_rule_cost` are in the
   selection; a model that sets one of their inputs without its cost is refused anyway
   ([Parameters and their costs](#parameters-and-their-costs)).
@@ -630,25 +652,29 @@ three; before is 0.9.0:
 
 | truck | budget | hard 0 | pairs left | unplaced | first hard 0 (s) |
 | --- | --- | --- | --- | --- | --- |
-| catalog 2.5t, 12 stops, 120 boxes | 10 s | 0/3 → 1/3 | 338 → 0 | 9.0 → 3.0 | 1.7 |
-| catalog 5t, 15 stops, 200 boxes | 10 s | 0/3 → 3/3 | 1003 → 0 | 1.7 → 0 | 2.1/0.3/5.9 |
-| catalog 5t, 20 stops, 250 boxes | 30 s | 0/3 → 0/3 | 1401 → 15 | 13.0 → 10.7 | |
-| catalog 5t, 25 stops, 220 boxes | 30 s | 0/3 → 0/3 | 1171 → 26 | 4.0 → 11.3 | |
-| catalog 5t, 20 stops, 300 boxes | 30 s | 0/3 → 0/3 | 1269 → 151 | 41.7 → 54.7 | |
-| cut 2.5t, 10 stops (about 115 boxes) | 10 s | 0/3 → 3/3 | 212 → 0 | 18.3 → 0 | 0.2/0.0/0.3 |
-| cut 5t, 15 stops (about 200 boxes) | 30 s | 0/3 → 1/3 | 672 → 186 | 30.3 → 16.3 | 18.4 |
-| cut 5t, 20 stops (about 300 boxes) | 30 s | 0/3 → 0/3 | 1729 → 255 | 63.0 → 40.7 | |
+| catalog 2.5t, 12 stops, 120 boxes | 10 s | 0/3 → 1/3 | 338 → 0 | 9.0 → 1.3 | 0.2 |
+| catalog 5t, 15 stops, 200 boxes | 10 s | 0/3 → 3/3 | 1003 → 0 | 1.7 → 0 | 0.0/0.2/0.1 |
+| catalog 5t, 20 stops, 250 boxes | 30 s | 0/3 → 0/3 | 1401 → 0 | 13.0 → 5.0 | |
+| catalog 5t, 25 stops, 220 boxes | 30 s | 0/3 → 0/3 | 1171 → 0 | 4.0 → 6.3 | |
+| catalog 5t, 20 stops, 300 boxes | 30 s | 0/3 → 0/3 | 1269 → 0 | 41.7 → 29.7 | |
+| cut 2.5t, 10 stops (about 115 boxes) | 10 s | 0/3 → 3/3 | 212 → 0 | 18.3 → 0 | 0.0/0.0/0.4 |
+| cut 5t, 15 stops (about 200 boxes) | 30 s | 0/3 → 1/3 | 672 → 0 | 30.3 → 5.0 | 21.1 |
+| cut 5t, 20 stops (about 300 boxes) | 30 s | 0/3 → 0/3 | 1729 → 0 | 63.0 → 11.0 | |
 
 With the weights a warehouse system sends (an unplaced item 1,000, an unloading pair 10,
-stacking 1 per gram, `load_balance_cost` 1e-4 and `used_length_cost` 1e-6) the same rows
-meet every constraint as often (8 of 24 trucks at 30 s, none before). An unplaced item
-then costs as much as 100 pairs, so where not everything fits the solve trades pairs
-for a box more in the truck, and more pairs are left than at the default weights. Where
-hard 0 comes, it comes within seconds: the construction leaves tens to hundreds of pairs, and the
-stop-block moves clear them, at several times 0.9.0's speed (on the catalog trucks, 120
-boxes ran at 1,340 steps per second where 0.9.0 ran at 480, 200 boxes at 370 for 125,
-300 boxes at 215 for 34). What is left is density: a stop's front is ragged, every later stop has to stay
-behind it, and on the larger trucks the room runs out before the last stops are in.
+stacking 1 per gram, `load_balance_cost` 1e-4 and `used_length_cost` 1e-6) 7 of the 24
+trucks meet every constraint at 30 s (none in 0.9.0). An unplaced item then costs as
+much as 100 pairs, so the decoder places a box that blocks up to 100 others rather than
+leave it out, and where not everything fits cleanly the solve keeps the boxes in and
+leaves pairs: on the three largest rows 3.0 to 15 boxes stay out and 44 to 568 pairs are
+left per truck. Where hard 0 comes, it comes within seconds (on the catalog trucks of 15
+stops within 1.3 s, on the cut trucks of 10 stops within 0.4 s). What is left is density:
+every truck that misses hard 0 at the default weights misses it on boxes that found no
+place, not on pairs. A stop's front is ragged, every later stop has to stay behind it, and
+on the larger trucks the room runs out before the last stops are in; the cut positions
+themselves, given to the decoder as a loading order, are not reproduced (the decoder fills
+the first hole it meets), and more time helps slowly (cut 5t, 20 stops, over six seeds:
+17 boxes out on average at 30 s, 11 at 120 s).
 
 Against an exact model: [`benchmarks/container-loading`](../../../benchmarks/container-loading)
 compares the engine with a CP-SAT model that places items freely, 30 s each. On the twelve
