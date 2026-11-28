@@ -19,7 +19,6 @@
 #include "es/model/domain.hpp"
 #include "es/score/score_calculator.hpp"
 #include "es/solver.hpp"
-#include "optimaru/optimaru.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
 

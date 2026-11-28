@@ -297,7 +297,6 @@ library" are built from `optimaru/<use case>/cpp/` against these headers.
 
 ```
 core/optimaru/
-├── optimaru.hpp                  umbrella include for consumers
 ├── solver.hpp                    Solver: construction, then the step loop
 │                                 (Solver::run); multi-start
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
