@@ -129,7 +129,12 @@ ParcelModel
 
 An unknown field is refused. So are a repeated id, a `box` that is not a candidate's id, a
 parcel that fits none of the candidates (by size and `max_weight`) and a `max_box_types`
-below the number of required boxes, each with a message that names it.
+below the number of required boxes, each with a message that names it. The model is
+stricter here than the compiled `BoxSizingProblem`, which takes such a parcel and can be
+scored (`calculate_score`, `constraint_costs`); only a solve refuses it there. The message
+describes the first parcel that fits nothing and names up to five more with their count
+(`... (and 12 more: 'P9', 'P11', 'P12', 'P20', 'P31', ...)`), so a large import shows how
+much there is to fix.
 
 `solve_request` takes a pydantic request, `models.BoxSizingRequest`: the problem model as
 `model_input`, with the settings of the solve under the names of `solve`'s keywords

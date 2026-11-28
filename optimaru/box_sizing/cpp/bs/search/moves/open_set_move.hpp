@@ -55,6 +55,8 @@ protected:
     void census(const BoxSizingProblem& problem) {
         const int boxCount = problem.boxCount();
         count_.assign(static_cast<std::size_t>(boxCount), 0);
+        // No range check: a solve has been through ScoreCalculator::prepare,
+        // which refuses a box outside -1..boxCount - 1.
         for (const Parcel& parcel : problem.parcels) {
             if (parcel.box >= 0) ++count_[parcel.box];
         }

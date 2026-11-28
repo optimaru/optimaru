@@ -101,7 +101,10 @@ class BoxSizingProblem:
         """Sum over the assigned parcels of quantity * (box volume - parcel volume); a parcel
         larger than its box counts 0."""
     def fill_ratio(self) -> float:
-        """Shipped parcel volume / shipped box volume; 0.0 when nothing is assigned."""
+        """Shipped parcel volume / shipped box volume; 0.0 when nothing is assigned. A
+        parcel larger than its box (which does not fit it) counts as the box's volume, so
+        the ratio is at most 1 and void_volume() is the shipped box volume times
+        (1 - fill_ratio())."""
     def parcels_per_box(self) -> list[int]:
         """Per box, the shipments in it: the quantities of its parcels, summed."""
     def assignment(self) -> list[int]:

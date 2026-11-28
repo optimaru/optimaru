@@ -136,7 +136,13 @@ class BoxSizingProblemModel(StrictModel):
         default=None, ge=0, description="Output: sum over the parcels of quantity * (box volume - parcel volume)."
     )
     fill_ratio: float | None = Field(
-        default=None, ge=0, description="Output: shipped parcel volume / shipped box volume."
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "Output: shipped parcel volume / shipped box volume. A parcel larger than its box (which does "
+            "not fit it) counts as the box's volume, as it counts no air in void_volume."
+        ),
     )
 
     @model_validator(mode="after")
@@ -159,10 +165,19 @@ class BoxSizingProblemModel(StrictModel):
         for parcel in self.parcels:
             if parcel.box is not None and parcel.box not in known:
                 raise ValueError(f"parcel {parcel.id!r}: box {parcel.box!r} is not one of the candidate boxes")
-        for parcel in _parcels_no_box_takes(self.boxes, self.parcels) if fits else ():
+        misfits = _parcels_no_box_takes(self.boxes, self.parcels) if fits else []
+        if misfits:
+            # The first one in full and up to five more by id, with their count: the engine's
+            # message (ScoreCalculator::requireSolvable).
+            parcel, more = misfits[0], misfits[1:]
+            others = ""
+            if more:
+                named = ", ".join(repr(other.id) for other in more[:5])
+                others = f" (and {len(more)} more: {named}{', ...' if len(more) > 5 else ''})"
             raise ValueError(
                 f"parcel {parcel.id!r} ({parcel.length} x {parcel.width} x {parcel.height}, weight "
-                f"{parcel.weight}) fits none of the candidate boxes: add a box that takes it, or leave it out"
+                f"{parcel.weight}) fits none of the candidate boxes: add a box that takes it, or leave it "
+                f"out{others}"
             )
         required = sum(box.required for box in self.boxes)
         if self.max_box_types is not None and required > self.max_box_types:

@@ -149,6 +149,27 @@ def test_a_parcel_that_fits_no_candidate_is_refused_naming_it():
         BoxSizingProblemModel.model_validate(data)
 
 
+def test_the_refusal_counts_the_parcels_that_fit_nothing_and_names_five_more():
+    data = nested_data()
+    data["parcels"] += [{"id": f"pole-{i}", "length": 31 + i, "width": 5, "height": 5} for i in range(8)]
+    with pytest.raises(ValueError) as refusal:
+        BoxSizingProblemModel.model_validate(data)
+    assert (
+        "parcel 'pole-0' (31 x 5 x 5, weight 0) fits none of the candidate boxes: add a box that takes it, or "
+        "leave it out (and 7 more: 'pole-1', 'pole-2', 'pole-3', 'pole-4', 'pole-5', ...)"
+    ) in str(refusal.value)
+    # The engine says the same of a compiled problem.
+    core = bs.BoxSizingProblem(
+        [bs.Box("S", 10, 10, 10)], [bs.Parcel(f"pole-{i}", 11 + i, 5, 5) for i in range(3)] + [bs.Parcel("ok", 5, 5, 5)]
+    )
+    with pytest.raises(ValueError) as refusal:
+        bs.solve(core, time_limit_seconds=0)
+    assert str(refusal.value) == (
+        "parcel 'pole-0' (11 x 5 x 5, weight 0) fits none of the candidate boxes: add a box that takes it, or "
+        "leave it out (and 2 more: 'pole-1', 'pole-2')"
+    )
+
+
 def test_a_parcel_too_heavy_for_every_box_that_holds_it_is_refused():
     data = nested_data()
     data["boxes"][2]["max_weight"] = 1000

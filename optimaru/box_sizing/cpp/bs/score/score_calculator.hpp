@@ -41,8 +41,9 @@ public:
 
     // What a solve refuses on top of prepare(), because no assignment could
     // ever be feasible: a parcel that fits none of the candidates (by size and
-    // weight), and more required boxes than maxBoxTypes allows. Needs
-    // prepare().
+    // weight), and more required boxes than maxBoxTypes allows. The message
+    // describes the first such parcel and names up to five more by id, with
+    // their count. Needs prepare().
     static void requireSolvable(const BoxSizingProblem& problem);
 
     // The largest side and weight a fact may have, and the bound on the

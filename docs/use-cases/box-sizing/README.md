@@ -70,14 +70,16 @@ ctest --test-dir build
 - Lengths and weights are whole numbers in whatever unit you use; the examples here use mm
   and g. See [Units](#units).
 
-A solve refuses, with a `ValueError` that names it, a parcel that fits none of the candidate
-boxes (by size and by `max_weight`), and a `max_box_types` below the number of required
-boxes: no assignment could be feasible. The model refuses them when it is built; the engine
-refuses them again for a compiled problem.
+A solve refuses a parcel that fits none of the candidate boxes (by size and by `max_weight`),
+with a `ValueError` that describes the first such parcel and names up to five more, and a
+`max_box_types` below the number of required boxes: no assignment could be feasible. The
+model refuses them when it is built; the engine refuses them again for a compiled problem.
 
 The solved model carries the outputs: `box_types_used`, `void_volume` (the sum over the
 parcels of `quantity x (box volume - parcel volume)`), `fill_ratio` (shipped parcel volume /
 shipped box volume) and, on every box, `parcels` (the shipments in it: quantities summed).
+On an assignment that is not feasible, a parcel larger than its box counts as the box's
+volume in both: no air, and a fill of 1 for that shipment, so `fill_ratio` never passes 1.
 
 ## Constraints
 

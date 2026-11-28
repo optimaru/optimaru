@@ -171,7 +171,10 @@ struct BoxSizingProblem {
     }
 
     // Shipped parcel volume / shipped box volume over the assigned parcels;
-    // 0 when nothing is assigned.
+    // 0 when nothing is assigned. A parcel larger than its box (which does
+    // not fit it) counts as the box's volume, as it counts no air in
+    // voidVolume(): the ratio is at most 1, and voidVolume() is the shipped
+    // box volume times (1 - fillRatio()) on every assignment.
     double fillRatio() const {
         long double parcelVolumeSum = 0.0L;
         long double boxVolumeSum = 0.0L;
@@ -179,12 +182,14 @@ struct BoxSizingProblem {
             if (parcel.box < 0 || parcel.box >= boxCount()) continue;
             const Box& box = boxes[parcel.box];
             const auto quantity = static_cast<long double>(parcel.quantity);
-            parcelVolumeSum += quantity * static_cast<long double>(parcel.length) *
-                               static_cast<long double>(parcel.width) *
-                               static_cast<long double>(parcel.height);
-            boxVolumeSum += quantity * static_cast<long double>(box.length) *
-                            static_cast<long double>(box.width) *
-                            static_cast<long double>(box.height);
+            const long double parcelVolume = static_cast<long double>(parcel.length) *
+                                             static_cast<long double>(parcel.width) *
+                                             static_cast<long double>(parcel.height);
+            const long double boxVolume = static_cast<long double>(box.length) *
+                                          static_cast<long double>(box.width) *
+                                          static_cast<long double>(box.height);
+            parcelVolumeSum += quantity * std::min(parcelVolume, boxVolume);
+            boxVolumeSum += quantity * boxVolume;
         }
         return boxVolumeSum > 0.0L ? static_cast<double>(parcelVolumeSum / boxVolumeSum) : 0.0;
     }

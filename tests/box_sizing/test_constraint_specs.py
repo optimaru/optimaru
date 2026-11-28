@@ -115,8 +115,19 @@ def test_the_summary_getters_agree_with_the_costs():
     assert problem.void_volume() == 48_000_000
     assert problem.box_types_used() == 2
     assert problem.parcels_per_box() == [6, 3]
-    shipped = 2 * 330 * 120 * 210 + 4 * 3_000_000 + 3 * 12_000_000
-    assert problem.fill_ratio() == pytest.approx(shipped / (6 * 6_000_000 + 3 * 24_000_000))
+    # `long` is larger than its box: it counts as the box's volume, as it counts no air.
+    shipped = 2 * 6_000_000 + 4 * 3_000_000 + 3 * 12_000_000
+    boxes = 6 * 6_000_000 + 3 * 24_000_000
+    assert problem.fill_ratio() == pytest.approx(shipped / boxes)
+    assert problem.void_volume() == boxes - shipped
+
+
+def test_the_fill_ratio_never_passes_one():
+    problem = bs.BoxSizingProblem([bs.Box("S", 10, 10, 10)], [bs.Parcel("big", 30, 30, 30, quantity=4, box=0)])
+    assert bs.calculate_score(problem).hard == -60
+    assert (problem.fill_ratio(), problem.void_volume()) == (1.0, 0)
+    model = bs.models.BoxSizingProblemModel.from_core(problem)
+    assert (model.fill_ratio, model.void_volume, model.score_hard) == (1.0, 0, -60)
 
 
 def test_the_clean_cases_cost_nothing():

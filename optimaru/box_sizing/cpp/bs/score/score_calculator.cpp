@@ -31,6 +31,9 @@ static_assert(kFitWeight == ParcelFitCost::kDefaultWeight &&
 
 [[noreturn]] void refuse(const std::string& message) { throw std::invalid_argument(message); }
 
+// How many of the parcels that fit no candidate a refusal names after the first.
+constexpr std::size_t kMisfitsNamed = 5;
+
 void requireSide(const std::string& who, const char* name, std::int64_t value) {
     if (value < 1 || value > ScoreCalculator::kMaxSide) {
         refuse(who + ": " + name + " must be between 1 and " +
@@ -116,15 +119,29 @@ void ScoreCalculator::prepare(BoxSizingProblem& problem) {
 
 void ScoreCalculator::requireSolvable(const BoxSizingProblem& problem) {
     const int boxCount = problem.boxCount();
+    std::vector<int> misfits;
     for (int p = 0; p < problem.parcelCount(); ++p) {
         bool fitsOne = false;
         for (int b = 0; b < boxCount && !fitsOne; ++b) fitsOne = problem.fits(p, b);
-        if (fitsOne) continue;
-        const Parcel& parcel = problem.parcels[p];
-        refuse("parcel '" + parcel.id + "' (" + std::to_string(parcel.length) + " x " +
-               std::to_string(parcel.width) + " x " + std::to_string(parcel.height) + ", weight " +
-               std::to_string(parcel.weight) +
-               ") fits none of the candidate boxes: add a box that takes it, or leave it out");
+        if (!fitsOne) misfits.push_back(p);
+    }
+    if (!misfits.empty()) {
+        // The first one in full, and the others by id (five of them), so a
+        // caller with many sees how many and where to start.
+        const Parcel& parcel = problem.parcels[misfits.front()];
+        std::string message =
+                "parcel '" + parcel.id + "' (" + std::to_string(parcel.length) + " x " +
+                std::to_string(parcel.width) + " x " + std::to_string(parcel.height) + ", weight " +
+                std::to_string(parcel.weight) +
+                ") fits none of the candidate boxes: add a box that takes it, or leave it out";
+        if (misfits.size() > 1) {
+            message += " (and " + std::to_string(misfits.size() - 1) + " more: ";
+            for (std::size_t i = 1; i < misfits.size() && i <= kMisfitsNamed; ++i) {
+                message += (i > 1 ? ", '" : "'") + problem.parcels[misfits[i]].id + "'";
+            }
+            message += misfits.size() - 1 > kMisfitsNamed ? ", ...)" : ")";
+        }
+        refuse(message);
     }
     if (problem.maxBoxTypes) {
         int required = 0;
