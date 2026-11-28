@@ -134,8 +134,8 @@ acceptor judges like any other.
 - Code: `BuiltinStrategies::draw` in
   [`core/optimaru/search/strategies.hpp`](../core/optimaru/search/strategies.hpp);
   the strategies in [`core/optimaru/search/moves/`](../core/optimaru/search/moves/)
-  (`descent.hpp`, `ejection_chain.hpp`, `iterated_local_search.hpp`,
-  `route_elimination.hpp`) and
+  (`descent.hpp`, `ejection_chain.hpp`, `iterated_local_search.hpp` with the
+  descent it runs in `granular_local_search.hpp`, `route_elimination.hpp`) and
   [`search/ruin_recreate/ruin_recreate_move.hpp`](../core/optimaru/search/ruin_recreate/ruin_recreate_move.hpp).
 - Settings: `config.strategies` (`*_weight` turns one on, the rest tune it).
 - A new built-in strategy is a `MoveOperator` in `search/moves/` and a line in
@@ -167,8 +167,11 @@ the selection rules: nearby candidates first where a distance is configured, and
 the use case's entity and value hints.
 
 - Code: `MoveMixSampler::sample` in
-  [`core/optimaru/search/moves/move_mix.hpp`](../core/optimaru/search/moves/move_mix.hpp);
-  the sequence moves and their previews in
+  [`core/optimaru/search/moves/move_mix.hpp`](../core/optimaru/search/moves/move_mix.hpp),
+  which draws among the moves, one file each in the same folder: `change.hpp`,
+  `swap.hpp`, `relocate.hpp`, `element_swap.hpp`, `two_opt.hpp`, `or_opt.hpp`,
+  `two_opt_star.hpp`, `cross_exchange.hpp` (what they draw with is in
+  `move_draw.hpp`); the sequence moves' preview, apply and undo in
   [`list_move.hpp`](../core/optimaru/search/moves/list_move.hpp).
 - Settings: `config.moves` (the weights), `config.selection` (nearby, hints).
 - Before writing a move, check whether reweighting these does the job

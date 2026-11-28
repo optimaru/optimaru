@@ -14,6 +14,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/search/moves/descent.hpp"
 #include "optimaru/search/moves/ejection_chain.hpp"
+#include "optimaru/search/moves/granular_local_search.hpp"
 #include "optimaru/search/moves/iterated_local_search.hpp"
 #include "optimaru/search/moves/route_elimination.hpp"
 #include "optimaru/search/operators.hpp"

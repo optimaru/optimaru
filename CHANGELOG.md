@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Source layout: one file per move.** The ordinary moves of the move mix each have a file in
+  `search/moves/`: `change.hpp`, `swap.hpp` (assignment shape), `relocate.hpp`,
+  `element_swap.hpp`, `two_opt.hpp`, `or_opt.hpp`, `two_opt_star.hpp` and
+  `cross_exchange.hpp` (sequence shape). `move_mix.hpp` keeps `MoveMixSampler`, which draws
+  among them by weight, and `move_draw.hpp` holds what they draw with (`SampledMove`, the
+  nearby pick). The granular descent of iterated local search, `GranularLocalSearch`, moves to
+  `search/moves/granular_local_search.hpp`. The draws are the same in the same order, so
+  every seeded solve gives the same result; `move_mix.hpp` and `iterated_local_search.hpp`
+  still include what they used to provide. Nothing changes in the Python package.
 - **Breaking (C++): `utils/` holds what the engine's folders share.** `portable_random.hpp`
   moves to `core/optimaru/utils/random.hpp` and `worker_threads.hpp` to
   `core/optimaru/utils/worker_threads.hpp`; the include guards follow
