@@ -27,6 +27,93 @@ cmake -B build -DOPTIMARU_USE_CASES=order_picking && cmake --build build -j
 ctest --test-dir build
 ```
 
+## Warehouse layout
+
+The layout is input. A request, or a compiled solution, uses one of two kinds; without
+either it has the default grid, and solves as it did before the layout was input.
+
+**A grid of shelvings.** Columns `A`, `B`, ... by shelving rows `1`, `2`, ...; a location is a
+shelving, its `LEFT` or `RIGHT` side and a row along that side, in meters from the shelving's
+top edge. `warehouse` on the request sizes it:
+
+| `warehouse` field | Default | Range | Meaning |
+| --- | --- | --- | --- |
+| `column_count` | 5 | 1..18278 | shelving columns, `A`..`E` by default |
+| `shelving_row_count` | 3 | 1..10000 | shelving rows, from 1 |
+| `shelving_width` | 2 | 1..1000 | meters between the two sides of a shelving |
+| `shelving_height` | 10 | 1..1000 | meters along a side; a side has the rows `0`..`shelving_height` |
+| `shelving_padding` | 3 | 1..1000 | meters of corridor between neighboring shelvings, both ways |
+
+A location's `column` is written in letters as a spreadsheet writes its columns: `A`..`Z`, then
+`AA`, `AB`, ... up to `ZZZ`. A location outside the grid is refused, naming the trolley or the
+order item.
+
+```python
+from optimaru.order_picking.models import (
+    LocationModel, OrderModel, OrderPickingRequest, ProductModel, TrolleyModel, WarehouseModel, solve_request,
+)
+
+request = OrderPickingRequest(
+    time_limit_seconds=2,
+    warehouse=WarehouseModel(column_count=30, shelving_row_count=4, shelving_height=20),
+    trolleys=[TrolleyModel(id="1", bucket_count=4, bucket_capacity=48000,
+                           location=LocationModel(column="A", shelving_row=1, side="LEFT", row=0))],
+    orders=[OrderModel(id="order1", items=[
+        ProductModel(id="p0", volume=1232, location=LocationModel(column="AB", shelving_row=4, side="RIGHT", row=17)),
+    ])],
+)
+```
+
+**Named locations with a distance table.** For a building that is not such a grid, `locations`
+lists the ids of its places (at most 2048) and `distances` the walk between them, `{from id: {to id: meters}}`
+in whole meters (0..1000000). The `location` of a trolley or an order item is then one of the
+ids, and the response's stops name them the same way.
+
+```python
+request = OrderPickingRequest(
+    time_limit_seconds=2,
+    locations=["dock", "aisle-1", "aisle-2"],
+    distances={"dock": {"aisle-1": 12, "aisle-2": 20}, "aisle-1": {"aisle-2": 9}},
+    trolleys=[TrolleyModel(id="1", bucket_count=4, bucket_capacity=48000, location="dock")],
+    orders=[OrderModel(id="order1", items=[ProductModel(id="p0", volume=1232, location="aisle-2")])],
+)
+```
+
+- A location is 0 meters from itself (a distance given for it must be 0).
+- The table may be asymmetric (a one-way aisle): `distances["a"]["b"]` and `distances["b"]["a"]`
+  are read separately when both are given.
+- A pair given one way only is as long the other way, so a symmetric table needs each pair once.
+- A pair of `locations` given neither way is refused: the table has to say how far every
+  location is from every other one, also those no trolley or item is at. Nothing is derived by
+  walking through a third location, and the distances given are used as they are.
+- An id in `distances` that is not in `locations` is refused.
+- The table is one number for every pair, so it grows with the square of `locations`. With
+  each pair given once, 1,000 locations are a body of 8 MB that the request model reads and
+  lays out in about 0.2 s, and 2,048, the most a request takes, 34 MB and about 1.2 s (one
+  thread of an Apple M4 Max); it also has to fit the body an API accepts. `locations` needs
+  only the places the request's trolleys and items are at, not the whole building. A caller
+  that already has the table as a matrix can skip the dict: `op.Warehouse.from_distances`
+  takes it as it is, up to 4,096 locations.
+
+The distances are in the unit the score counts in. The default weight of
+`order_split_by_trolley_cost`, 1000, prices one more trolley on an order at 1000 of them.
+
+**One kind per request.** `warehouse` together with `locations`, a grid location in a request
+with `locations`, or an id in a request without them is refused with a message that says so.
+
+On the compiled side the layout is `OrderPickingSolution.warehouse`: `op.Warehouse(column_count,
+shelving_row_count, shelving_width, shelving_height, shelving_padding)` for a grid,
+`op.Warehouse.from_distances(location_ids, distances)` (a square list of lists) for named
+locations, whose locations come from `warehouse.location(id)`; see [`python.md`](python.md).
+
+While a solve runs, every distance is a lookup in one table, for both kinds: on a grid the
+solver fills it for the locations in use (up to 2048 distinct ones; beyond that it computes
+each distance as it goes, which is what it did for every solve before).
+
+The CP-SAT reference of the [benchmark](#benchmark) knows the default grid only, so a request
+with `warehouse`, or with `locations` and `distances`, solves on the engine only until the
+reference model follows.
+
 ## Constraints
 
 The score is the engine's `Score` type as it is, with no mapping.

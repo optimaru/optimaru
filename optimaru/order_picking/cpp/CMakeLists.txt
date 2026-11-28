@@ -6,6 +6,7 @@ add_library(op_core
     op/score/incremental_calculator.cpp
     op/solver.cpp
     op/model/demo_data.cpp
+    op/model/layout.cpp
 )
 target_include_directories(op_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(op_core PUBLIC optimaru)

@@ -15,6 +15,11 @@ uv run order-picking-compare --seconds 10 --workers 8   # engine vs CP-SAT (--ma
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
+The instances are in the default warehouse (5 columns x 3 shelving rows), the only layout the
+CP-SAT model knows: a request with another layout (`warehouse`, or `locations` and `distances`,
+see the [guide](../../docs/use-cases/order-picking/README.md#warehouse-layout)) solves on the
+engine only until external-solver follows.
+
 The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.

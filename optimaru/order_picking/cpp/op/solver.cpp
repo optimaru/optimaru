@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "op/model/layout.hpp"
 #include "op/score/incremental_calculator.hpp"
 #include "op/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
@@ -89,6 +90,7 @@ private:
     // Cheapest-insertion position for `location` in the trolley's route.
     static int cheapestPosition(const OrderPickingSolution& s, const Trolley& trolley,
                                 const WarehouseLocation& location) {
+        const Warehouse& warehouse = s.warehouse;
         const std::vector<int>& list = trolley.pickTaskIndices;
         const WarehouseLocation* previous = &trolley.location;
         const int size = static_cast<int>(list.size());
@@ -97,9 +99,9 @@ private:
         for (int p = 0; p <= size; ++p) {
             const WarehouseLocation& next =
                     p < size ? s.pickTasks[list[p]].location : trolley.location;
-            const int delta = calculateDistance(*previous, location) +
-                              calculateDistance(location, next) -
-                              calculateDistance(*previous, next);
+            const int delta = calculateDistance(warehouse, *previous, location) +
+                              calculateDistance(warehouse, location, next) -
+                              calculateDistance(warehouse, *previous, next);
             if (delta < bestDelta) {
                 bestDelta = delta;
                 bestPosition = p;
@@ -401,14 +403,18 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     moves.tail_swap_weight = config.tail_swap_weight;
 
     // Warehouse-distance nearby neighborhoods over the pick tasks (see
-    // Config::distance_nearby). The meter reads a snapshot of the pick
-    // locations — a pure lookup.
+    // Config::distance_nearby). The meter reads a snapshot of the layout and
+    // of the pick locations — a pure lookup.
     if (config.distance_nearby) {
+        // The copy of the layout shares the solve's table (Warehouse::active),
+        // which so lives as long as these settings: the engine of one solve.
+        auto warehouse = std::make_shared<const Warehouse>(solution.warehouse);
         auto locations = std::make_shared<std::vector<WarehouseLocation>>();
         locations->reserve(solution.pickTasks.size());
         for (const PickTask& task : solution.pickTasks) locations->push_back(task.location);
-        engineConfig.selection.nearby.distance = [locations](int a, int b) {
-            return static_cast<double>(calculateDistance((*locations)[a], (*locations)[b]));
+        engineConfig.selection.nearby.distance = [warehouse, locations](int a, int b) {
+            return static_cast<double>(
+                    calculateDistance(*warehouse, (*locations)[a], (*locations)[b]));
         };
         engineConfig.selection.nearby.size =
                 std::max(1, std::min(config.distance_nearby_size,
@@ -433,6 +439,7 @@ static void registerMoves(optimaru::Solver<OrderPickingSolution>& engine,
 }
 
 void Solver::solve(OrderPickingSolution& solution) {
+    checkLayout(solution);
     if (solution.trolleys.empty() || solution.pickTasks.empty()) {
         ScoreCalculator::score(solution);
         return;
@@ -445,37 +452,56 @@ void Solver::solve(OrderPickingSolution& solution) {
     // built-in moves only — cannot be used. Each start is a single-start
     // Solver of its own.
     if (config_.parallel_solver_count > 1) {
-        optimaru::solve_parallel_starts(
-                config_, solution, [](const Config& config, OrderPickingSolution& candidate, int) {
-                    Solver worker(config);
-                    worker.solve(candidate);
-                });
+        {
+            // One table for every start: the candidates are copies of the
+            // solution, which share it. A candidate so arrives at its start's
+            // solve with the table set and, on a grid, its locations numbered:
+            // checkLayout takes that for what it is (checkLocation), because
+            // this solution was checked above, before it was numbered.
+            const ActiveDistances distances(solution);
+            optimaru::solve_parallel_starts(
+                    config_, solution,
+                    [](const Config& config, OrderPickingSolution& candidate, int) {
+                        Solver worker(config);
+                        worker.solve(candidate);
+                    });
+        }
+        // As below: the final score off the layout itself.
+        solution.score = ScoreCalculator::score(solution);
         return;
     }
 
-    optimaru::Settings engineConfig = buildEngineConfig(config_, solution);
-    // Construction heuristic (cheapest insertion) + late-acceptance local
-    // search (+ ALNS kicks), with the order-consolidation operator joining
-    // the built-in move mix under adaptive selection.
-    OrderPickingIncrementalScoreCalculator calculator;
-    optimaru::Solver<OrderPickingSolution> engine(std::move(engineConfig));
-    if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    registerMoves(engine, config_, calculator);
-    engine.solve(solution, calculator);
+    {
+        // Every distance of the search is a lookup in the solve's table (see
+        // ActiveDistances), whatever the layout.
+        const ActiveDistances distances(solution);
+        optimaru::Settings engineConfig = buildEngineConfig(config_, solution);
+        // Construction heuristic (cheapest insertion) + late-acceptance local
+        // search (+ ALNS kicks), with the order-consolidation operator joining
+        // the built-in move mix under adaptive selection.
+        OrderPickingIncrementalScoreCalculator calculator;
+        optimaru::Solver<OrderPickingSolution> engine(std::move(engineConfig));
+        if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
+        registerMoves(engine, config_, calculator);
+        engine.solve(solution, calculator);
+    }
 
-    // The authoritative final score: a full recompute on the best solution.
-    // Also refreshes the derived fields (trolley / previous / next).
+    // The authoritative final score: a full recompute on the best solution,
+    // off the layout itself and not the solve's table. Also refreshes the
+    // derived fields (trolley / previous / next).
     solution.score = ScoreCalculator::score(solution);
 }
 
 void Solver::solve(OrderPickingSolution& solution,
                    optimaru::DecomposedObjective<OrderPickingSolution>& calculator) {
     optimaru::check_config(config_);
+    checkLayout(solution);
     if (!solution.pickTasks.empty() && !solution.trolleys.empty()) {
         // No OrderConsolidateMove here: that operator reads the monolithic
         // calculator's live per-(trolley, order) volume table, which a
         // caller-assembled plugin does not expose. The built-in sequence move mix
         // plus the ALNS kicks remain.
+        const ActiveDistances distances(solution);
         optimaru::Solver<OrderPickingSolution> engine(buildEngineConfig(config_, solution));
         engine.solve(solution, calculator);
     }

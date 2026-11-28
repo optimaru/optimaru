@@ -6,7 +6,9 @@ Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0; see t
 
 ## Problem
 
-Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, left/right sides x rows 0-10).
+Pick order items onto trolleys in a warehouse: by default a grid of 5 shelving columns A-E x 3 rows,
+left/right sides x rows 0-10; a grid of another size or named locations with a distance table when the
+problem says so ([Layouts](#layouts)).
 
 - **decision**: `Trolley.pick_task_indices` — the list of `PickTask` indices the
   trolley picks, in visiting order.
@@ -44,6 +46,54 @@ from optimaru.order_picking.models import OrderPickingRequest, solve_request
 response = solve_request(OrderPickingRequest.model_validate(request_dict))
 print(response.feasible, response.distance_by_trolley)
 ```
+
+## Layouts
+
+`OrderPickingSolution(orders, trolleys, pick_tasks, warehouse=None)` takes the layout its locations
+are in; `None` is the default grid, and `solution.warehouse` reads it back.
+
+```python
+# A grid of another size: 30 columns x 4 shelving rows, shelvings 2 m x 20 m, 3 m apart.
+warehouse = op.Warehouse(column_count=30, shelving_row_count=4, shelving_height=20)
+start = op.WarehouseLocation(column=0, shelving_row=0, side=op.Side.LEFT, row=0)
+far = op.WarehouseLocation(column=27, shelving_row=3, side=op.Side.RIGHT, row=17)   # (AB,4)
+solution = op.OrderPickingSolution(
+    [op.Order("order1")], [op.Trolley("1", 4, 48000, start)], [op.PickTask("order1-0", 0, 1232, far)], warehouse
+)
+print(op.calculate_distance(start, far, warehouse), far.shelving_id)
+
+# Named locations: distances[i][j] is the whole meters from location_ids[i] to location_ids[j].
+warehouse = op.Warehouse.from_distances(["dock", "aisle-1", "aisle-2"], [[0, 12, 20], [12, 0, 9], [20, 9, 0]])
+dock, aisle = warehouse.location("dock"), warehouse.location("aisle-2")
+solution = op.OrderPickingSolution(
+    [op.Order("order1")], [op.Trolley("1", 4, 48000, dock)], [op.PickTask("order1-0", 0, 1232, aisle)], warehouse
+)
+op.solve(solution, time_limit_seconds=1.0)
+print(op.distance_to_travel(solution, 0))   # 40: there and back
+```
+
+- `Warehouse(column_count=5, shelving_row_count=3, shelving_width=2, shelving_height=10, shelving_padding=3)`:
+  a grid, in whole meters; `ValueError` outside 1..18278 columns, 1..10000 shelving rows and 1..1000 for the
+  three sizes. `WarehouseLocation(column, shelving_row, side, row)` is 0-based and checks only that
+  nothing is negative: whether a location is inside the grid is checked where the warehouse is known,
+  by `OrderPickingSolution(...)` and again by `solve`, `calculate_score`, `distance_to_travel` and
+  `constraint_costs` (`ValueError`, naming the trolley or pick task), and by `calculate_distance` for
+  its two locations.
+- `Warehouse.from_distances(location_ids, distances)`: named locations. The table is square over the
+  ids (at most 4096, `Warehouse.MAX_LOCATIONS`) and may be asymmetric; `ValueError` for a repeated id, a distance outside 0..1000000 or a
+  location that is not 0 from itself. `warehouse.location(id)` is the location to give a trolley or a
+  pick task (`location.index` is its position in `warehouse.location_ids`, -1 for a grid location),
+  and `warehouse.location_id(location)` names it again. A named location belongs to the warehouse
+  that made it: a solution of another warehouse refuses it (`ValueError`).
+- One solution, one kind: a grid location in a warehouse of named locations, or the reverse, is a
+  `ValueError`.
+- `calculate_distance(start, end, warehouse=None)` measures in the default grid without a warehouse.
+
+In `optimaru.order_picking.models` the same two kinds are the request's `warehouse`
+(`WarehouseModel`), or its `locations` and `distances` (a dict of dicts, where a pair given one way
+only is as long the other way); a `location` is a `LocationModel` (column letters `A`..`Z`, `AA`, ...)
+or the id of a named location. The fields, their ranges and what is refused are in the
+[guide](README.md#warehouse-layout).
 
 `SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
 `parallel_solver_count` multistart, ...) — see `_core.pyi`.
@@ -89,4 +139,6 @@ score(raw, [DistanceFromPreviousPickTaskCost(), DistanceFromPreviousPickTaskCost
 A request is refused when it sets a field that acts only through a cost while its
 constraints leave that cost out ([Parameters and their costs](../README.md#parameters-and-their-costs)).
 This use case has no such field: every field a cost reads is required, so
-`models.parameter_uses(model)` is always empty.
+`models.parameter_uses(model)` is always empty. The layout (`warehouse`, or `locations` and
+`distances`) has a default but is no such field either: the response reports the meters walked
+from it whatever the constraints.

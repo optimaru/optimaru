@@ -23,6 +23,10 @@
 //       soft, incremental == a fresh recompute over a random walk, every
 //       preview == the applied score under ScoreChecks::Full and a ScoreChecks::Full
 //       solve with repeated, shifted components
+//   (k) other layouts (a grid of another size, named locations with a
+//       distance table): the distance components by hand, the default
+//       assembly == the monolithic score on random lists, and a solve under
+//       ScoreChecks::Full that leaves the calculator on the final solution
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -39,6 +43,7 @@
 #include "op/constraints.hpp"
 #include "op/model/demo_data.hpp"
 #include "op/model/domain.hpp"
+#include "op/model/layout.hpp"
 #include "op/score/score_calculator.hpp"
 #include "op/solver.hpp"
 #include "optimaru/solution/editor.hpp"
@@ -870,6 +875,89 @@ void verifyRepeatsAndOffsets() {
     }
     std::printf("\n");
 }
+
+// -------------------------------------------------------------------------
+// (k) Layouts other than the default grid.
+// -------------------------------------------------------------------------
+void verifyLayouts() {
+    std::printf("== (k) Layouts: a grid of another size, named locations ==\n");
+
+    // 4 named locations on an asymmetric table, and a random grid of 40 x 6
+    // shelvings: 3 trolleys, 4 orders, 24 picks each.
+    OrderPickingSolution named = makeBase(4);
+    named.warehouse = makeNamedWarehouse(
+            {"dock", "a", "b", "c"}, {{0, 5, 9, 10}, {5, 0, 7, 4}, {9, 3, 0, 2}, {11, 4, 2, 0}});
+    OrderPickingSolution grid = makeBase(4);
+    grid.warehouse = makeGridWarehouse(40, 6, 3, 14, 4);
+    std::mt19937_64 rng(5);
+    WarehouseLocation gridStart;
+    for (int t = 0; t < 3; ++t) {
+        addTrolley(named, 6, 5000, WarehouseLocation::named(0));
+        addTrolley(grid, 6, 5000, gridStart);
+    }
+    for (int p = 0; p < 24; ++p) {
+        addPick(named, p % 4, 700, WarehouseLocation::named(1 + p % 3));
+        WarehouseLocation place;
+        place.column = static_cast<int>(rng() % 40);
+        place.shelvingRow = static_cast<int>(rng() % 6);
+        place.side = rng() % 2 == 0 ? Side::LEFT : Side::RIGHT;
+        place.row = static_cast<int>(rng() % 15);
+        addPick(grid, p % 4, 700, place);
+    }
+
+    // By hand, on the table: dock -> a -> b -> c is 5 + 7 + 2, and c -> dock 11.
+    {
+        named.trolleys[0].pickTaskIndices = {0, 1, 2};
+        DecomposedCalculator previous;
+        previous.emplace<DistanceFromPreviousPickTaskCost>();
+        checkScore("named: distanceFromPreviousPickTaskCost 5 + 7 + 2", scoreWith(previous, named),
+                   0, -14.0);
+        DecomposedCalculator back;
+        back.emplace<DistanceFromLastPickTaskToPathOriginCost>();
+        checkScore("named: distanceFromLastPickTaskToPathOriginCost c -> dock",
+                   scoreWith(back, named), 0, -11.0);
+        named.trolleys[0].pickTaskIndices.clear();
+    }
+
+    for (OrderPickingSolution* s : {&named, &grid}) {
+        const char* kind = s->warehouse.isGrid() ? "custom grid" : "named";
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        int mismatches = 0;
+        for (int round = 0; round < 100; ++round) {
+            for (Trolley& trolley : s->trolleys) trolley.pickTaskIndices.clear();
+            for (int p = 0; p < 24; ++p) {
+                if (rng() % 10 == 0) continue;  // left unassigned
+                s->trolleys[rng() % 3].pickTaskIndices.push_back(p);
+            }
+            if (!sameScore(scoreWith(calculator, *s), ScoreCalculator::score(*s))) ++mismatches;
+        }
+        check(mismatches == 0,
+              std::string(kind) + ": default assembly == monolithic score on 100 random lists");
+
+        for (Trolley& trolley : s->trolleys) trolley.pickTaskIndices.clear();
+        Solver::Config config;
+        config.time_limit = std::chrono::seconds(1);
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        config.ruin_recreate_unimproved_step_trigger = 200;
+        config.ruin_recreate_polish_steps = 100;
+        bool corrupted = false;
+        try {
+            Solver(config).solve(*s, calculator);
+        } catch (const optimaru::ScoreMismatchError& e) {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        const Score reported = s->score;
+        check(!corrupted && reported.feasible() && s->warehouse.active == nullptr &&
+                      sameScore(reported, calculator.score()) &&
+                      sameScore(reported, ScoreCalculator::score(*s)),
+              std::string(kind) + ": 1s FULL_ASSERT plugin solve, score == monolithic recompute, " +
+                      reported.str());
+    }
+    std::printf("\n");
+}
 }  // namespace
 
 int main() {
@@ -883,6 +971,7 @@ int main() {
     verifyRawCostsByHand();
     verifyCatalog();
     verifyRepeatsAndOffsets();
+    verifyLayouts();
 
     if (failures == 0) {
         std::printf("All order-picking plugin checks PASSED.\n");

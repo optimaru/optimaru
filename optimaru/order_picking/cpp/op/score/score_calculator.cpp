@@ -44,6 +44,7 @@ ConstraintTotals ScoreCalculator::calculateTotals(OrderPickingSolution& solution
 
     const int trolleyCount = static_cast<int>(solution.trolleys.size());
     const int orderCount = static_cast<int>(solution.orders.size());
+    const Warehouse& warehouse = solution.warehouse;
     ConstraintTotals totals;
 
     // --- soft: distance constraints, reading the derived fields -----------
@@ -56,12 +57,12 @@ ConstraintTotals ScoreCalculator::calculateTotals(OrderPickingSolution& solution
                 task.previousPickTask != -1 ? solution.pickTasks[task.previousPickTask].location
                                             : trolley.location;
         totals.distanceFromPreviousPickTaskCost +=
-                kPreviousWeight * calculateDistance(previousLocation, task.location);
+                kPreviousWeight * calculateDistance(warehouse, previousLocation, task.location);
 
         // distanceFromLastPickTaskToPathOriginCost
         if (task.isLast()) {
             totals.distanceFromLastPickTaskToPathOriginCost +=
-                    kReturnWeight * calculateDistance(task.location, trolley.location);
+                    kReturnWeight * calculateDistance(warehouse, task.location, trolley.location);
         }
     }
 

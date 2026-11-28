@@ -136,7 +136,7 @@ std::vector<PlacedProduct> buildProducts(DemoRandom& random) {
         const std::vector<Shelf>& shelvings = shelvingsFor(raw.family);
         const int shelvingIndex = random.next_int(static_cast<int>(shelvings.size()));
         const Side side = random.next_int(2) == 0 ? Side::LEFT : Side::RIGHT;
-        const int row = random.next_int(Warehouse::SHELVING_ROWS_SIZE) + 1;
+        const int row = random.next_int(Warehouse::DEFAULT_SHELVING_HEIGHT) + 1;
         WarehouseLocation location;
         location.column = shelvings[shelvingIndex].column;
         location.shelvingRow = shelvings[shelvingIndex].row;

@@ -18,7 +18,8 @@ struct DistanceFromLastPickTaskToPathOriginCost final : OpUnitConstraint {
     double cost(const OrderPickingSolution& solution, int unit,
                 const std::vector<int>& members) const override {
         if (members.empty()) return 0.0;
-        return static_cast<double>(calculateDistance(solution.pickTasks[members.back()].location,
+        return static_cast<double>(calculateDistance(solution.warehouse,
+                                                     solution.pickTasks[members.back()].location,
                                                      solution.trolleys[unit].location));
     }
 };

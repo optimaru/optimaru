@@ -4,6 +4,9 @@ Each trolley's ordered `pick_task_indices` is the decision; a pick task in
 no list is unassigned. `trolley_index` / `previous_pick_task` /
 `next_pick_task` on a pick task are derived from the lists.
 
+The layout is the solution's `warehouse`: a grid of shelvings of any size (the default:
+5 columns x 3 shelving rows), or named locations with a walking-distance table.
+
 Score (hard / soft, lexicographic), at the default weights:
   hard = -(missing trolley buckets)                 # trolley_capacity_cost
   soft = -(walk to and between the picks, m         # distance_from_previous_pick_task_cost
@@ -29,8 +32,15 @@ class Side:
     RIGHT: Side
 
 class WarehouseLocation:
-    """A spot in the warehouse: shelving (column 0..4 == A..E, shelving_row
-    0..2 == rows 1..3), side and the row 0..10 within the shelving side."""
+    """A spot in the warehouse.
+
+    On a grid: the shelving (column 0.. == A.., shelving_row 0.. == rows 1..), its side and
+    the row 0..shelving_height within the shelving side. The constructor makes one of
+    these; whether it is inside the grid is checked where the warehouse is known
+    (`OrderPickingSolution`, `Solver.solve`).
+
+    In a warehouse of named locations: one of them, from `Warehouse.location(id)`. It belongs
+    to that warehouse: a solution of another warehouse refuses it (ValueError)."""
 
     def __init__(self, column: int, shelving_row: int, side: Side, row: int) -> None: ...
     @property
@@ -42,8 +52,69 @@ class WarehouseLocation:
     @property
     def row(self) -> int: ...
     @property
+    def index(self) -> int:
+        """The index of a named location in `Warehouse.location_ids`; -1 for a grid location."""
+    @property
     def shelving_id(self) -> str:
-        """The shelving id, e.g. "(A,1)"."""
+        """The shelving id of a grid location, e.g. "(A,1)" (columns beyond Z: "(AA,1)")."""
+
+class Warehouse:
+    """The layout of a warehouse: a grid of shelvings, or named locations.
+
+    `Warehouse()` is the default grid: 5 columns (A..E) x 3 shelving rows (1..3) of shelvings
+    2 m wide and 10 m tall, 3 m of corridor between neighbors. The arguments size another
+    one, in whole meters: `column_count` 1..18278, `shelving_row_count` 1..10000, and
+    `shelving_width`, `shelving_height`, `shelving_padding` 1..1000 each (ValueError
+    outside). A shelving side holds the rows 0..`shelving_height`.
+
+    `Warehouse.from_distances(location_ids, distances)` is a warehouse of named locations."""
+
+    MAX_COLUMN_COUNT: int
+    """18278: columns A..ZZZ."""
+    MAX_SHELVING_ROW_COUNT: int
+    """10000."""
+    MAX_SHELVING_SIZE: int
+    """1000: the most meters of `shelving_width`, `shelving_height` and `shelving_padding`."""
+    MAX_DISTANCE: int
+    """1000000: the longest distance, in meters, a table of named locations may hold."""
+    MAX_LOCATIONS: int
+    """4096: the most named locations of a warehouse."""
+
+    def __init__(
+        self,
+        column_count: int = 5,
+        shelving_row_count: int = 3,
+        shelving_width: int = 2,
+        shelving_height: int = 10,
+        shelving_padding: int = 3,
+    ) -> None: ...
+    @staticmethod
+    def from_distances(location_ids: list[str], distances: list[list[int]]) -> Warehouse:
+        """A warehouse of named locations: `distances[i][j]` is the whole meters from
+        `location_ids[i]` to `location_ids[j]`.
+
+        The table is square over the ids (at most 4096) and may be asymmetric. ValueError for
+        a repeated id, a distance outside 0..1000000 or a location that is not 0 from itself."""
+    @property
+    def is_grid(self) -> bool:
+        """True for a grid, False for named locations."""
+    @property
+    def column_count(self) -> int: ...
+    @property
+    def shelving_row_count(self) -> int: ...
+    @property
+    def shelving_width(self) -> int: ...
+    @property
+    def shelving_height(self) -> int: ...
+    @property
+    def shelving_padding(self) -> int: ...
+    @property
+    def location_ids(self) -> list[str]:
+        """The ids of the named locations; empty for a grid."""
+    def location(self, id: str) -> WarehouseLocation:
+        """The named location with this id (ValueError: unknown id, or a grid)."""
+    def location_id(self, location: WarehouseLocation) -> str:
+        """What the location is called: the id of a named location, the shelving id of a grid one."""
 
 class Order:
     def __init__(self, id: str) -> None: ...
@@ -97,7 +168,14 @@ class OrderPickingSolution:
         orders: list[Order],
         trolleys: list[Trolley],
         pick_tasks: list[PickTask],
-    ) -> None: ...
+        warehouse: Warehouse | None = None,
+    ) -> None:
+        """`warehouse` is the layout the locations are in; None is the default grid.
+
+        ValueError when a trolley or a pick task is at a location outside it: beyond the
+        grid, or a grid location in a warehouse of named locations (and the reverse)."""
+    @property
+    def warehouse(self) -> Warehouse: ...
     @property
     def orders(self) -> list[Order]: ...
     trolleys: list[Trolley]
@@ -108,11 +186,18 @@ class OrderPickingSolution:
     def routes(self) -> dict[str, list[str]]:
         """{trolley id: [pick task ids]} in pick order."""
 
-def calculate_distance(start: WarehouseLocation, end: WarehouseLocation) -> int:
-    """Distance in meters between two locations."""
+def calculate_distance(start: WarehouseLocation, end: WarehouseLocation, warehouse: Warehouse | None = None) -> int:
+    """Distance in meters between two locations of `warehouse` (None: the default grid).
+
+    ValueError when one of them is not a location of it (outside the grid, or not one of its
+    named locations)."""
 
 def distance_to_travel(solution: OrderPickingSolution, trolley_index: int) -> int:
-    """One trolley's round-trip distance."""
+    """One trolley's round-trip distance.
+
+    Like `calculate_score` and `constraint_costs`, it first checks every location against the
+    solution's warehouse (ValueError), since a location can be replaced after the solution
+    was made."""
 
 def update_shadow_variables(solution: OrderPickingSolution) -> None:
     """Re-derive the pick tasks' derived fields from the pick lists."""
@@ -242,7 +327,11 @@ class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, solution: OrderPickingSolution) -> None:
         """Solve in place: mutates pick_task_indices, refreshes the derived
-        variables and stores the best score in solution.score."""
+        variables and stores the best score in solution.score.
+
+        The solution is the solve's own while it runs (it also keeps its table of distances
+        on it, and on a grid numbers the locations, both removed at the end): do not read,
+        copy, score or solve the same solution object from another thread meanwhile."""
 
     def solve_with_constraints(self, solution: OrderPickingSolution, constraints: Iterable[Any] | None = ...) -> None:
         """Same solve, scored by a caller-chosen constraint set (see

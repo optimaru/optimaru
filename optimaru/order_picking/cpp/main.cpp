@@ -47,8 +47,8 @@ int main() {
                                        kSoftWeight<OrderSplitByTrolleyCost>));
 
     for (const Trolley& trolley : solution.trolleys) {
-        std::printf("Trolley %s  (distance %3d m, %d picks): ", trolley.id.c_str(),
-                    calculateDistanceToTravel(solution, trolley),
+        std::printf("Trolley %s  (distance %3lld m, %d picks): ", trolley.id.c_str(),
+                    static_cast<long long>(calculateDistanceToTravel(solution, trolley)),
                     static_cast<int>(trolley.pickTaskIndices.size()));
         std::printf("%s", trolley.location.shelvingId().c_str());
         for (int pickIndex : trolley.pickTaskIndices) {
