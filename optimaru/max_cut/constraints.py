@@ -137,7 +137,7 @@ class DifferentPartitionPairsCost(Constraint):
         "One unit of cost is one pair left together; 0 means every pair is split across the cut."
     )
     description_ko = (
-        "different_partition_pairs에서 두 정점이 같은 쪽에 배정된 쌍의 수를 그쪽 비용으로 계산합니다. "
+        "different_partition_pairs의 두 정점이 같은 쪽에 놓이면 그쪽 비용으로 한 번 셉니다. "
         "함께 놓인 쌍 하나가 비용 1이며, 0이면 모든 쌍이 서로 다른 쪽으로 나뉘어 있습니다."
     )
 
