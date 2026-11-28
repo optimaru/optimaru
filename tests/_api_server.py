@@ -30,6 +30,7 @@ MODEL_USE_CASES = {
     "bin-packing": "BinPackingProblemModel",
     "box-sizing": "BoxSizingProblemModel",
     "conference-scheduling": "ConferenceScheduleModel",
+    "container-loading": "ContainerLoadingProblemModel",
     "facility-location": "FacilityLocationProblemModel",
     "flight-crew-scheduling": "FlightCrewScheduleModel",
     "food-packaging": "PackagingScheduleModel",

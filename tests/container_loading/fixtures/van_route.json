@@ -1,0 +1,17 @@
+{
+  "containers": [
+    {"id": "van-1", "length": 3000, "width": 1700, "height": 1800, "max_weight": 1200000}
+  ],
+  "items": [
+    {"id": "stop1-crate", "length": 800, "width": 600, "height": 500, "weight": 40000, "rotations": "upright", "unload_order": 1, "group": "stop-1"},
+    {"id": "stop1-carton", "length": 600, "width": 400, "height": 400, "weight": 15000, "unload_order": 1, "group": "stop-1"},
+    {"id": "stop1-glass", "length": 600, "width": 400, "height": 300, "weight": 8000, "rotations": "upright", "max_load_on_top": 0, "unload_order": 1, "group": "stop-1"},
+    {"id": "stop2-pallet", "length": 1200, "width": 800, "height": 900, "weight": 250000, "rotations": "upright", "unload_order": 2, "group": "stop-2"},
+    {"id": "stop2-carton-a", "length": 600, "width": 400, "height": 400, "weight": 15000, "unload_order": 2, "group": "stop-2"},
+    {"id": "stop2-carton-b", "length": 600, "width": 400, "height": 400, "weight": 15000, "unload_order": 2, "group": "stop-2"},
+    {"id": "stop3-pallet", "length": 1200, "width": 800, "height": 1000, "weight": 300000, "rotations": "upright", "max_load_on_top": 50000, "unload_order": 3, "group": "stop-3"},
+    {"id": "stop3-crate", "length": 800, "width": 600, "height": 500, "weight": 40000, "rotations": "upright", "unload_order": 3, "group": "stop-3"},
+    {"id": "stop3-carton", "length": 500, "width": 400, "height": 300, "weight": 9000, "unload_order": 3, "group": "stop-3"},
+    {"id": "stop3-tube", "length": 1500, "width": 200, "height": 200, "weight": 6000, "rotations": "upright", "unload_order": 3, "group": "stop-3"}
+  ]
+}

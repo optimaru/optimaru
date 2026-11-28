@@ -1,0 +1,549 @@
+# Container loading
+
+Three-dimensional loading of boxes into containers, on this repository's C++ engine
+(`core/optimaru/`): boxes onto pallets and into rack bays, a route's parcels into a
+vehicle's cargo space in the order of its stops, an order's items into the cheapest
+shipping cartons of a catalog. Original to optimaru; the placement rule is the extreme
+points of Crainic, Perboli and Tadei (2008).
+
+The decision is an **order**, not a set of coordinates: every container has a list of
+items, its loading order, and a decoder places the items one after the other. Positions
+are outputs.
+
+Python API details: [`python.md`](python.md).
+
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=container_loading uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/container_loading
+```
+
+```python
+from optimaru import container_loading as cl
+
+problem = cl.ContainerLoadingProblem(
+    containers=[cl.Container(f"pallet-{c + 1}", 1200, 800, 1500, max_weight=600_000) for c in range(3)],
+    items=[cl.Item(f"carton-{i + 1}", 400, 300, 300, weight=6000) for i in range(60)],
+)
+print(cl.solve(problem, time_limit_seconds=2.0, random_seed=0).score)   # 0hard/-2soft
+print(problem.containers_used(), problem.unplaced_items())              # 2 []
+for item in problem.items[:3]:
+    print(item.id, problem.containers[item.container].id, (item.x, item.y, item.z),
+          (item.placed_length, item.placed_width, item.placed_height))
+```
+
+`solve` returns the problem it was given, solved in place; the score is its `score`
+(`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
+(`container_loading.SolverConfig`) and `constraints`:
+
+```python
+from optimaru.container_loading.constraints import UsedLengthCost, get_constraints, score
+
+cl.constraint_info()                    # the catalog: name, default level / weight, flags
+picks = [UsedLengthCost(weight=0.001) if spec.name == "used_length_cost" else spec for spec in get_constraints()]
+cl.solve(problem, time_limit_seconds=1.0, constraints=picks)
+raw = cl.constraint_costs(problem)      # raw per-container costs, re-priced in pure Python
+score(raw), score(raw, picks)
+```
+
+`cl.generate_demo_data()` builds the demo: 40 boxes of six kinds (one fragile) for four
+pallets, for three stores (the groups).
+
+## The JSON model
+
+`optimaru.container_loading.models` is the contract of the optimaru API for this use case
+(slug `container-loading`): a request in, the same problem with its outputs filled in out.
+
+Lengths and weights are whole numbers in whatever unit the caller uses; the examples here
+use millimetres and grams. Coordinates: `x` runs along a container's `length`, from the
+closed end (0) to the door (`x = length`); `y` along its `width`; `z` up. An item's
+`x, y, z` is its corner nearest the origin.
+
+**`ContainerLoadingRequest`**: `model_input` (the problem below) and the settings every
+request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `full_assert`, `solver_parameters`; see
+[One way to solve](../README.md#one-way-to-solve)).
+
+**`ContainerLoadingProblemModel`**
+
+| Field | Type, default | Meaning |
+| --- | --- | --- |
+| `containers` | list of `ContainerModel`, at least one | the spaces that may be used |
+| `items` | list of `ItemModel` | the boxes |
+| `min_support_ratio` | float in (0, 1], 0.8 | share of an item's base that must rest on the floor or on other items |
+| `score_hard`, `score_soft` | output | the score (hard 0 = feasible) |
+| `containers_used` | output, int | containers that hold a placed item |
+| `unplaced_items` | output, list of ids | items that are not placed |
+
+**`ContainerModel`**: one physical space: a pallet, a rack bay, a cargo space, one carton.
+
+| Field | Type, default | Meaning |
+| --- | --- | --- |
+| `id` | str | unique |
+| `length`, `width`, `height` | int, 1 to 1,000,000 | inner size |
+| `max_weight` | int or None, None | weight it may hold; None = no limit |
+| `cost` | float >= 0, 1.0 | what using this container costs (1 = count containers) |
+| `initial_items` | list of item ids, [] | warm start: the loading order to start from |
+| `items` | output, list of ids | the placed items, in loading order |
+| `unplaced_items` | output, list of ids | items the solve gave to this container that found no place in it |
+| `loaded_weight`, `loaded_volume` | output, int | weight and volume of the placed items (`container_weight_cost` counts the unplaced ones too) |
+| `fill_ratio` | output, float | `loaded_volume` / the container's volume |
+| `used_length` | output, int | largest `x + placed_length` of a placed item (0 when empty) |
+
+**`ItemModel`**
+
+| Field | Type, default | Meaning |
+| --- | --- | --- |
+| `id` | str | unique |
+| `length`, `width`, `height` | int, 1 to 1,000,000 | size as given, before any rotation |
+| `weight` | int, 0 to 1,000,000,000, 0 | |
+| `rotations` | `"all"`, `"upright"` or `"fixed"`, `"all"` | all = the six axis-parallel orientations; upright = the height stays vertical (two); fixed = as given |
+| `max_load_on_top` | int or None, None | weight this item can carry; 0 = nothing on top; None = no limit |
+| `unload_order` | int or None, None | lower leaves first (a route's stop number); None = no order |
+| `group` | non-empty str or None, None | items of one group belong in one container (the items of an order) |
+| `container` | output, id or None | the container it stands in; None = not placed |
+| `sequence` | output, int | 0-based place in its container's loading order |
+| `x`, `y`, `z` | output, int | its corner nearest the origin |
+| `placed_length`, `placed_width`, `placed_height` | output, int | size along x, y and z after rotation |
+
+An item that is not placed has `container: null` and no position, is listed in the
+problem's `unplaced_items`, and counts in `score_hard`.
+
+A request and what comes back, shortened
+([`tests/container_loading/fixtures/van_route.json`](../../../tests/container_loading/fixtures/van_route.json)
+is the whole problem: ten parcels for three stops in one van):
+
+```json
+{
+  "time_limit_seconds": 5,
+  "model_input": {
+    "containers": [{"id": "van-1", "length": 3000, "width": 1700, "height": 1800, "max_weight": 1200000}],
+    "items": [
+      {"id": "stop1-glass", "length": 600, "width": 400, "height": 300, "weight": 8000,
+       "rotations": "upright", "max_load_on_top": 0, "unload_order": 1, "group": "stop-1"},
+      {"id": "stop3-pallet", "length": 1200, "width": 800, "height": 1000, "weight": 300000,
+       "rotations": "upright", "max_load_on_top": 50000, "unload_order": 3, "group": "stop-3"}
+    ]
+  }
+}
+```
+
+```json
+{
+  "containers": [{"id": "van-1", "items": ["stop3-pallet", "stop1-glass"], "unplaced_items": [],
+                  "loaded_weight": 308000, "loaded_volume": 1032000000, "fill_ratio": 0.1124,
+                  "used_length": 800, "...": "the inputs, unchanged"}],
+  "items": [
+    {"id": "stop1-glass", "container": "van-1", "sequence": 1, "x": 0, "y": 1200, "z": 0,
+     "placed_length": 600, "placed_width": 400, "placed_height": 300, "...": "the inputs"},
+    {"id": "stop3-pallet", "container": "van-1", "sequence": 0, "x": 0, "y": 0, "z": 0,
+     "placed_length": 800, "placed_width": 1200, "placed_height": 1000, "...": "the inputs"}
+  ],
+  "score_hard": 0, "score_soft": -1.0, "containers_used": 1, "unplaced_items": []
+}
+```
+
+### Three ways to use it
+
+- **Pallets and rack bays.** One container per pallet or bay, `max_weight` its load
+  limit, `max_load_on_top` on what must not be crushed. The solve fills as few as it can.
+- **A vehicle's cargo space, in stop order.** One container for the cargo space, the door
+  at `x = length`, and each parcel's `unload_order` the number of its stop on the route.
+  `unloading_order_cost` then keeps every parcel reachable when its stop comes: nothing
+  that leaves later stands between it and the door, or on it. Give `used_length_cost` a
+  weight to keep the load at the closed end (loading metres).
+- **Cartons from a catalog.** List one container per carton you are willing to use: for a
+  catalog of three sizes and an order that may need up to two cartons, six containers,
+  each with its carton's `cost`. `used_container_cost` is then the price of the cartons
+  chosen, and the solve returns the cheapest ones that hold the order. Several orders in
+  one request: give each order's items a `group`, and `group_split_cost` keeps an order
+  in one carton where it fits.
+
+## Domain (sequence shape)
+
+- `Container.items` is the only decision variable: the item indices in loading order.
+  Every item is in exactly one container's list once a solve returns.
+- The **decoder** turns a container and its list into positions. It keeps the corners an
+  item may be put at ("points"; an empty container has one, its origin). The next item of
+  the list goes to the first point, in (x, z, y) order (from the closed end towards the
+  door, then up, then across), at which one of its allowed orientations is *feasible*:
+  inside the container, overlapping no placed item, and with at least
+  `min_support_ratio` of its base on the floor or on the tops of placed items. Of the
+  orientations feasible there it takes the one that divides the free room best (the most
+  axes along which the room up to the next item or wall is a whole multiple of the item's
+  size, so equal items line up into full rows and layers); of equals, the lowest, then the
+  one that reaches less far towards the door. A placed item covers some points and adds
+  up to six: its three far corners, each slid back along the two other axes until it
+  meets an item or a wall.
+- An item for which no point works is **unplaced**. It stays in its list, changes nothing
+  for the items after it, and `unplaced_item_cost` counts it. The search moves it to
+  another container or to another place in the order.
+- The decode reads the sizes, the rotations and `min_support_ratio`, and nothing else:
+  weight limits, stacking limits, the unloading order and groups are costs computed on
+  its result. So a hard cost of 0 means every one of them holds, and a solve that cannot
+  reach 0 still returns a loading, with what is broken counted.
+
+`calculate_score(problem)` decodes every container, scores at the default weights and
+writes the derived fields (`update_placements(problem)` writes them without scoring): per item
+`container` (an index, -1 = not placed), `sequence`, `x`, `y`, `z` and the placed size; per
+container `placed_items`, `unplaced_items`, `loaded_weight`, `loaded_volume`,
+`used_length` and `fill_ratio`. Every solve leaves them current.
+
+## Constraints
+
+The score is the engine's `Score` type as it is, with no mapping.
+
+| Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+|---|---|---|---|---|
+| `unplaced_item_cost` | `UnplacedItemCost` | hard | 1 | per container: the items of its list the decoder could not place |
+| `container_weight_cost` | `ContainerWeightCost` | hard | 1 | per container: the weight of its list above `max_weight` (0 without a limit) |
+| `stacking_load_cost` | `StackingLoadCost` | hard | 1 | per container: over its placed items with `max_load_on_top`, the weight resting on the item above that limit, rounded up per item |
+| `unloading_order_cost` | `UnloadingOrderCost` | hard | 1 | per container: the pairs (a, b) of placed items with `unload_order(a) < unload_order(b)` where b blocks a |
+| `used_container_cost` | `UsedContainerCost` | soft | 1 | per container: its `cost` when it holds a placed item |
+| `used_length_cost` | `UsedLengthCost` | soft | 0 (opt-in) | per container: `used_length`, the largest `x + placed_length` |
+| `load_balance_cost` | `LoadBalanceCost` | soft | 0 (opt-in) | per container: the distance of the load's centre of gravity from the container's centre in the x-y plane, in thousandths of the half-diagonal |
+| `group_split_cost` | `GroupSplitCost` (global) | soft | 1 | over the groups: the containers whose list holds one of its items, beyond the first |
+
+Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
+`Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level), none
+is a reward, and six of the eight are scored by default (`default_enabled`):
+`used_length_cost` and `load_balance_cost` weigh 0 until a selection gives them a weight.
+`container_loading.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`). The unit constraints come first in
+`list_constraints()`, the global one last. An item in no list contributes nothing.
+
+What the raw costs mean exactly:
+
+- **Stacking load.** An item passes its own weight plus the load on it down to the items
+  right under it, shared by contact area; an item on the floor passes it to the floor.
+  The load on an item is what arrives from above. Two bases side by side under one box of
+  9 kg carry 4.5 kg each. `max_load_on_top=0` means nothing may stand on the item.
+- **Unloading order.** b blocks a when it stands between a and the door (at or beyond
+  a's far end along x, overlapping a across and in height) or above a (at or above a's
+  top, overlapping a in the floor plane). Items without `unload_order` are in nobody's
+  way and wait for nobody; items of the same stop do not block each other.
+- **Container weight** counts the whole list, an unplaced item included: what the solve
+  gave to a container belongs to it. `loaded_weight` is the weight of the placed items
+  only, so a container whose `loaded_weight` is within `max_weight` can still cost here
+  when it has `unplaced_items`. An item too large for every container therefore also
+  adds its weight to the list that holds it.
+- **Used container.** A container whose list holds only unplaced items is not in use.
+- **The hard costs are in different units.** `unplaced_item_cost` counts items,
+  `unloading_order_cost` counts pairs, and `container_weight_cost` and
+  `stacking_load_cost` count weight units (grams in the guide's examples). With the
+  default weights one gram over a limit weighs as much as one unplaced item, and a 10 kg
+  box on an item with `max_load_on_top=0` as much as 10,000 unplaced items. A solve that
+  cannot reach hard 0 therefore leaves boxes out rather than overload a container or crush
+  one. To trade differently, reweight in the `constraints` of `solve`: e.g.
+  `UnplacedItemCost(weight=1000)` makes one unplaced item weigh as much as a kilogram over.
+- **Group split** counts where the lists put the items, placed or not.
+
+### Parameters and their costs
+
+`max_weight`, `max_load_on_top`, `unload_order` and `group` act only through their cost.
+A model that sets one of them while its constraint selection leaves that cost out is
+refused with `ValueError` naming the field and the cost to add; a pick at weight 0
+counts. `models.parameter_uses(model)` lists the fields an input sets, and
+[Parameters and their costs](../README.md#parameters-and-their-costs) has the table for
+every use case. It is checked where the input is the JSON model (`solve_request`,
+`solve(model)`); a compiled problem is solved as given. The sizes, `rotations` and
+`min_support_ratio` are the decoder's and hold under every selection; `cost` is
+`used_container_cost`'s own scale.
+
+### Scoring and the Python API
+
+- **No weights on the problem.** `ContainerLoadingProblem` and
+  `ContainerLoadingProblemModel` carry no constraint weights (`extra="forbid"`). Weights
+  come only from constraint selections; the defaults are the components'.
+- **One scoring path.** A solve without `constraints` scores with the default assembly,
+  the same components a selection picks from; there is no hand-written incremental
+  calculator beside it. `ScoreCalculator` (`cpp/cl/score/score_calculator.hpp`) is the
+  full recompute the assembly is checked against, and what scores the solution a default
+  solve returns. So `solve(problem)` and `solve(problem, constraints=get_constraints())`
+  run the same search and return the same loading.
+- **`SolverConfig`** has the engine knobs (`stop.time_limit_seconds`, `stop.step_limit`,
+  `unimproved_*`, `stop.target_score`, `run.parallel_solver_count`,
+  `acceptance.late_acceptance_size`, the `alns` and `alns_trigger` groups, the move
+  weights `moves.relocate_weight`, `moves.list_swap_weight`, `moves.two_opt_weight` and
+  `moves.or_opt_weight`, `construction.first_fit_decreasing`,
+  `custom_moves.empty_container`, `custom_moves.empty_container_candidates`,
+  `custom_moves.repack`, `custom_moves.switch_container`, `on_new_best`, `full_assert`). Zero budget is
+  `stop.time_limit_seconds = 0`; a fixed number of steps is `stop.step_limit = N`.
+- **Exponent granularity.** The engine shapes a unit constraint per unit and a global on
+  its total. The units are containers: the seven per-container constraints are shaped per
+  container (two overloads of 3 and 4 at exponent 2 cost 9 + 16, not 49), and
+  `group_split_cost` shapes its one total.
+- **`constraint_costs()` shape.** The standard C++-package dict `{name: {costs, weight,
+  exponent, offset, clip, global, level, reward, level_flippable, name, label,
+  default_weight, default_level}}`. The seven per-container constraints list one cost per
+  container, an empty one included; `group_split_cost` is `[total]`. Hard costs are
+  rounded per container, as the engine does.
+- **Core checks.** Building, scoring or solving a core problem refuses a
+  `min_support_ratio` outside (0, 1], a repeated id, a size outside 1..1,000,000, a weight
+  outside 0..1,000,000,000, a negative `max_weight`, `max_load_on_top` or `cost`, an item
+  listed twice and items without a container (`ValueError`; the pydantic model refuses
+  the same). The bounds keep a volume inside 64 bits.
+- **The lists a problem comes with are the starting point.** A solve keeps them and
+  constructs only the items in no list; `time_limit_seconds=0` returns the construction.
+- **Constraints path.** `solve(..., constraints=...)` is single-start
+  (`parallel_solver_count` is ignored there, as in bin packing).
+- `problem.items[i]` and `problem.containers[i]` return copies (as in every C++ package):
+  write loading orders with `problem.set_loading([...])`; `problem.loading()` reads them.
+  `problem.score` is read-only (set by `calculate_score` / `solve`).
+
+### Offsets and repeated picks
+
+Every constraint takes the knobs `weight`, `level`, `exponent` and, keyword-only,
+`offset` and `clip`, and may be picked several times. A raw cost `x` (per container for
+the seven unit constraints, the one total for `group_split_cost`) is shaped as
+`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
+`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
+every container below the offset, an empty one included); `offset=0` is the plain power
+shaping. `clip=False` with an offset is refused on hard, because hard 0 must mean no
+violation. Each pick is its own instance with its own knobs, its level included, and the
+instances add up:
+
+```python
+from optimaru.container_loading.constraints import UsedLengthCost, get_constraints
+
+cl.solve(problem, constraints=[
+    *get_constraints(),                        # the defaults
+    UsedLengthCost(weight=0.01, offset=1000),  # + 0.01 per mm a load reaches beyond 1 m
+])
+```
+
+`cl.constraint_costs(problem, picks)` takes the same picks (the second keyed
+`used_length_cost#2`).
+
+## Search
+
+First fit decreasing by decode builds the start; late acceptance then works on the
+loading orders with the engine's sequence moves (relocate, swap, Or-opt, 2-opt), its
+adaptive ruin-and-recreate kicks, and three moves of the domain
+(`optimaru/container_loading/cpp/cl/search/moves/`).
+
+- **Construction** (`construction.first_fit_decreasing`,
+  `cpp/cl/construct/construction.hpp`). The items no list holds go in this order: with
+  unloading orders, what leaves last first; the items with a `max_load_on_top` after all
+  the others, so that they end up on top; then group by group, the group with the most
+  volume first; inside a group largest first, by volume, then by base area. Each goes
+  into the first container that *takes* it: one whose weight limit holds and whose decode,
+  with the new item added, leaves no more items unplaced than before, no more weight on an
+  item than it carries and no more items in the way of an earlier stop.
+  Containers are tried in this order: those that already hold an item of the item's
+  group, the other containers in use, then the empty ones, cheapest per volume first. An
+  item no container takes goes to the one with the most free volume. It is
+  deterministic.
+- **`EmptyContainerMove`** (`custom_moves.empty_container`,
+  `custom_moves.empty_container_candidates`). `used_container_cost` is a step function: a
+  container stops costing only once its last item has left, which no single-item move can
+  show the acceptor. This move takes one of the least filled containers in use and moves
+  its items, largest first, each to the fullest other container that still takes it (as
+  above, and the moved item itself must find a place there). What no other container
+  takes stays, so the move may be partial: the score
+  stays and the source is nearer to empty.
+- **`RepackPairMove`** (`custom_moves.repack`). `group_split_cost` is a step function
+  too: a group spread over two containers costs the same until its last item has joined
+  the others. This move takes the items out of two containers in use and loads them
+  again, into those two and, every second time, an empty one as a third. The items are
+  dealt out group by group: a group goes whole to the first of the containers with room
+  for all of it (a drawn share of its volume, 70 to 100%, and its weight limit), and a
+  group none has room for is dealt item by item. Each container's items are then put in
+  the construction's loading order and decoded; what finds no place goes on to the next
+  container. The groups the two shared come out whole wherever they fit, and when
+  everything fits the first container the second is empty. It is made only when every
+  load comes out clean (everything placed, no stacking limit or unloading order broken).
+- **`SwitchContainerMove`** (`custom_moves.switch_container`; used only when the
+  containers differ in size, cost or weight limit). The load of one container goes into
+  empty containers of another kind that cost no more: as it is into one, or split, in its
+  order, over several opened cheapest first while together they cost no more than the one
+  that is left. It is how a load reaches a cheaper carton, or two small ones in place of
+  a large one.
+- **The decode is the cost of a step.** A move changes one or two lists, and each is
+  decoded again from the place it changes: item k's place depends on items 0 .. k - 1
+  only, so a decode keeps what it needs to go on from any position
+  (`cpp/cl/score/packing.hpp`). The constraints share one decode per container and list
+  (`PackingCache`), so six constraints cost one decode, not six.
+
+### How good, how fast
+
+Where the fewest containers is known: containers of 1200 x 800 x 1000 cut into boxes
+(sides in steps of 100), which fit back into as many containers as were cut and into no
+fewer. Three seeds per row, one thread of an Apple M4 Max, 10 s per solve; where the
+seeds differ they are listed in seed order. "Slack" is the share of the volume taken out
+again after the cut; "volume needs" is the number of containers the items' volume fills,
+rounded up: the optimum without slack, a lower bound with it
+([`container-loading-known-optimum`](../../../benchmarks/container-loading/README.md#where-the-fewest-containers-is-known)):
+
+| cut containers x boxes | slack | rotations | items | volume needs | construction | solve |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4 x 15 | 0% | fixed | 60 | 4 | 6 (1 unplaced) | 5 |
+| 4 x 15 | 0% | all | 60 | 4 | 5 | 5 |
+| 4 x 30 | 0% | all | 120 | 4 | 5 | 5 |
+| 10 x 20 | 0% | fixed | 200 | 10 | 13/13/12 | 12 |
+| 10 x 20 | 0% | all | 200 | 10 | 11/12/11 | 11 |
+| 20 x 25 | 0% | all | 500 | 20 | 21 | 21 |
+| 4 x 15 | 10% | all | 54/55/53 | 4 | 5 | 4 |
+| 10 x 20 | 10% | fixed | 178/178/179 | 10/9/10 | 12/11/12 | 11/11/10 |
+| 10 x 20 | 10% | all | 178/178/179 | 10/9/10 | 10 | 10 |
+| 20 x 25 | 10% | all | 446/449/450 | 19/19/18 | 20/19/19 | 19 |
+| 40 x 50 | 10% | all | 1803/1801/1801 | 36/37/37 | 37 | 37 |
+
+A cut container is full to the last unit, which a real load rarely is, and a placement
+rule that never looks ahead leaves gaps: without slack the solve needs one container more
+than the fewest on the small instances (5 for 4), one or two more on the middle ones (11
+or 12 for 10) and one more on the large one (21 for 20). With a tenth of the volume taken
+out again it needs what the volume needs or one more. Most of the result is the
+construction's. The search closes a container where a few moves can (every row where
+"solve" is below "construction"); on the larger instances it mostly keeps the hard
+constraints at 0 and the groups together.
+
+Steps per second on instances of the same kind, one thread (30,000 steps, seed 1, the
+median of three solves). A step costs a decode of the lists it touches, so it is the
+number of items per container that sets the speed, more than the number of items:
+
+| cut containers x boxes | items | thousand steps per second |
+| --- | --- | --- |
+| 4 x 15 | 60 | 60 |
+| 4 x 30 | 120 | 15 |
+| 10 x 20 | 200 | 40 |
+| 20 x 25 | 500 | 12 |
+| 40 x 50 | 2000 | 3 |
+
+One container holding hundreds of items is the slow case: each corner the decoder tries
+is checked against every box already placed, and a decode of a list resumes only from
+where the list changes. On two containers of 1200 x 800 x 2000 cut into boxes (10% slack,
+one spare, 3,000 steps, one run each, the time including the construction), about 45
+items per container ran at 7,500 steps per second, 90 at 3,300, 180 at 640 and 360 at
+340. For a trailer of several hundred small parcels, give the solve time accordingly or
+group the parcels into larger units first.
+
+Against an exact model: [`benchmarks/container-loading`](../../../benchmarks/container-loading)
+compares the engine with a CP-SAT model that places items freely, 30 s each. On the twelve
+instances of up to 15 items CP-SAT proves the optimum and the engine reaches it. On the
+four of 32 items the engine uses 4, 5, 5 and 4 containers (4 is the fewest) where CP-SAT,
+which proves nothing there, ends on 5.
+
+Groups and stacking limits cost containers, and how many is worth knowing before a
+result is called good or bad. The demo made three times as large
+(`generate_demo_data(item_count=120, container_count=8)`: 120 boxes for three stores, 27
+of them fragile, 3.9 pallets of volume), 200,000 steps, seeds 1 to 3, the same on all
+three:
+
+| | pallets | store splits |
+| --- | --- | --- |
+| as it is | 6 | 3 |
+| without the stores (`group`) | 5 | |
+| without the limits on the fragile boxes (`max_load_on_top`) | 5 | 3 |
+| without both | 4 | |
+
+## Starting from an existing solution
+
+`with_initial_solution(problem, solution)` returns a copy of a
+`ContainerLoadingProblemModel` whose search starts from `solution`, a solved model or the
+same thing as a JSON dict. Containers and items are matched by id: each container's
+`initial_items` becomes the `items` it has in the solution, replacing what the problem
+had, and a container the solution leaves out starts empty. Items the solution placed
+nowhere are constructed around the seeded loading orders; with
+`time_limit_seconds=0` a complete solution comes back as it went in. An unknown container
+or item, or an item listed twice, raises `ValueError`.
+
+```python
+from optimaru.container_loading import with_initial_solution
+from optimaru.container_loading.models import ContainerLoadingProblemModel
+
+model = ContainerLoadingProblemModel.from_core(cl.generate_demo_data())
+solved = cl.solve(model, time_limit_seconds=1.0, random_seed=0)
+again = cl.solve(with_initial_solution(model, solved), time_limit_seconds=1.0, random_seed=1)
+```
+
+A solved model is itself a starting point: `to_core()` loads the `items` (and
+`unplaced_items`) a solve filled in, so `cl.solve(solved, ...)` goes on from there, and
+`cl.calculate_score(solved.to_core())` is the score it carries when everything is placed.
+An unplaced item does not keep its place in the order: it is loaded back after the placed
+ones, which stand where they stood, so such a model can only come back with fewer unplaced
+items than the solve reported, though not necessarily with a lower hard score: an item
+placed now may stand on a fragile item or in front of an earlier stop. `initial_items` is
+read only where a container has no `items` yet.
+
+## C++
+
+- `optimaru/container_loading/cpp/cl/model/domain.hpp`: the domain and the
+  `optimaru::SolutionTraits` specialization; `model/demo_data.cpp`: the demo
+- `optimaru/container_loading/cpp/cl/score/packing.hpp`: the decoder (`decode`), the
+  costs of one decoded container (`stackingExcess`, `unloadingBlocks`,
+  `balancePerMille`) and `PackingCache`
+- `optimaru/container_loading/cpp/cl/score/score_calculator.hpp`: `prepare()` (the fact
+  checks, the orientations in the decoder's order, the groups), `updateDerived()` and the
+  full recompute
+- `optimaru/container_loading/cpp/cl/constraints/`: one component per constraint
+  (+ `common.hpp`, which holds the decode the components share);
+  `optimaru/container_loading/cpp/cl/constraints.hpp` assembles the default set
+  (`defaultConstraints()`)
+- `optimaru/container_loading/cpp/cl/construct/construction.hpp`: first fit decreasing by
+  decode
+- `optimaru/container_loading/cpp/cl/search/moves/`: `empty_container.hpp`,
+  `repack_pair.hpp`, `switch_container.hpp` (header-only, so the tests drive them
+  directly) and what they share, `list_edit.hpp`
+- `optimaru/container_loading/cpp/cl/solver.hpp`: the engine wrapper (construction, late
+  acceptance, the three moves, adaptive ruin & recreate, parallel starts)
+- `optimaru/container_loading/cpp/main.cpp`: the demo
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=container_loading
+cmake --build build -j2
+ctest --test-dir build --output-on-failure   # cl_test + cl_plugin_test
+./build/container_loading/cl_demo            # 5 s solve; checks hard 0 (exit 0)
+```
+
+`cl_test`: the decoder by hand (the order of the points, the support rule, the rotations,
+which orientation is taken, an item without a place) and on random lists (every decode a
+valid loading, checked without the decoder; a decode resumed from any shared prefix equal
+to one from scratch), the costs of a decoded container by hand, `PackingCache`, the fact
+checks and derived fields, the construction, the three moves (applied, undone, repeated)
+and the solver (a `ScoreChecks::Full` solve, a zero budget, parallel starts).
+`cl_plugin_test`: the default assembly against the full recompute on random loadings and
+over random moves, raw costs by hand for all eight constraints, the catalog, overrides and
+partial assemblies, `constraint_totals()`, every move preview against the applied score,
+and `ScoreChecks::Full` solves, with repeated and shifted components too.
+
+`tests/container_loading/reference_container_loading.py` checks a solved model without
+the decoder, in plain Python: that the positions are a loading (inside, no overlap, enough
+support, an allowed orientation) and what every constraint costs on them, the stacking
+loads in exact fractions. `test_reference_parity.py` holds the engine to it on random
+loadings and on solves.
+
+## Extending
+
+Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
+The solution has the **sequence** shape; the domain solver that configures the engine is
+`optimaru/container_loading/cpp/cl/solver.hpp` + `optimaru/container_loading/cpp/cl/solver.cpp`.
+
+**Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt moves
+(weights in `Solver::Config`). `EmptyContainerMove`, `RepackPairMove` and
+`SwitchContainerMove` are defined in `optimaru/container_loading/cpp/cl/search/moves/` and
+registered in `registerMoves()` of `solver.cpp`: use them as the template, and give a new
+move a case in `cl_test` (g). A move that needs to know whether an item still finds a
+place asks a `PackingCache` of its own, as all three do.
+
+**Changing the construction heuristic.** The domain places every item before the engine
+runs (`cpp/cl/construct/construction.cpp`); the engine only fills what is still in no
+list, so a different heuristic is a different order or rule there.
+`construction.first_fit_decreasing = False` leaves it to the engine's cheapest insertion.
+
+**Changing the placement rule.** The decoder is `decode()` in
+`cpp/cl/score/packing.cpp`. Whatever it does, it has to stay a function of the problem's
+facts, the container and the list alone, and of the list's prefix (item k's place may
+depend on items 0 .. k - 1 only): `cl_test` (b) checks both on random lists.
+
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one
+new constraint through this use case's files in six steps: changed from Python, written
+as a component, tested, made cheaper per move, turned on by default and measured.
+
+## Benchmark
+
+[`benchmarks/container-loading`](../../../benchmarks/container-loading) compares this use
+case with an OR-Tools CP-SAT model that places items freely, on instances whose fewest
+containers is known.

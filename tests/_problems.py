@@ -26,6 +26,7 @@ SMALL_PROBLEMS = {
     "bin_packing": _call(".bin_packing.test_solve", "web_demo"),
     "box_sizing": _core(_call("optimaru.box_sizing", "generate_demo_data", parcel_count=40)),
     "conference_scheduling": _call("optimaru.conference_scheduling", "generate_demo_data"),
+    "container_loading": _call("optimaru.container_loading", "generate_demo_data"),
     "employee_scheduling": _call(
         "optimaru.employee_scheduling", "make_random_roster", days=8, shifts_per_day=6, employees=9, seed=23
     ),

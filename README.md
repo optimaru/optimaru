@@ -1,7 +1,7 @@
 # optimaru
 
 A metaheuristic optimization engine for real-world routing, scheduling,
-timetabling and allocation, with 23 ready-to-use models you call from Python.
+timetabling and allocation, with 24 ready-to-use models you call from Python.
 
 This repository contains the free, open-source edition. The Enterprise edition
 hosts the same engine as the optimaru API. To switch an existing Python program
@@ -162,7 +162,7 @@ measured at each stage.
 
 ## Use cases
 
-[`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 23 use cases
+[`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 24 use cases
 and the constraint contract they share. Each use case's guide in
 `docs/use-cases/<slug>/` has a short usage example, and `extending.md` beside it
 adds a constraint step by step in that use case's files.
@@ -172,10 +172,10 @@ order picking, facility location. Scheduling: employee shifts, flight crew,
 maintenance, project-job (RCPSP), semiconductor fab, food packaging, task
 assigning, meeting. Timetabling: school timetabling, conference, sports league,
 tournament. Allocation and packing: bed allocation, bin packing, box sizing,
-knapsack, assembly-line balancing, quadratic assignment, max-cut.
+container loading (3D), knapsack, assembly-line balancing, quadratic assignment, max-cut.
 
 ```sh
-uv sync                                    # editable install; builds all 23 extensions in place
+uv sync                                    # editable install; builds all 24 extensions in place
 uv run pytest                              # every Python test
 export OPTIMARU_USE_CASES=knapsack         # or build only the use cases you work on
 uv sync && uv run pytest tests/knapsack    # (uv rebuilds when the variable changes)
@@ -186,7 +186,8 @@ cmake -B build && cmake --build build -j && ctest --test-dir build   # engine + 
 
 [`benchmarks/README.md`](benchmarks/README.md) lists every comparison. In
 short: every use case but vehicle routing is compared with OR-Tools CP-SAT on
-the same instances and rescored by the use case's own evaluator; vehicle
+the same instances and rescored by the use case's own evaluator (container
+loading: by where the items stand, since its CP-SAT model places them freely); vehicle
 routing is compared with the OR-Tools Routing solver on CVRPLIB Set X and
 Augerat's Set A, and with time windows on Solomon's and Gehring & Homberger's
 VRPTW instances. Pickup & delivery, project-job scheduling, bin
@@ -264,7 +265,7 @@ optimaru/                          the Python package (pip install optimaru)
 ├── _models.py                     what the use cases' pydantic models share
 ├── _api.py                        solving on the optimaru API: the key, the request, the job
 ├── cpp/optimaru/                  the engine (header-only C++17), below
-└── <use case>/                    23 subpackages, e.g. vehicle_routing/
+└── <use case>/                    24 subpackages, e.g. vehicle_routing/
     ├── __init__.py, models.py,    the Python API: solve, pydantic models,
     │   constraints.py, _core.pyi  constraint specs, stubs of the extension
     └── cpp/

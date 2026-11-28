@@ -23,7 +23,7 @@ USE_CASES = {path.parent.name for path in (ROOT / "optimaru").glob("*/_core.pyi"
 
 
 def test_every_subpackage_is_a_use_case():
-    assert len(USE_CASES) == 23
+    assert len(USE_CASES) == 24
     assert all((ROOT / "optimaru" / name / "cpp" / "CMakeLists.txt").is_file() for name in USE_CASES)
     assert all((ROOT / "tests" / name).is_dir() for name in USE_CASES)
 
@@ -191,8 +191,8 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     only when it has a `[build-system]` table: without one `uv run <slug>-compare` cannot spawn,
     and CI does not notice, because it runs `python -m` from the project directory. The CP-SAT
     library is pinned by tag in every project that uses it (every use case but vehicle routing,
-    compared with OR-Tools Routing, and school timetabling and box sizing, which keep their
-    models here): one tag, moved in all of them, and the links into the library follow it. pytest is in the `dev`
+    compared with OR-Tools Routing, and school timetabling, box sizing and container loading,
+    which keep their models here): one tag, moved in all of them, and the links into the library follow it. pytest is in the `dev`
     dependency group, which a plain `uv sync` installs (an extra or another group is not)."""
     slugs = {name.replace("_", "-") for name in USE_CASES}
     projects = {slug: ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml" for slug in slugs - {"vehicle-routing"}}
@@ -210,7 +210,7 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
         if source is not None:
             assert set(source) == {"git", "tag"}, f"{slug}: external-solver is pinned by tag, not {source}"
             tags[slug] = source["tag"]
-    assert set(tags) == slugs - {"vehicle-routing", "school-timetabling", "box-sizing"}
+    assert set(tags) == slugs - {"vehicle-routing", "school-timetabling", "box-sizing", "container-loading"}
     assert len(set(tags.values())) == 1, f"the benchmark projects pin different external-solver tags: {tags}"
     (tag,) = set(tags.values())
     tracked = subprocess.run(["git", "ls-files", "*.md"], cwd=ROOT, capture_output=True, text=True)

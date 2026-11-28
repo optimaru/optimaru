@@ -32,6 +32,7 @@ __all__ = [
     "bin_packing",
     "box_sizing",
     "conference_scheduling",
+    "container_loading",
     "employee_scheduling",
     "facility_location",
     "flight_crew_scheduling",

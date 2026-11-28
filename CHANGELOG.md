@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **New use case: container loading (`optimaru.container_loading`).** Three-dimensional loading
+  of boxes into containers: pallets and rack bays, a vehicle's cargo space in the order of its
+  stops, an order's items into the cheapest cartons of a catalog. It is the 24th use case, and the
+  first whose decision is not what the answer shows: every container has a loading order (the
+  sequence shape), and a placement decoder derives where each item stands from it (extreme
+  points; an item goes to the first corner, from the closed end, then up, then across, that takes
+  it inside the walls, clear of the others and with `min_support_ratio` of its base supported).
+  Eight constraints: `unplaced_item_cost`, `container_weight_cost`, `stacking_load_cost` and
+  `unloading_order_cost` (hard), `used_container_cost` and `group_split_cost` (soft), and the
+  opt-in `used_length_cost` and `load_balance_cost` (soft, weight 0). Items carry `rotations`
+  (`all`, `upright`, `fixed`), `max_load_on_top`, `unload_order` and `group`; containers
+  `max_weight` and `cost`. The constraints share one decode per container and list, and a list
+  is decoded again only from where it changes. Search: first fit decreasing by decode, the
+  sequence moves, `EmptyContainerMove`, `RepackPairMove` and `SwitchContainerMove`
+  (`custom_moves.empty_container`, `custom_moves.empty_container_candidates`,
+  `custom_moves.repack`, `custom_moves.switch_container`). The JSON model is
+  `models.ContainerLoadingRequest` / `ContainerLoadingProblemModel` (API slug
+  `container-loading`); the guide is `docs/use-cases/container-loading/`, the notebook
+  `examples/container-loading.ipynb`. `benchmarks/container-loading` compares it, on instances
+  whose fewest containers is known, with a CP-SAT model that places items freely; that model is
+  kept in the benchmark project, and both answers are scored from where the items stand.
 - **Engine: one ruin-count helper.** `clamp_ruin_count` in `search/ruin_recreate/ruin_count.hpp`
   now draws the ruin count of the destroy-repair move and the iterated local search;
   `kick_ruin_count` moved there from `kick.hpp`, which still includes it. Seeded results unchanged.
