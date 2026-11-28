@@ -421,7 +421,7 @@ def test_a_larger_table_request_solves_on_every_path():
         ({"distances": DISTANCES | {"c": {"dock": 11, "c": 2}}}, "distance from 'c' to itself must be 0"),
         ({"distances": DISTANCES | {"c": {"dock": 1.5}}}, "valid integer"),
         ({"locations": []}, "at least 1 item"),
-        ({"locations": [f"l{i}" for i in range(4097)]}, "at most 4096 items"),
+        ({"locations": [f"l{i}" for i in range(2049)]}, "at most 2048 items"),
         # Seven places and one distance: 20 pairs are missing, five are named.
         (
             {"locations": LOCATIONS + ["d", "e", "f"], "distances": DISTANCES | {"d": {"e": 1}}},

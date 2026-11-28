@@ -80,7 +80,12 @@ _MAX_COLUMN_COUNT: int = _core.Warehouse.MAX_COLUMN_COUNT  # 18278: A..ZZZ
 _MAX_SHELVING_ROW_COUNT: int = _core.Warehouse.MAX_SHELVING_ROW_COUNT  # 10000
 _MAX_SHELVING_SIZE: int = _core.Warehouse.MAX_SHELVING_SIZE  # 1000: width, height and padding, meters
 _MAX_DISTANCE: int = _core.Warehouse.MAX_DISTANCE  # 1000000 meters
-_MAX_LOCATIONS: int = _core.Warehouse.MAX_LOCATIONS  # 4096 named locations
+#: The most named locations of a request: half of what the compiled `Warehouse` takes
+#: (`Warehouse.MAX_LOCATIONS`, 4096). A table goes through JSON, the model and a square of
+#: Python ints before it is the compiled one; at 2048 locations that is a body of 34 to 68 MB
+#: and about a second, at 4096 four times as much.
+_MAX_REQUEST_LOCATIONS = 2048
+assert _MAX_REQUEST_LOCATIONS <= _core.Warehouse.MAX_LOCATIONS
 
 
 def _column_index(letters: str) -> int:
@@ -226,8 +231,10 @@ def _check_distances(locations: list[str], distances: dict[str, dict[str, int]])
                     raise ValueError(f"distance from {start!r} to itself must be 0, not {meters}")
                 continue
             given += 1
+            # A pair given both ways is in `given` twice; the test on the ids counts it here once.
             if start < end and start in distances.get(end, _NO_DISTANCES):
                 both_ways += 1
+    # `given - both_ways` pairs have a distance, of the n (n - 1) / 2 there are.
     missing = len(locations) * (len(locations) - 1) // 2 - (given - both_ways)
     if not missing:
         return
@@ -281,9 +288,9 @@ class OrderPickingRequest(SolveRequest):
     locations: list[str] | None = Field(
         default=None,
         min_length=1,
-        max_length=_MAX_LOCATIONS,
+        max_length=_MAX_REQUEST_LOCATIONS,
         description=(
-            "Ids of the named locations of a warehouse that is not a grid, at most 4096. With them, "
+            "Ids of the named locations of a warehouse that is not a grid, at most 2048. With them, "
             "`distances` is required, and every `location` of a trolley or an order item is one of "
             "these ids."
         ),

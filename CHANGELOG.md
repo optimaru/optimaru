@@ -14,7 +14,7 @@
     `location` of a trolley or an order item is then an id; `op.Warehouse.from_distances(ids,
     table)` and `warehouse.location(id)` on the compiled side. The table may be asymmetric, a pair
     given one way only is as long the other way, and a pair given neither way is refused. At
-    most 4096 locations.
+    most 2048 locations in a request, 4096 in a compiled `Warehouse`.
   - One request uses one kind; mixing them is refused. `OrderPickingSolution` takes a fourth
     argument, `warehouse`, and has the property of that name; `calculate_distance` takes a third.
     `PickStop.location` is a `LocationModel` or an id, as the request gave it.
@@ -36,6 +36,9 @@
     form in the default grid; `calculateDistanceToTravel` returns `std::int64_t`. New:
     `op/model/layout.hpp` (`makeGridWarehouse`, `makeNamedWarehouse`, `checkLayout`,
     `ActiveDistances`).
+  - On the optimaru API, a request that gives no layout is sent as before (it dumps without the
+    three new fields). One that gives a layout is refused (422, unknown field) by an API that
+    runs an earlier optimaru, until that API follows.
   - The CP-SAT reference (external-solver) knows the default grid only, so the comparison in
     `benchmarks/order-picking` stays on it and another layout is engine-only for now.
 - **Breaking (C++): the engine's `model/` is `solution/`.** `core/optimaru/model/` held how the

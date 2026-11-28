@@ -65,7 +65,7 @@ request = OrderPickingRequest(
 ```
 
 **Named locations with a distance table.** For a building that is not such a grid, `locations`
-lists the ids of its places (at most 4096) and `distances` the walk between them, `{from id: {to id: meters}}`
+lists the ids of its places (at most 2048) and `distances` the walk between them, `{from id: {to id: meters}}`
 in whole meters (0..1000000). The `location` of a trolley or an order item is then one of the
 ids, and the response's stops name them the same way.
 
@@ -87,12 +87,13 @@ request = OrderPickingRequest(
   location is from every other one, also those no trolley or item is at. Nothing is derived by
   walking through a third location, and the distances given are used as they are.
 - An id in `distances` that is not in `locations` is refused.
-- The table is one number for every pair, so it grows with the square of `locations`: 1,000
-  locations are a million distances at most (half of that when each pair is given once), which
-  the request model reads and lays out in about 0.2 s and which have to fit the body an API
-  accepts. `locations` needs only the places the request's trolleys and items are at, not the
-  whole building, and holds at most 4096. A caller that already has the table as a matrix can
-  skip the dict: `op.Warehouse.from_distances` takes it as it is.
+- The table is one number for every pair, so it grows with the square of `locations`. With
+  each pair given once, 1,000 locations are a body of 8 MB that the request model reads and
+  lays out in about 0.2 s, and 2,048, the most a request takes, 34 MB and about 1.2 s (one
+  thread of an Apple M4 Max); it also has to fit the body an API accepts. `locations` needs
+  only the places the request's trolleys and items are at, not the whole building. A caller
+  that already has the table as a matrix can skip the dict: `op.Warehouse.from_distances`
+  takes it as it is, up to 4,096 locations.
 
 The distances are in the unit the score counts in. The default weight of
 `order_split_by_trolley_cost`, 1000, prices one more trolley on an order at 1000 of them.
