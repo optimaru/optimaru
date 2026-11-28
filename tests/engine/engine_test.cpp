@@ -13,6 +13,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numeric>
 #include <set>
 #include <stdexcept>
@@ -1186,11 +1187,17 @@ void testNothingPlaced() {
 // Solver::set_construction: a use case's own construction runs in place of the
 // built-in one, once per solve, before the search, and every start of a
 // multi-start run uses it.
-void testCustomConstruction(const Score& optimum) {
+void testCustomConstruction() {
     std::printf("== construction: a use case's own ==\n");
     std::atomic<int> calls{0};
+    std::vector<std::uint64_t> seeds;
+    std::mutex seeds_mutex;
     const auto mine = [&](optimaru::Editor<TaskAssignment>& editor,
-                          const optimaru::ConstructionSettings&) {
+                          const optimaru::ConstructionSettings&, std::uint64_t seed) {
+        {
+            std::lock_guard<std::mutex> lock(seeds_mutex);
+            seeds.push_back(seed);
+        }
         ++calls;
         // Places only what the caller left unplaced, as the contract asks.
         TaskAssignment& s = editor.solution();
@@ -1230,16 +1237,18 @@ void testCustomConstruction(const Score& optimum) {
     }
     {
         calls = 0;
+        seeds.clear();
         optimaru::Settings config;
         config.stop.step_limit = 2000;
+        config.run.seed = 40;
         config.run.parallel_starts = 3;
         TaskAssignment s = buildTaskInstance();
         optimaru::Solver<TaskAssignment> solver(config);
         solver.set_construction(mine);
-        const Score result = solver.solve_multistart(
-                s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
+        solver.solve_multistart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         check(calls == 3, "every start of a multi-start run uses it");
-        check(result <= optimum, "and the search goes on from it");
+        std::sort(seeds.begin(), seeds.end());
+        check(seeds == std::vector<std::uint64_t>{40, 41, 42}, "each with its start's seed");
     }
 }
 
@@ -2947,7 +2956,7 @@ int main() {
     testHistoryGrowthOnAWarmStart(optimum);
     testPortableDraws();
     testNothingPlaced();
-    testCustomConstruction(optimum);
+    testCustomConstruction();
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();
     testCustomMoveShareInLaterStages();

@@ -44,8 +44,8 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // Runs one solve:
 //   1. construction: everything unassigned gets its best placement (first
-//      fit / first fit decreasing / cheapest insertion), see
-//      construct/construction.hpp;
+//      fit / first fit decreasing / cheapest insertion, see
+//      construct/construction.hpp), or the use case's own (set_construction);
 //   2. the search (run() below): one candidate move per step, judged by an
 //      Acceptor, until the StopCondition fires. A step's move is a built-in
 //      strategy (search/strategies.hpp), one of the caller's operators or a
@@ -104,9 +104,13 @@ public:
     // Replace the built-in construction (construct/construction.hpp) with the
     // use case's own; called once per solve, before the search, with the
     // solve's editor. It places what the caller left unplaced, as the
-    // built-in one does: a warm start keeps what it placed. solve_multistart
-    // runs it on every start's thread at once: what it captures must be safe
-    // to use concurrently.
+    // built-in one does: a warm start keeps what it placed. `seed` is the
+    // solve's run.seed (each start of a multi-start run has its own): a
+    // construction that draws seeds a std::mt19937_64 with it and draws
+    // through utils/random.hpp. solve_multistart runs it on every start's
+    // thread at once, each with its own copy of the callable: what it refers
+    // to by reference or pointer must be safe to use concurrently. It runs
+    // before the stop condition is first asked, so keep it bounded.
     void set_construction(ConstructionFn<Solution> construction) {
         construction_ = std::move(construction);
     }
@@ -127,7 +131,7 @@ public:
         build_nearby(solution);
         // How it solves, 1: construction (docs/how-it-solves.md).
         if (construction_) {
-            construction_(editor, config_.construction);
+            construction_(editor, config_.construction, config_.run.seed);
         } else {
             Construction<Solution>::run(editor, config_.construction);
         }
@@ -164,8 +168,9 @@ public:
     // multi-start threads run with the built-ins only. The acceptor factory
     // (set_acceptor_factory) IS shared: every start calls it for an acceptor
     // of its own, so it must be safe to call concurrently. So is the
-    // construction (set_construction): every start runs it at the same time,
-    // each on its own copy of the solution, so what it captures is shared.
+    // construction (set_construction): every start runs its own copy at the
+    // same time, on its own copy of the solution, so what it refers to by
+    // reference or pointer is used by every start at once.
     template <typename ObjectiveFactory>
     Score solve_multistart(Solution& solution, ObjectiveFactory&& make_objective) {
         require_pinned_values<Traits>(solution);

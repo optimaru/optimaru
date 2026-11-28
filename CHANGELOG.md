@@ -8,7 +8,8 @@
   heuristics, `construct/initialization_order.hpp` the order they share, and
   `construct/construction.hpp` keeps `Construction<Solution>::run`, which picks by shape, and
   `nothing_placed`. `Solver::set_construction` registers a construction in place of the
-  built-in one, for every start of a multi-start run. The built-in construction is unchanged:
+  built-in one, for every start of a multi-start run; it gets the solve's seed (each start's
+  own) to draw with. The built-in construction is unchanged:
   every seeded solve gives the same result. **Breaking (C++):** `Construction<Solution>::
   place_best_value`, `place_cheapest_insertion_full_scan` and `initialization_order` are free
   functions (`optimaru::place_best_value`, ...).

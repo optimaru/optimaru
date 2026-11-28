@@ -4,6 +4,7 @@
 #ifndef OPTIMARU_CONSTRUCT_CONSTRUCTION_HPP
 #define OPTIMARU_CONSTRUCT_CONSTRUCTION_HPP
 
+#include <cstdint>
 #include <functional>
 
 #include "optimaru/construct/cheapest_insertion.hpp"
@@ -51,7 +52,8 @@ bool nothing_placed(const Solution& solution) {
 // (Solver::set_construction) in their place. A new built-in heuristic is a
 // file here and a branch in run() below.
 template <typename Solution>
-using ConstructionFn = std::function<void(Editor<Solution>&, const ConstructionSettings&)>;
+using ConstructionFn =
+        std::function<void(Editor<Solution>&, const ConstructionSettings&, std::uint64_t seed)>;
 
 template <typename Solution>
 struct Construction {
