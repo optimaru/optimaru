@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -45,6 +46,27 @@ void validate(const ContainerLoadingProblem& problem) {
             (*container.maxStackHeight <= 0 || *container.maxStackHeight > kMaxLength)) {
             throw std::invalid_argument(what + ": max_stack_height must be between 1 and " +
                                         std::to_string(kMaxLength));
+        }
+        if (container.tareWeight &&
+            (*container.tareWeight < 0 || *container.tareWeight > kMaxLimit))
+            throw std::invalid_argument(what + ": tare_weight must be >= 0");
+        if (!container.axleGroups.empty() && container.axleGroups.size() != 2)
+            throw std::invalid_argument(what +
+                                        ": axle_groups must be two (front and rear) or none");
+        for (const AxleGroup& axle : container.axleGroups) {
+            if (axle.id.empty()) throw std::invalid_argument(what + ": an axle group has no id");
+            if (std::abs(static_cast<std::int64_t>(axle.position)) > 10 * kMaxLength)
+                throw std::invalid_argument(what + ": axle group '" + axle.id + "' is too far");
+            if (axle.maxLoad < 0 || axle.maxLoad > kMaxLimit ||
+                (axle.emptyLoad && (*axle.emptyLoad < 0 || *axle.emptyLoad > kMaxLimit)))
+                throw std::invalid_argument(what + ": axle group '" + axle.id +
+                                            "': max_load and empty_load must be >= 0");
+        }
+        if (container.axleGroups.size() == 2) {
+            if (container.axleGroups[0].id == container.axleGroups[1].id)
+                throw std::invalid_argument(what + ": axle group ids must be unique");
+            if (container.axleGroups[0].position == container.axleGroups[1].position)
+                throw std::invalid_argument(what + ": the two axle groups must be apart");
         }
         for (const auto& [name, share] :
              {std::pair{"max_offset_length", container.maxOffsetLength},
@@ -105,8 +127,9 @@ void validate(const ContainerLoadingProblem& problem) {
                 throw std::invalid_argument("container '" + container.id + "': an empty tag");
             for (const Container& other : problem.containers) {
                 if (other.id == tag) {
-                    throw std::invalid_argument("container '" + container.id + "': its tag '" +
-                                                tag + "' is another container's id");
+                    throw std::invalid_argument(
+                            "container '" + container.id + "': its tag '" + tag + "' is " +
+                            (&other == &container ? "its own id" : "another container's id"));
                 }
             }
         }
@@ -210,6 +233,7 @@ Score ConstraintTotals::toScore() const {
             UnloadingOrderCost::kDefaultWeight * static_cast<double>(unloadingOrderCost) +
             BalanceLimitCost::kDefaultWeight * static_cast<double>(balanceLimitCost) +
             SegregationCost::kDefaultWeight * static_cast<double>(segregationCost) +
+            AxleLoadCost::kDefaultWeight * static_cast<double>(axleLoadCost) +
             IncompleteGroupCost::kDefaultWeight * static_cast<double>(incompleteGroupCost) +
             SingleContainerCost::kDefaultWeight * static_cast<double>(singleContainerCost);
     const double soft = UsedContainerCost::kDefaultWeight * usedContainerCost +
@@ -381,6 +405,7 @@ void ScoreCalculator::updateDerived(ContainerLoadingProblem& problem) {
         container.loadedWeight = packing.loadedWeight;
         container.loadedVolume = packing.loadedVolume;
         container.usedLength = packing.usedLength;
+        axleStages(problem, static_cast<int>(c), packing, container.axleLoads);
     }
 }
 
@@ -407,6 +432,7 @@ ConstraintTotals ScoreCalculator::calculateTotals(ContainerLoadingProblem& probl
         totals.unloadingOrderCost += unloadingBlocks(problem, packing);
         totals.balanceLimitCost += balanceExcess(problem, unit, packing);
         totals.segregationCost += segregationPairs(problem, packing);
+        totals.axleLoadCost += axleExcess(problem, unit, packing);
         if (!packing.boxes.empty()) totals.usedContainerCost += container.cost;
         totals.usedLengthCost += packing.usedLength;
         totals.loadBalanceCost += balancePerMille(problem, unit, packing);

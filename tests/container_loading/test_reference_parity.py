@@ -25,7 +25,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def random_problem(seed: int) -> cl.ContainerLoadingProblem:
     """Boxes with sides of 1 to 6 for a few spaces of two sizes, with every optional field in use
     (stacking rules, layer limits, bottom_only, stack heights, balance limits, priorities,
-    optional items, group rules, allowed containers and segregation included)."""
+    optional items, group rules, allowed containers, segregation and axle groups included)."""
     rng = random.Random(seed)
     containers = [
         cl.Container(
@@ -39,6 +39,14 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             max_offset_length=rng.choice([None, None, 0.1, 0.3]),
             max_offset_width=rng.choice([None, None, 0.2]),
             tags=rng.choice([[], ["reefer"]]),
+            tare_weight=rng.choice([None, 20]),
+            axle_groups=rng.choice(
+                [
+                    [],
+                    [],
+                    [("front", -3, rng.randint(10, 60), None), ("rear", 9, rng.randint(10, 60), rng.choice([None, 4]))],
+                ]
+            ),
         )
         for c in range(rng.randint(2, 5))
     ]

@@ -153,6 +153,7 @@ struct Packing {
     mutable std::int64_t stackingViolations = -1;
     mutable std::int64_t balanceExcess = -1;
     mutable std::int64_t segregationPairs = -1;
+    mutable std::int64_t axleExcess = -1;
     // Only with optional items or priorities (unplacedCost < 0 = not yet).
     mutable std::int64_t unplacedCost = -1;
     mutable std::int64_t optionalCost = 0;
@@ -193,6 +194,22 @@ std::int64_t unplacedOptionalWeight(const ContainerLoadingProblem& problem, cons
 // stand closer than it in the floor plane (the larger of the gaps between
 // their footprints along x and along y).
 std::int64_t segregationPairs(const ContainerLoadingProblem& problem, const Packing& packing);
+
+// The axle loads of a container with two axle groups, by the lever rule:
+// what a placed item of weight w whose middle is at x puts on the front group
+// is w (rear - x) / (rear - front), the rest on the rear; to that each group
+// adds its emptyLoad or, where neither group gives one, its share of the
+// tareWeight taken at the middle of the cargo space. One stage at departure,
+// and one after each stop (the items with that unloadOrder taken off), stops
+// in increasing order. Empty for a container without axle groups.
+void axleStages(const ContainerLoadingProblem& problem, int container, const Packing& packing,
+                std::vector<AxleStage>& out);
+
+// axleLoadCost: over the stages, the largest sum over the two groups of the
+// load above maxLoad, rounded up to a whole weight unit. 0 without axle groups
+// and for a container that holds no placed item (a vehicle not on the road).
+std::int64_t axleExcess(const ContainerLoadingProblem& problem, int container,
+                        const Packing& packing);
 
 // stackingLoadCost: over the placed items that set maxLoadOnTop, the weight
 // resting on the item above that limit, rounded up to a whole unit. An item

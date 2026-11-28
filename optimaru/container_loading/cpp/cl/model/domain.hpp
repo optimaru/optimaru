@@ -34,6 +34,9 @@ using Score = optimaru::Score;
 // are taken in double where the moves and the construction compare them.
 constexpr int kMaxLength = 1'000'000;
 constexpr std::int64_t kMaxWeight = 1'000'000'000;
+// The largest axle load, tare or empty load (a weight limit's bound, kept so
+// that a sum over the items stays far inside an int64).
+constexpr std::int64_t kMaxLimit = 1'000'000'000'000'000;
 // The largest Item::maxStackLayers (the JSON model's bound).
 constexpr int kMaxLayers = 1'000'000'000;
 // The largest Item::priority: an unplaced item's cost stays far below the
@@ -112,6 +115,24 @@ struct Item {
     }
 };
 
+// One axle group of a vehicle: where it is, measured along x from the
+// container's closed end (0; ahead of it is negative: a tractor's or a cab's
+// axle), what it may carry, and what it carries when the vehicle is empty.
+struct AxleGroup {
+    std::string id;
+    int position = 0;
+    std::int64_t maxLoad = 0;
+    std::optional<std::int64_t> emptyLoad;
+};
+
+// The axle loads of a container at one stage of its route: at departure
+// (afterStop unset) and after each stop's items are unloaded. One load per
+// axle group, in the order of Container::axleGroups.
+struct AxleStage {
+    std::optional<int> afterStop;
+    std::vector<double> loads;
+};
+
 // ---------------------------------------------------------------------------
 // Container  (the list owner)
 // ---------------------------------------------------------------------------
@@ -136,14 +157,21 @@ struct Container {
     // What items' allowedContainers may name besides the id (a reefer, a
     // vehicle type).
     std::vector<std::string> tags;
+    // The vehicle's empty weight, taken at the middle of the cargo space
+    // unless the axle groups give their emptyLoad. Unset = 0.
+    std::optional<std::int64_t> tareWeight;
+    // Two axle groups (front, rear) or none: the load each carries follows
+    // from the lever rule (axleLoadCost).
+    std::vector<AxleGroup> axleGroups;
     std::vector<int> items;  // loading order (indices into ContainerLoadingProblem::items)
 
     // --- derived by ScoreCalculator::updateDerived (calculate_score, solve) ---
-    std::vector<int> placedItems;    // the items of the list that found a place, in order
-    std::vector<int> unplacedItems;  // the items of the list that found none
-    std::int64_t loadedWeight = 0;   // weight of the placed items
-    std::int64_t loadedVolume = 0;   // volume of the placed items
-    int usedLength = 0;              // largest x + placed length; 0 when empty
+    std::vector<int> placedItems;      // the items of the list that found a place, in order
+    std::vector<int> unplacedItems;    // the items of the list that found none
+    std::int64_t loadedWeight = 0;     // weight of the placed items
+    std::int64_t loadedVolume = 0;     // volume of the placed items
+    int usedLength = 0;                // largest x + placed length; 0 when empty
+    std::vector<AxleStage> axleLoads;  // with axle groups: per stage, the load on each
 
     // --- derived by ScoreCalculator::prepare ---
     int fillHeight = 0;  // what the decoder fills up to: maxStackHeight, at most height

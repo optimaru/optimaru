@@ -58,6 +58,8 @@ def test_the_field_names_are_the_contract():
         "max_offset_length",
         "max_offset_width",
         "tags",
+        "tare_weight",
+        "axle_groups",
         "initial_items",
         "items",
         "unplaced_items",
@@ -65,6 +67,7 @@ def test_the_field_names_are_the_contract():
         "loaded_volume",
         "fill_ratio",
         "used_length",
+        "axle_loads",
     ]
     assert list(ItemModel.model_fields) == [
         "id",
@@ -255,6 +258,17 @@ def test_solve_request_is_solve_with_the_request_settings():
         (lambda data: data.update(stacking_rules=[{"top": "a", "bottom": "b", "allowed": True}]), "Extra inputs"),
         (lambda data: data["items"][0].update(priority=0), "greater than or equal to 1"),
         (lambda data: data["items"][0].update(allowed_containers=["reefer"]), "no container's id or tag"),
+        (
+            lambda data: data["containers"][0].update(axle_groups=[{"id": "f", "position": 0, "max_load": 1}]),
+            "two \\(front and rear\\) or none",
+        ),
+        (
+            lambda data: data["containers"][0].update(
+                axle_groups=[{"id": "f", "position": 0, "max_load": 1}, {"id": "r", "position": 0, "max_load": 1}]
+            ),
+            "must be apart",
+        ),
+        (lambda data: data["containers"][0].update(tare_weight=-1), "greater than or equal to 0"),
         (lambda data: data.update(segregation_rules=[{"a": "x", "b": "y", "distance": 0}]), "greater than 0"),
         (lambda data: data.update(segregation_rules=[{"a": "", "b": "y"}]), "at least 1 character"),
         (lambda data: data["items"][0].update(segregation_class=""), "at least 1 character"),
@@ -351,3 +365,44 @@ def test_allowed_containers_and_segregation_go_through_to_the_engine_and_back():
     assert by_id["bleach"].container != by_id["bread"].container
     back = ContainerLoadingProblemModel.from_core(solved.to_core())
     assert back.segregation_rules == model.segregation_rules and back.containers[1].tags == ["reefer"]
+
+
+def test_axle_groups_go_through_and_the_loads_come_back_by_stage():
+    """A truck 10 long, axle groups at -2 and 8: 100 with its middle at 1 stays (70 front, 30 rear),
+    50 with its middle at 9 leaves at stop 1 (-5 front, 55 rear)."""
+    model = ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [
+                {
+                    "id": "truck",
+                    "length": 10,
+                    "width": 2,
+                    "height": 2,
+                    "axle_groups": [
+                        {"id": "front", "position": -2, "max_load": 1000},
+                        {"id": "rear", "position": 8, "max_load": 1000},
+                    ],
+                    "initial_items": ["a", "spacer", "b"],
+                }
+            ],
+            "items": [
+                {"id": "a", "length": 2, "width": 2, "height": 2, "weight": 100, "rotations": "fixed"},
+                {"id": "spacer", "length": 6, "width": 2, "height": 2, "rotations": "fixed"},
+                {
+                    "id": "b",
+                    "length": 2,
+                    "width": 2,
+                    "height": 2,
+                    "weight": 50,
+                    "rotations": "fixed",
+                    "unload_order": 1,
+                },
+            ],
+        }
+    )
+    solved = cl.solve(model, config=cl.SolverConfig(stop={"time_limit_seconds": 0}))
+    loads = solved.containers[0].axle_loads
+    assert [stage.after_stop for stage in loads] == [None, 1]
+    assert loads[0].loads == pytest.approx({"front": 65.0, "rear": 85.0})
+    assert loads[1].loads == pytest.approx({"front": 70.0, "rear": 30.0})
+    assert solved.containers[0].axle_groups == model.containers[0].axle_groups

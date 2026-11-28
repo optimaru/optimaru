@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Container loading: axle loads.** Container `tare_weight` and `axle_groups` (two: `id`,
+  `position` from the closed end, `max_load`, optional `empty_load`), the loads by the lever rule
+  at departure and after each stop's items are unloaded, scored by the new hard constraint
+  `axle_load_cost` (the worst stage's excess) and reported per container as `axle_loads`.
 - **Container loading: allowed containers and segregation.** Container `tags` and item
   `allowed_containers` (ids or tags; [] = any, the decoder's: an item finds no place elsewhere),
   and item `segregation_class` with the problem's `segregation_rules` (`{"a", "b", "distance"}`:

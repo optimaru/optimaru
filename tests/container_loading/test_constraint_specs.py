@@ -11,6 +11,7 @@ import pytest
 
 import optimaru.container_loading as cl
 from optimaru.container_loading.constraints import (
+    AxleLoadCost,
     BalanceLimitCost,
     ContainerWeightCost,
     GroupSplitCost,
@@ -26,6 +27,7 @@ from optimaru.container_loading.constraints import (
     UnplacedItemCost,
     UsedContainerCost,
     UsedLengthCost,
+    axle_load_cost,
     balance_limit_cost,
     container_weight_cost,
     get_constraints,
@@ -54,6 +56,7 @@ NAMES = [
     "unloading_order_cost",
     "balance_limit_cost",
     "segregation_cost",
+    "axle_load_cost",
     "used_container_cost",
     "optional_item_cost",
     "used_length_cost",
@@ -72,6 +75,7 @@ CLASSES = (
     UnloadingOrderCost,
     BalanceLimitCost,
     SegregationCost,
+    AxleLoadCost,
     UsedContainerCost,
     OptionalItemCost,
     UsedLengthCost,
@@ -138,6 +142,7 @@ def test_list_constraints_matches_the_spec_names():
         unloading_order_cost,
         balance_limit_cost,
         segregation_cost,
+        axle_load_cost,
         used_container_cost,
         optional_item_cost,
         used_length_cost,
@@ -177,6 +182,7 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("hard", 1.0, True, False, True),
         ("hard", 1.0, True, False, True),
         ("hard", 1.0, True, False, True),
+        ("hard", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
         ("soft", 0.0, True, False, False),
@@ -198,6 +204,7 @@ def test_constraint_costs_are_the_raw_costs_by_hand():
         "unloading_order_cost": [1, 0],
         "balance_limit_cost": [0, 0],
         "segregation_cost": [0, 0],
+        "axle_load_cost": [0, 0],
         "used_container_cost": [2, 1],
         "optional_item_cost": [0, 0],
         "used_length_cost": [8, 4],
@@ -216,6 +223,7 @@ def test_constraint_costs_are_the_raw_costs_by_hand():
     # The two scoped constraints evaluate no container here: nothing sets their inputs.
     assert raw["stacking_rule_cost"]["units"] == [] and raw["balance_limit_cost"]["units"] == []
     assert raw["optional_item_cost"]["units"] == [] and raw["segregation_cost"]["units"] == []
+    assert raw["axle_load_cost"]["units"] == []
     assert "units" not in raw["stacking_load_cost"]
 
 

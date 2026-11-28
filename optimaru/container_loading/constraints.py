@@ -1,6 +1,6 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`cl.solve(problem)`) scores all fourteen constraints at their default
+The default path (`cl.solve(problem)`) scores all fifteen constraints at their default
 weights, two of them opt-in at weight 0. This module is how a call changes that: pick
 constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(problem, constraints=...)`.
@@ -64,6 +64,7 @@ search is the same one, the domain's moves included.
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
+    "AxleLoadCost",
     "BalanceLimitCost",
     "Constraint",
     "ContainerWeightCost",
@@ -81,6 +82,7 @@ __all__ = [
     "UnplacedItemCost",
     "UsedContainerCost",
     "UsedLengthCost",
+    "axle_load_cost",
     "balance_limit_cost",
     "container_weight_cost",
     "get_constraints",
@@ -267,6 +269,32 @@ class SegregationCost(Constraint):
     )
 
 
+class AxleLoadCost(Constraint):
+    """Axle groups loaded above their `max_load`. Default: hard, weight 1.
+
+    For a container with two `axle_groups`, the load on each follows from the lever rule: a
+    placed item of weight w whose middle is at x puts w (rear - x) / (rear - front) on the
+    front group, the rest on the rear, plus each group's `empty_load` or share of
+    `tare_weight`. Checked at departure and after each stop's items are unloaded; the worst
+    stage counts, its excesses over the two groups added, rounded up to a whole weight unit."""
+
+    name = "axle_load_cost"
+    label_en = "Axle loads"
+    label_ko = "축중"
+    description_en = (
+        "For each container with axle groups, the load each group carries above its max_load, "
+        "by the lever rule over the placed items (plus the empty loads or the tare), at the worst "
+        "stage of the route: at departure or after a stop's items are unloaded. One unit of cost "
+        "is one weight unit over a limit; 0 means no axle group is overloaded at any stage."
+    )
+    description_ko = (
+        "축 그룹이 있는 컨테이너마다, 놓인 물품(과 공차 하중 또는 tare)에 지렛대 법칙을 적용해 "
+        "각 축 그룹이 받는 하중이 max_load를 넘는 만큼을 출발 시점과 각 정차지에서 물품을 내린 "
+        "뒤 중 가장 나쁜 단계에서 더합니다. 한도를 넘은 중량 1단위가 비용 1이며, 0이면 어떤 "
+        "단계에서도 축이 과적되지 않았습니다."
+    )
+
+
 class UsedContainerCost(Constraint):
     """Cost of the containers in use. Default: soft, weight 1.
 
@@ -426,6 +454,7 @@ stacking_rule_cost = StackingRuleCost()
 unloading_order_cost = UnloadingOrderCost()
 balance_limit_cost = BalanceLimitCost()
 segregation_cost = SegregationCost()
+axle_load_cost = AxleLoadCost()
 used_container_cost = UsedContainerCost()
 optional_item_cost = OptionalItemCost()
 used_length_cost = UsedLengthCost()
@@ -443,6 +472,7 @@ _DEFAULTS = (
     unloading_order_cost,
     balance_limit_cost,
     segregation_cost,
+    axle_load_cost,
     used_container_cost,
     optional_item_cost,
     used_length_cost,
@@ -454,7 +484,7 @@ _DEFAULTS = (
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """Return the cost function. Without arguments, all fourteen default constraints.
+    """Return the cost function. Without arguments, all fifteen default constraints.
 
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored::

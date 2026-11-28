@@ -15,7 +15,8 @@
 //       order (in front, on top),
 //       used length, load balance, stacking rules and layer limits, the
 //       balance limit, priorities and optional items, all-or-none and
-//       single-container groups, segregation
+//       single-container groups, segregation, axle loads (departure and
+//       after a stop, tare and empty loads)
 //   (d) PackingCache: what it returns is decode()'s result, a repeated list
 //       is a hit, changed facts drop the decodes
 //   (e) ScoreCalculator: prepare's refusals, the derived fields, the totals
@@ -869,6 +870,47 @@ void verifyCostsByHand() {
               "segregation: no rule, no cost");
     }
     {
+        // Axle loads, a truck 10 long: the front group 2 ahead of the closed
+        // end, the rear one at 8, so a weight w with its middle at x puts
+        // w (8 - x) / 10 on the front. A (100, middle 1, stays): 70 front, 30
+        // rear. B (50, middle 9, behind the rear group, stop 1): -5 front, 55
+        // rear. Departure: 65 / 85; after stop 1: 70 / 30.
+        ContainerLoadingProblem p;
+        addContainer(p, 10, 2, 2);
+        addItem(p, 2, 2, 2, Rotation::Fixed, 100);
+        addItem(p, 6, 2, 2, Rotation::Fixed, 0);  // a spacer from x 2 to 8
+        addItem(p, 2, 2, 2, Rotation::Fixed, 50);
+        p.items[2].unloadOrder = 1;
+        p.containers[0].axleGroups = {{"front", -2, 68, std::nullopt},
+                                      {"rear", 8, 100, std::nullopt}};
+        p.containers[0].items = {0, 1, 2};
+        ScoreCalculator::score(p);
+        const auto& stages = p.containers[0].axleLoads;
+        check(stages.size() == 2 && !stages[0].afterStop && stages[1].afterStop == 1 &&
+                      std::fabs(stages[0].loads[0] - 65.0) < 1e-9 &&
+                      std::fabs(stages[0].loads[1] - 85.0) < 1e-9 &&
+                      std::fabs(stages[1].loads[0] - 70.0) < 1e-9 &&
+                      std::fabs(stages[1].loads[1] - 30.0) < 1e-9,
+              "axles: the lever rule at departure and after the stop");
+        check(ScoreCalculator::calculateTotals(p).axleLoadCost == 2,
+              "axles: the front group over its 68 only once the rear item is off (70)");
+        p.containers[0].axleGroups[0].maxLoad = 70;
+        check(ScoreCalculator::calculateTotals(p).axleLoadCost == 0, "axles: within the limits");
+        // A tare of 100, taken at the middle (x 5): 30 front, 70 rear. The
+        // worst stage is now departure: 95 against 70 and 155 against 100.
+        p.containers[0].tareWeight = 100;
+        check(ScoreCalculator::calculateTotals(p).axleLoadCost == 80,
+              "axles: the tare taken at the middle; the worst stage's excesses add up (25 + 55)");
+        // Empty loads replace the tare: 10 and 0.
+        p.containers[0].axleGroups[0].emptyLoad = 10;
+        check(ScoreCalculator::calculateTotals(p).axleLoadCost == 10,
+              "axles: the empty loads replace the tare");
+        p.containers[0].axleGroups.clear();
+        check(ScoreCalculator::calculateTotals(p).axleLoadCost == 0 &&
+                      p.containers[0].axleLoads.size() == 2,
+              "axles: none, no cost");
+    }
+    {
         // The balance limit. One item of 4 x 4 in the corner of an 8 x 8
         // floor: its centre (2, 2) is half of the half size off along both
         // axes. Limits 0.2 along and 0.5 across: 30 percent over.
@@ -1068,6 +1110,16 @@ void verifyScoreCalculator() {
           "and a distance below 1 are refused");
     check(broken([](ContainerLoadingProblem& p) { p.containers[0].tags = {p.containers[1].id}; }),
           "a tag that is another container's id is refused");
+    check(broken([](ContainerLoadingProblem& p) {
+              p.containers[0].axleGroups = {{"front", 0, 10, std::nullopt}};
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].axleGroups = {{"a", 0, 10, std::nullopt}, {"b", 0, 10, std::nullopt}};
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].axleGroups = {{"a", 0, 10, std::nullopt}, {"a", 5, 10, std::nullopt}};
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].axleGroups = {{"a", 0, -1, std::nullopt}, {"b", 5, 10, std::nullopt}};
+          }) && broken([](ContainerLoadingProblem& p) { p.containers[0].tareWeight = -1; }),
+          "one axle group, two at one place, a repeated id, a negative limit or tare are refused");
 
     // Two pallets, hand-built: weight above the limit, a group over both, a
     // container cost.
