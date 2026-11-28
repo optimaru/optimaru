@@ -34,7 +34,7 @@ struct Greedy {
         }
         for (char o : open) types += o;
         for (int p : free) {
-            for (int box : ranking.order) {
+            for (int box : ranking.orderOf(ranking.groupOf[p])) {
                 if (open[box] && problem.fits(p, box)) {
                     target[p] = box;
                     break;
@@ -49,7 +49,9 @@ struct Greedy {
     // Would the parcel move to `box` if it opened?
     bool wouldMove(int parcel, int box) const {
         const int now = target[parcel];
-        return (now == kNone || ranking.rank[box] < ranking.rank[now]) && problem.fits(parcel, box);
+        const int group = ranking.groupOf[parcel];
+        return (now == kNone || ranking.rankOf(group, box) < ranking.rankOf(group, now)) &&
+               problem.fits(parcel, box);
     }
 
     void openBox(int box) {
@@ -85,8 +87,9 @@ struct Greedy {
         double saved = 0.0;
         for (int p : free) {
             if (target[p] == kNone || !wouldMove(p, box)) continue;
+            const int group = ranking.groupOf[p];
             saved += static_cast<double>(problem.parcels[p].quantity) *
-                     (ranking.unitPrice[target[p]] - ranking.unitPrice[box]);
+                     (ranking.priceOf(group, target[p]) - ranking.priceOf(group, box));
         }
         return saved - ranking.typeWeight;
     }

@@ -3,7 +3,14 @@
 import pytest
 
 import optimaru.box_sizing as bs
-from optimaru.box_sizing.constraints import BoxCost, BoxTypeCost, BoxTypeLimitCost, BoxWeightCost, get_constraints
+from optimaru.box_sizing.constraints import (
+    BoxCost,
+    BoxTypeCost,
+    BoxTypeLimitCost,
+    BoxWeightCost,
+    ShippingCost,
+    get_constraints,
+)
 from optimaru.box_sizing.models import BoxSizingProblemModel, parameter_uses
 
 from .._picks import replace_default, without
@@ -12,7 +19,12 @@ from .conftest import nested_data
 
 def problem(**box) -> BoxSizingProblemModel:
     data = nested_data(max_box_types=3)
-    data["boxes"][2] |= {"max_weight": 1000, "cost": 2.0, "required": True} | box
+    data["boxes"][2] |= {"max_weight": 1000, "cost": 2.0, "required": True, "dim_divisor": 5000} | box
+    data["parcels"][0]["zone"] = "near"
+    data["rate_tables"] = [
+        {"breaks": [{"max_weight": 1000, "price": 3.0}]},
+        {"zone": "near", "breaks": [{"max_weight": 1000, "price": 2.0}]},
+    ]
     return BoxSizingProblemModel.model_validate(data)
 
 
@@ -20,11 +32,22 @@ CHECKED = [
     ("max_weight", "box_weight_cost", BoxWeightCost),
     ("cost", "box_cost", BoxCost),
     ("max_box_types", "box_type_limit_cost", BoxTypeLimitCost),
+    ("dim_divisor", "shipping_cost", ShippingCost),
+    ("zone", "shipping_cost", ShippingCost),
+    ("rate_tables", "shipping_cost", ShippingCost),
 ]
 
 
 def test_the_default_selection_accepts_every_parameter():
-    assert {use.field for use in parameter_uses(problem())} == {"max_weight", "cost", "required", "max_box_types"}
+    assert {use.field for use in parameter_uses(problem())} == {
+        "max_weight",
+        "cost",
+        "required",
+        "max_box_types",
+        "dim_divisor",
+        "zone",
+        "rate_tables",
+    }
     bs.solve(problem(), time_limit_seconds=0)
 
 

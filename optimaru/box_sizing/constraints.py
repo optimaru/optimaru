@@ -1,7 +1,8 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`bs.solve(problem)`) scores the five default constraints at their default
-weights (the sixth, `box_type_cost`, is opt-in: weight 0). This module is the alternative
+weights (the other three, `board_area_cost`, `shipping_cost` and `box_type_cost`, are opt-in:
+weight 0). This module is the alternative
 path next to it: pick constraints, change weights, change levels, shape the cost, and pass
 the list to `solve(problem, constraints=...)`.
 
@@ -23,14 +24,14 @@ is ``VoidVolumeCost()``, and so on.)
 Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (1 for all but BoxTypeCost, which is 0: off until picked
-               with a weight). The problem carries no weights;
+               default (1, but 0 for BoardAreaCost, ShippingCost and BoxTypeCost:
+               off until picked with a weight). The problem carries no weights;
                ``bs.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
                case has no medium level.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``,
-               per box for the four per-box constraints and on the one count for
+               per box for the six per-box constraints and on the one count for
                BoxTypeLimitCost and BoxTypeCost.
 - ``offset``   (keyword) shifts that shaping; 0.0 = none.
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
@@ -50,6 +51,7 @@ there is no hand-maintained alias table — check them with `bs.list_constraints
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
+    "BoardAreaCost",
     "BoxCost",
     "BoxTypeCost",
     "BoxTypeLimitCost",
@@ -58,7 +60,9 @@ __all__ = [
     "Level",
     "ParcelFitCost",
     "Score",
+    "ShippingCost",
     "VoidVolumeCost",
+    "board_area_cost",
     "box_cost",
     "box_type_cost",
     "box_type_limit_cost",
@@ -66,6 +70,7 @@ __all__ = [
     "get_constraints",
     "parcel_fit_cost",
     "score",
+    "shipping_cost",
     "void_volume_cost",
 ]
 
@@ -137,6 +142,47 @@ class BoxCost(Constraint):
     )
 
 
+class BoardAreaCost(Constraint):
+    """The board the boxes shipped are made of. Default: soft, weight 0 (opt-in).
+
+    Pick it with a weight to prefer the boxes that use less board: its weight says how much
+    volume one unit of area is worth, as it shares the soft level with the void volume."""
+
+    name = "board_area_cost"
+    label_en = "Board area"
+    label_ko = "골판지 면적"
+    description_en = (
+        "For each box, over the parcels that ship in it, quantity x 2 (lw + lh + wh): the board of the boxes "
+        "shipped. Opt-in: at the default weight 0 it scores nothing."
+    )
+    description_ko = (
+        "상자마다 그 상자로 나가는 화물의 수량 x 2(lw + lh + wh)를 모두 더합니다. 배송되는 상자의 골판지 "
+        "면적이며, 기본 가중치 0에서는 점수에 반영되지 않습니다."
+    )
+
+
+class ShippingCost(Constraint):
+    """What the parcels cost to ship by billed weight. Default: soft, weight 0 (opt-in).
+
+    A shipment bills its weight, or its box's dimensional weight (ceil(box volume /
+    dim_divisor)) when that is more, and pays the price of that weight in the rate table of
+    its zone. Its weight says how much volume one unit of money is worth; to minimise the
+    shipping cost alone, pick it with `void_volume_cost` and `box_cost` left out."""
+
+    name = "shipping_cost"
+    label_en = "Shipping cost"
+    label_ko = "운송비"
+    description_en = (
+        "For each box, over the parcels that ship in it, quantity x the price of a shipment's billed weight "
+        "(its weight, or the box's dimensional weight when that is more) in the rate table of its zone. "
+        "0 without rate tables; opt-in: at the default weight 0 it scores nothing."
+    )
+    description_ko = (
+        "상자마다 그 상자로 나가는 화물의 수량 x 청구 중량(화물 무게와 상자 부피중량 중 큰 값)에 대한 "
+        "그 존 요율표의 운임을 모두 더합니다. 요율표가 없으면 0이며, 기본 가중치 0에서는 점수에 반영되지 않습니다."
+    )
+
+
 class BoxTypeLimitCost(Constraint):
     """At most max_box_types distinct boxes may be in use. Default: hard, weight 1.
 
@@ -180,6 +226,8 @@ parcel_fit_cost = ParcelFitCost()
 box_weight_cost = BoxWeightCost()
 void_volume_cost = VoidVolumeCost()
 box_cost = BoxCost()
+board_area_cost = BoardAreaCost()
+shipping_cost = ShippingCost()
 box_type_limit_cost = BoxTypeLimitCost()
 box_type_cost = BoxTypeCost()
 
@@ -189,14 +237,16 @@ _DEFAULTS = (
     box_weight_cost,
     void_volume_cost,
     box_cost,
+    board_area_cost,
+    shipping_cost,
     box_type_limit_cost,
     box_type_cost,
 )
 
 
 def get_constraints(constraints: list[Constraint] | None = None) -> list[Constraint]:
-    """Return the cost function. Without arguments, all six constraints at their defaults
-    (`box_type_cost` at weight 0, so five of them score).
+    """Return the cost function. Without arguments, all eight constraints at their defaults
+    (`board_area_cost`, `shipping_cost` and `box_type_cost` at weight 0, so five of them score).
 
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, list the others as they are::

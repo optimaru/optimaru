@@ -37,7 +37,8 @@ std::string boxRepr(const Box& box) {
     return "Box(id=" + quoted(box.id) + ", " + sizeText(box.length, box.width, box.height) +
            ", max_weight=" + (box.maxWeight ? std::to_string(*box.maxWeight) : "None") +
            ", cost=" + py::repr(py::float_(box.cost)).cast<std::string>() +
-           ", required=" + (box.required ? "True" : "False") + ")";
+           ", required=" + (box.required ? "True" : "False") +
+           ", dim_divisor=" + (box.dimDivisor ? std::to_string(*box.dimDivisor) : "None") + ")";
 }
 
 std::string parcelRepr(const Parcel& parcel) {
@@ -45,7 +46,21 @@ std::string parcelRepr(const Parcel& parcel) {
            sizeText(parcel.length, parcel.width, parcel.height) +
            ", weight=" + std::to_string(parcel.weight) +
            ", quantity=" + std::to_string(parcel.quantity) + ", box=" + std::to_string(parcel.box) +
-           ")";
+           ", zone=" + (parcel.zone ? quoted(*parcel.zone) : "None") + ")";
+}
+
+std::string rateBreakRepr(const RateBreak& rateBreak) {
+    return "RateBreak(max_weight=" + std::to_string(rateBreak.maxWeight) +
+           ", price=" + py::repr(py::float_(rateBreak.price)).cast<std::string>() + ")";
+}
+
+std::string rateTableRepr(const RateTable& table) {
+    std::string text =
+            "RateTable(zone=" + (table.zone ? quoted(*table.zone) : "None") + ", breaks=[";
+    for (std::size_t i = 0; i < table.breaks.size(); ++i) {
+        text += (i > 0 ? ", " : "") + rateBreakRepr(table.breaks[i]);
+    }
+    return text + "])";
 }
 
 }  // namespace
@@ -58,7 +73,7 @@ PYBIND11_MODULE(_core, m) {
     py::class_<Box>(m, "Box", py::module_local())
             .def(py::init([](std::string id, std::int64_t length, std::int64_t width,
                              std::int64_t height, std::optional<std::int64_t> maxWeight,
-                             double cost, bool required) {
+                             double cost, bool required, std::optional<std::int64_t> dimDivisor) {
                      Box box;
                      box.id = std::move(id);
                      box.length = length;
@@ -67,11 +82,12 @@ PYBIND11_MODULE(_core, m) {
                      box.maxWeight = maxWeight;
                      box.cost = cost;
                      box.required = required;
+                     box.dimDivisor = dimDivisor;
                      return box;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
                  py::arg("max_weight") = py::none(), py::arg("cost") = 0.0,
-                 py::arg("required") = false)
+                 py::arg("required") = false, py::arg("dim_divisor") = py::none())
             .def_readwrite("id", &Box::id)
             .def_readwrite("length", &Box::length)
             .def_readwrite("width", &Box::width)
@@ -79,12 +95,13 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("max_weight", &Box::maxWeight)
             .def_readwrite("cost", &Box::cost)
             .def_readwrite("required", &Box::required)
+            .def_readwrite("dim_divisor", &Box::dimDivisor)
             .def("__repr__", &boxRepr);
 
     py::class_<Parcel>(m, "Parcel", py::module_local())
             .def(py::init([](std::string id, std::int64_t length, std::int64_t width,
                              std::int64_t height, std::int64_t weight, std::int64_t quantity,
-                             int box) {
+                             int box, std::optional<std::string> zone) {
                      Parcel parcel;
                      parcel.id = std::move(id);
                      parcel.length = length;
@@ -93,33 +110,59 @@ PYBIND11_MODULE(_core, m) {
                      parcel.weight = weight;
                      parcel.quantity = quantity;
                      parcel.box = box;
+                     parcel.zone = std::move(zone);
                      return parcel;
                  }),
                  py::arg("id"), py::arg("length"), py::arg("width"), py::arg("height"),
-                 py::arg("weight") = 0, py::arg("quantity") = 1, py::arg("box") = -1)
+                 py::arg("weight") = 0, py::arg("quantity") = 1, py::arg("box") = -1,
+                 py::arg("zone") = py::none())
             .def_readwrite("id", &Parcel::id)
             .def_readwrite("length", &Parcel::length)
             .def_readwrite("width", &Parcel::width)
             .def_readwrite("height", &Parcel::height)
             .def_readwrite("weight", &Parcel::weight)
             .def_readwrite("quantity", &Parcel::quantity)
+            .def_readwrite("zone", &Parcel::zone)
             // The decision variable: index into problem.boxes, -1 == unassigned.
             .def_readwrite("box", &Parcel::box)
             .def("is_assigned", &Parcel::isAssigned)
             .def("__repr__", &parcelRepr);
 
+    py::class_<RateBreak>(m, "RateBreak", py::module_local())
+            .def(py::init([](std::int64_t maxWeight, double price) {
+                     return RateBreak{maxWeight, price};
+                 }),
+                 py::arg("max_weight"), py::arg("price"))
+            .def_readwrite("max_weight", &RateBreak::maxWeight)
+            .def_readwrite("price", &RateBreak::price)
+            .def("__repr__", &rateBreakRepr);
+
+    py::class_<RateTable>(m, "RateTable", py::module_local())
+            .def(py::init([](std::vector<RateBreak> breaks, std::optional<std::string> zone) {
+                     RateTable table;
+                     table.zone = std::move(zone);
+                     table.breaks = std::move(breaks);
+                     return table;
+                 }),
+                 py::arg("breaks"), py::arg("zone") = py::none())
+            .def_readwrite("zone", &RateTable::zone)
+            .def_readwrite("breaks", &RateTable::breaks)
+            .def("__repr__", &rateTableRepr);
+
     py::class_<BoxSizingProblem>(m, "BoxSizingProblem", py::module_local())
             .def(py::init([](std::vector<Box> boxes, std::vector<Parcel> parcels,
-                             std::optional<int> maxBoxTypes, bool warmStart) {
+                             std::optional<int> maxBoxTypes, bool warmStart,
+                             std::vector<RateTable> rateTables) {
                      BoxSizingProblem problem;
                      problem.boxes = std::move(boxes);
                      problem.parcels = std::move(parcels);
                      problem.maxBoxTypes = maxBoxTypes;
                      problem.warmStart = warmStart;
+                     problem.rateTables = std::move(rateTables);
                      return problem;
                  }),
                  py::arg("boxes"), py::arg("parcels"), py::arg("max_box_types") = py::none(),
-                 py::arg("warm_start") = false)
+                 py::arg("warm_start") = false, py::arg("rate_tables") = std::vector<RateTable>{})
             // NOTE: element access returns copies; use set_assignment for the
             // parcels' boxes. Replacing a list re-validates on the next use.
             .def_property(
@@ -132,6 +175,13 @@ PYBIND11_MODULE(_core, m) {
                     "parcels", [](const BoxSizingProblem& problem) { return problem.parcels; },
                     [](BoxSizingProblem& problem, std::vector<Parcel> parcels) {
                         problem.parcels = std::move(parcels);
+                        problem.prepared = false;
+                    })
+            .def_property(
+                    "rate_tables",
+                    [](const BoxSizingProblem& problem) { return problem.rateTables; },
+                    [](BoxSizingProblem& problem, std::vector<RateTable> rateTables) {
+                        problem.rateTables = std::move(rateTables);
                         problem.prepared = false;
                     })
             .def_readwrite("max_box_types", &BoxSizingProblem::maxBoxTypes)
@@ -147,6 +197,9 @@ PYBIND11_MODULE(_core, m) {
             .def("void_volume", &BoxSizingProblem::voidVolume)
             .def("fill_ratio", &BoxSizingProblem::fillRatio)
             .def("parcels_per_box", &BoxSizingProblem::parcelsPerBox)
+            .def("board_area", &BoxSizingProblem::boardArea)
+            .def("billed_weight_per_box", &BoxSizingProblem::billedWeightPerBox)
+            .def("shipping_cost_per_box", &BoxSizingProblem::shippingCostPerBox)
             .def("assignment", &BoxSizingProblem::assignment)
             .def(
                     "set_assignment",

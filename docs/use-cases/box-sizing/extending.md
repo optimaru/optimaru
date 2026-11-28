@@ -3,7 +3,7 @@
 Six steps, from a change that needs no build to a constraint on the default fast path.
 Each step is complete by itself, so stop at the first one that does what you need.
 The engine contracts behind the steps are in [Extending a use case](../../extending.md);
-the model and its six constraints are in the [guide](README.md).
+the model and its eight constraints are in the [guide](README.md).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ There are two scoring paths, and they give the same score for the same assignmen
 | | `bs.solve(problem)` | `bs.solve(problem, constraints=[...])` |
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/bs/score/score_calculator.cpp` and `cpp/bs/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/bs/constraints/` |
-| Constraints | the six, at their defaults (so five score) | the ones you list, with your knobs |
+| Constraints | the eight, at their defaults (so five score) | the ones you list, with your knobs |
 | Steps per second | 333 thousand | 163 thousand |
 | Parallel starts | `parallel_solver_count` | one start |
 
@@ -80,8 +80,9 @@ print(score(raw, picks))                   # the score those picks give this ass
 
 The knobs (`weight`, `level`, `exponent`, `offset`, `clip`) and picking a constraint twice
 are described in [`constraints.py`](../../../optimaru/box_sizing/constraints.py).
-Stop here if the constraint you need is one of the six: `box_type_cost` already is the fixed
-cost of a size, and `box_cost` the price of a box.
+Stop here if the constraint you need is one of the eight: `box_type_cost` already is the fixed
+cost of a size, `box_cost` the price of a box, `board_area_cost` the board it is made of and
+`shipping_cost` the freight by billed weight.
 
 ## 2. A new constraint from one function
 
@@ -99,7 +100,7 @@ has the bases:
 | a number over the boxes in use | `detail::BoxTypeCount` | `cost()`, from the count it keeps |
 | any other statistic across boxes | `BsGlobalConstraint` | `reset()`, `on_unit_changed()`, `cost()` |
 
-Three of the six constraints that exist are sums of one term per parcel, and so is the
+Four of the eight constraints that exist are sums of one term per parcel, and so is the
 example: one function. Four edits:
 
 **1. The component**, `optimaru/box_sizing/cpp/bs/constraints/loose_fit_cost.hpp`:
@@ -152,7 +153,7 @@ whole numbers, because a hard contribution is rounded per box.
 
 **2. The assembly**, `cpp/bs/constraints.hpp`: include the header, add its
 row to the comment that lists the set, and add one line to `defaultConstraints()`, after
-`BoxCost` (the unit constraints come before the two globals in the catalog):
+`ShippingCost` (the unit constraints come before the two globals in the catalog):
 
 ```cpp
     assembly.emplace<LooseFitCost>();
@@ -253,11 +254,11 @@ cmake -B build -DOPTIMARU_USE_CASES=box_sizing && cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-**The counts.** A seventh constraint fails four checks that count or list the catalog.
+**The counts.** A ninth constraint fails four checks that count or list the catalog.
 Update them:
 
-- `bs_plugin_test.cpp`: `rows.size() == 6` in `verifyCatalog()`. Add the new row there
-  (`rowIs<LooseFitCost>(rows[4], "looseFitCost", soft, 0.0, false)`), and move the two
+- `bs_plugin_test.cpp`: `rows.size() == 8` in `verifyCatalog()`. Add the new row there
+  (`rowIs<LooseFitCost>(rows[6], "looseFitCost", soft, 0.0, false)`), and move the two
   globals down one;
 - `tests/box_sizing/test_constraint_specs.py`: `NAMES` at the top, which
   `test_list_constraints_matches_the_spec_names` and
@@ -296,7 +297,7 @@ leave or join. What that is depends on the constraint:
 | the same sum, stating what one parcel adds | add `supports_delta()` and `delta_cost()` | one term per parcel that moves | none here, see below; facility location's [`distance_from_facility_cost.hpp`](../../../optimaru/facility_location/cpp/fl/constraints/distance_from_facility_cost.hpp) |
 | a statistic across boxes | `BsGlobalConstraint` with `on_member_changed()`: keep your own totals | what your update costs | `BoxTypeCount` in [`common.hpp`](../../../optimaru/box_sizing/cpp/bs/constraints/common.hpp) |
 
-The example is the first row, and so are three of the constraints that exist. The third
+The example is the first row, and so are four of the constraints that exist. The third
 row looks like the cheaper one: a sum of per-parcel terms can state what one parcel adds,
 and a change of one parcel then costs one term instead of a pass over its box.
 
@@ -341,10 +342,11 @@ the solve starts (and on every step under `full_assert`); call the base's first:
 `PerParcelConstraint::on_reset(problem);`.
 
 **A constraint at weight 0 costs a move nothing.** The assembly asks a unit constraint
-at weight 0 only when a solve starts and when `bs.constraint_costs()` reports it:
-`get_constraints()` now returns seven constraints, and a solve with them ran at
-160 thousand steps per second where the six ran at 163 thousand, which is within what two
-runs of the same build differ by. A global at
+at weight 0 only when a solve starts and when `bs.constraint_costs()` reports it: on the
+version this guide was measured on, `get_constraints()` with the example returned seven
+constraints, and a solve with them ran at 160 thousand steps per second where the six ran
+at 163 thousand, which is within what two runs of the same build differ by.
+`board_area_cost` and `shipping_cost`, added since at weight 0, are the same case. A global at
 weight 0 is still sent every change, unless it declares `idle_at_weight_zero()` as
 `BoxTypeCount` does. `bs.solve(problem)` is not affected.
 
@@ -414,7 +416,10 @@ and the moves, which price a size by `BoxRanking::unitPrice` (`model/pricing.hpp
 that is one number per box (as `cost` is) is a term there. This one depends on the parcel
 too, so the sizes no longer have one order for all parcels. Left as it is, the search
 still judges every step by the whole score: the default solve with the constraint ends on
-the plan of step 2.
+the plan of step 2. `shippingCost` is a cost of that kind and is priced: with a weight on
+it, `BoxRanking::of` groups the parcels that pay alike in every box and gives each group
+its own order (`perGroup`, `orderOf`, `priceOf`); another parcel-dependent cost can join
+the group key and the group's price there.
 
 **4. What else moves.** A constraint that is on by default changes every default score.
 With the edits above the parity checks pass and these fail:
@@ -431,7 +436,7 @@ With the edits above the parity checks pass and these fail:
   problem); `test_solve.py`: `test_the_score_on_the_result_is_a_full_recompute` (the soft
   score is no longer the void alone), `test_small_instances_are_solved_to_the_optimum` and
   `test_a_box_cost_moves_parcels_to_the_cheaper_box`;
-- the tables, the score formula and the "six" in [README.md](README.md),
+- the tables, the score formula and the counts in [README.md](README.md),
   [python.md](python.md), `constraints.py`, `__init__.py`, `_core.pyi`, `domain.hpp`,
   `score_calculator.hpp`, `incremental_calculator.hpp` and `common.hpp`;
 - the CP-SAT model the benchmark compares against,
@@ -487,6 +492,9 @@ Each figure is the fastest of five runs: the machine was shared, and a run that 
 else disturbed came out at as little as half the speed, while undisturbed runs of one build
 were within 3% of each other. The first three rows made the same moves, and so did the last
 four.
+The use case had six constraints then (so the example was the seventh, in step 5 too);
+`board_area_cost` and `shipping_cost` came later, at weight 0, which a move does not ask
+(step 4).
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after: solve

@@ -4,14 +4,16 @@
 //       random assignments (identical with whole costs, within rounding with
 //       fractional ones)
 //   (b) incremental == a fresh calculator across a random walk through the
-//       engine's Editor, with every constraint picked (boxTypeCost included)
+//       engine's Editor, with every constraint picked (the opt-in ones
+//       included, on shipping prices)
 //   (c) each component's raw cost by hand: a violating and a clean case
 //   (d) the catalog read off the default assembly, and the knob guards
 //   (e) partial assemblies, re-weights, level flips, a repeat with an offset
 //   (f) boxTypeCost: a weight on it is the fixed cost of one more size, and
 //       the solve with it stocks fewer sizes
 //   (g) a solve under ScoreChecks::Full through the assembly, and its score
-//       against the monolithic recompute
+//       against the monolithic recompute; the opt-in costs at weight 0 leave
+//       the default solve as it is
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -88,6 +90,8 @@ void verifyAssemblyParity() {
 ConstraintAssembly everyConstraint() {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.weight("boxTypeCost", 1500.0);
+    assembly.weight("boardAreaCost", 30.0);
+    assembly.weight("shippingCost", 200000.0);
     return assembly;
 }
 
@@ -99,6 +103,7 @@ void verifyIncremental() {
     BoxSizingProblem p = randomInstance(9, 40, 3, 13, 250.0);
     p.boxes[2].required = true;
     p.boxes[4].maxWeight = 5000;
+    addRates(p);
     ScoreCalculator::prepare(p);
     DecomposedCalculator calculator;
     everyConstraint().into(calculator);
@@ -187,6 +192,39 @@ void verifyRawCostsByHand() {
               "boxCost: 6 shipments x 2.5, and a box without a cost");
     }
     {
+        // B0: 2 (300 x 200 + 300 x 100 + 200 x 100) = 220,000; B1: 520,000.
+        BoxSizingProblem p = twoBoxes();
+        addParcel(p, 100, 100, 100, 0, /*quantity*/ 4);
+        addParcel(p, 100, 100, 100, 1, /*quantity*/ 3);
+        check(rawCosts(p, "boardAreaCost") == std::vector<double>{880000.0, 1560000.0},
+              "boardAreaCost: 4 x 220,000 and 3 x 520,000");
+    }
+    {
+        // Divisor 5,000: B0 (6,000,000 mm3) bills at least 1,200 g, B1
+        // (24,000,000) 4,800 g. Breaks at 1,000 / 2,000 / 5,000 g.
+        BoxSizingProblem p = twoBoxes();
+        for (Box& box : p.boxes) box.dimDivisor = 5000;
+        p.boxes[0].maxWeight.reset();
+        p.rateTables.push_back({std::nullopt, {{1000, 4.0}, {2000, 6.0}, {5000, 9.0}}});
+        p.rateTables.push_back({std::string("far"), {{1000, 7.0}, {2000, 10.0}, {5000, 15.0}}});
+        addParcel(p, 100, 100, 100, 0, /*quantity*/ 2, /*weight*/ 300);   // bills 1,200: 6
+        addParcel(p, 100, 100, 100, 0, /*quantity*/ 1, /*weight*/ 1500);  // bills 1,500: 6
+        addParcel(p, 100, 100, 100, 1, /*quantity*/ 5, /*weight*/ 300);   // bills 4,800: 9
+        addParcel(p, 100, 100, 100, 0, /*quantity*/ 1, /*weight*/ 2500);  // far, bills 2,500: 15
+        p.parcels[3].zone = "far";
+        check(rawCosts(p, "shippingCost") == std::vector<double>{2 * 6.0 + 6.0 + 15.0, 45.0},
+              "shippingCost: the dimensional weight bills a light parcel, the zone its table");
+        check(p.billedWeightPerBox() == std::vector<std::int64_t>{2 * 1200 + 1500 + 2500, 5 * 4800},
+              "billedWeightPerBox: quantity x max(weight, dimensional weight)");
+        check(p.shippingCostPerBox() == std::vector<double>{33.0, 45.0},
+              "shippingCostPerBox: the raw cost, read off the facts");
+        p.rateTables.clear();
+        p.parcels[3].zone.reset();
+        p.prepared = false;
+        check(rawCosts(p, "shippingCost") == std::vector<double>{0.0, 0.0},
+              "shippingCost: no rate tables, no cost");
+    }
+    {
         // One size in use and one required: 2 against a limit of 1.
         BoxSizingProblem p = twoBoxes();
         addParcel(p, 100, 100, 100, 0);
@@ -232,14 +270,16 @@ void verifyCatalog() {
     const auto rows = defaultConstraints().info();
     const auto hard = optimaru::Level::Hard;
     const auto soft = optimaru::Level::Soft;
-    check(rows.size() == 6 && rowIs<ParcelFitCost>(rows[0], "parcelFitCost", hard, 1.0, false) &&
+    check(rows.size() == 8 && rowIs<ParcelFitCost>(rows[0], "parcelFitCost", hard, 1.0, false) &&
                   rowIs<BoxWeightCost>(rows[1], "boxWeightCost", hard, 1.0, false) &&
                   rowIs<VoidVolumeCost>(rows[2], "voidVolumeCost", soft, 1.0, false) &&
                   rowIs<BoxCost>(rows[3], "boxCost", soft, 1.0, false) &&
-                  rowIs<BoxTypeLimitCost>(rows[4], "boxTypeLimitCost", hard, 1.0, true) &&
-                  rowIs<BoxTypeCost>(rows[5], "boxTypeCost", soft, 0.0, true),
-          "info(): fit, weight (hard 1), void, cost (soft 1), limit (hard 1, global), "
-          "type (soft 0, global, opt-in); all flippable, no reward");
+                  rowIs<BoardAreaCost>(rows[4], "boardAreaCost", soft, 0.0, false) &&
+                  rowIs<ShippingCost>(rows[5], "shippingCost", soft, 0.0, false) &&
+                  rowIs<BoxTypeLimitCost>(rows[6], "boxTypeLimitCost", hard, 1.0, true) &&
+                  rowIs<BoxTypeCost>(rows[7], "boxTypeCost", soft, 0.0, true),
+          "info(): fit, weight (hard 1), void, cost (soft 1), board, shipping (soft 0, opt-in), "
+          "limit (hard 1, global), type (soft 0, global, opt-in); all flippable, no reward");
     check(!throwsInvalid([] { defaultConstraints().soft("parcelFitCost"); }) &&
                   !throwsInvalid([] { defaultConstraints().hard("voidVolumeCost"); }),
           "every level flips both ways");
@@ -342,6 +382,7 @@ void verifyFullAssertSolve() {
     std::printf("== (g) FULL_ASSERT plugin solve ==\n");
     for (bool everything : {false, true}) {
         BoxSizingProblem p = randomInstance(10, 40, 3, 21, 250.0);
+        if (everything) addRates(p);
         Solver::Config config;
         config.time_limit = std::chrono::seconds(20);
         config.step_limit = 5000;

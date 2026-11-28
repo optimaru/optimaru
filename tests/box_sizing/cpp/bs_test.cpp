@@ -13,6 +13,9 @@
 //       sizes finds; the search improves on the construction where it can
 //   (h) the acceptor: late acceptance that starts over just below its best
 //   (i) the parallel multi-start path returns a consistent best solution
+//   (j) the opt-in costs: shipping prices order a group's boxes, small
+//       instances priced by board and shipping solved to the enumerated
+//       optimum, and the default solve unchanged by facts they read
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -27,6 +30,7 @@
 #include <vector>
 
 #include "bs/accept/reheating_late_acceptance.hpp"
+#include "bs/constraints.hpp"
 #include "bs/construct/construction.hpp"
 #include "bs/model/domain.hpp"
 #include "bs/model/pricing.hpp"
@@ -291,6 +295,74 @@ void verifyRefusals() {
         p.maxBoxTypes = 1;
         check(refuses([&p] { Solver().solve(p); }, "max_box_types is 1, but 2 boxes are required"),
               "a solve refuses more required boxes than the limit");
+    }
+    // The facts of the shipping prices.
+    const auto priced = [&base] {
+        BoxSizingProblem p = base();
+        p.rateTables.push_back({std::nullopt, {{1000, 4.0}, {5000, 6.0}}});
+        return p;
+    };
+    {
+        BoxSizingProblem p = priced();
+        p.boxes[0].dimDivisor = 0;
+        check(prepareRefuses(p, "box 'B0': dim_divisor must be at least 1, not 0"),
+              "a divisor below 1");
+    }
+    {
+        BoxSizingProblem p = priced();
+        p.rateTables.push_back(p.rateTables[0]);
+        check(prepareRefuses(p, "the rate table without a zone is given twice"), "a zone twice");
+    }
+    {
+        BoxSizingProblem p = priced();
+        p.rateTables[0].breaks.clear();
+        check(prepareRefuses(p, "the rate table without a zone has no breaks"), "no breaks");
+    }
+    {
+        BoxSizingProblem p = priced();
+        p.rateTables[0].breaks[1].maxWeight = 1000;
+        check(prepareRefuses(p, "strictly ascending"), "breaks out of order");
+    }
+    {
+        BoxSizingProblem p = priced();
+        p.rateTables[0].breaks[0].price = -1.0;
+        check(prepareRefuses(p, "a break's price must be finite and >= 0"), "a negative price");
+    }
+    {
+        BoxSizingProblem p = priced();
+        p.parcels[0].zone = "far";
+        check(prepareRefuses(p, "parcel 'P0': no rate table has zone 'far'"), "an unpriced zone");
+        p.rateTables.clear();
+        check(prepareRefuses(p, "parcel 'P0': no rate table has zone 'far'"),
+              "a zone without any rate table");
+    }
+    {
+        BoxSizingProblem p = priced();
+        p.rateTables[0].zone = "near";
+        check(prepareRefuses(p, "parcel 'P0': no zone, and no rate table without a zone"),
+              "a parcel without a zone and no table for it");
+    }
+    {
+        // 300 x 200 x 100 at divisor 1,000 bills 6,000, above the top break.
+        BoxSizingProblem p = priced();
+        p.boxes[0].dimDivisor = 1000;
+        check(prepareRefuses(p,
+                             "parcel 'P0' bills 6000 in box 'B0', above the top break (5000) of "
+                             "the rate table without a zone: add a break that covers it"),
+              "a billed weight past the table");
+        p.boxes[0].dimDivisor = 2000;  // 3,000
+        p.prepared = false;
+        check(!prepareRefuses(p, ""), "within the table");
+    }
+    {
+        // Billed weights that an exact total cannot hold, only once weight is billed.
+        BoxSizingProblem p = base();
+        p.parcels[0].weight = ScoreCalculator::kMaxWeight;
+        p.parcels[0].quantity = 10000;
+        check(!prepareRefuses(p, ""), "without billing, a heavy parcel is not refused");
+        p.boxes[0].dimDivisor = 5000;
+        p.prepared = false;
+        check(prepareRefuses(p, "use a coarser weight unit"), "with billing, it is");
     }
     std::printf("\n");
 }
@@ -736,6 +808,165 @@ void verifyParallelStarts() {
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (j) The opt-in costs: board area and shipping by billed weight.
+// -------------------------------------------------------------------------
+
+// The cheapest set of at most `limit` sizes under `air` x the void volume and
+// the box cost, plus `board` x the board area and `shipping` x the shipping
+// cost, each parcel in its cheapest size of the set; -infinity when no set
+// takes every parcel.
+double pricedOptimum(BoxSizingProblem& problem, int limit, double air, double board,
+                     double shipping) {
+    ScoreCalculator::prepare(problem);
+    const int boxCount = problem.boxCount();
+    double best = -std::numeric_limits<double>::infinity();
+    for (std::uint32_t set = 1; set < (1u << boxCount); ++set) {
+        int sizes = 0;
+        for (int b = 0; b < boxCount; ++b) sizes += static_cast<int>(set >> b & 1u);
+        if (sizes > limit) continue;
+        double cost = 0.0;
+        bool feasible = true;
+        for (int p = 0; p < problem.parcelCount() && feasible; ++p) {
+            const auto quantity = static_cast<double>(problem.parcels[p].quantity);
+            double cheapest = std::numeric_limits<double>::infinity();
+            for (int b = 0; b < boxCount; ++b) {
+                if (!(set >> b & 1u) || !problem.fits(p, b)) continue;
+                const double price = air * (static_cast<double>(problem.voidOf(p, b)) +
+                                            quantity * problem.boxes[b].cost) +
+                                     quantity * (board * static_cast<double>(problem.boxArea[b]) +
+                                                 shipping * problem.shippingPrice(p, b));
+                cheapest = std::min(cheapest, price);
+            }
+            feasible = std::isfinite(cheapest);
+            cost += cheapest;
+        }
+        if (feasible) best = std::max(best, -cost);
+    }
+    return best;
+}
+
+void verifyOptInCosts() {
+    std::printf("== (j) Board area and shipping by billed weight ==\n");
+    {
+        // A light parcel and a heavy one that both fit S (1,000 mm3) and L
+        // (27,000 mm3). Divisor 10: S bills 100, L 2,700. Breaks at 1,000
+        // (price 1) and 3,000 (price 9). The light parcel pays 1 in S and 9
+        // in L; the heavy one (2,000) pays 9 in both. With the shipping cost
+        // alone, the two parcels' boxes come in different orders.
+        BoxSizingProblem p;
+        addBox(p, 30, 30, 30);  // B0: L, first by index
+        addBox(p, 10, 10, 10);  // B1: S
+        for (Box& box : p.boxes) box.dimDivisor = 10;
+        p.rateTables.push_back({std::nullopt, {{1000, 1.0}, {3000, 9.0}}});
+        addParcel(p, 10, 10, 10, -1, 1, /*weight*/ 50);
+        addParcel(p, 10, 10, 10, -1, 1, /*weight*/ 2000);
+        ScoreCalculator::prepare(p);
+        const BoxRanking ranking = BoxRanking::of(p, Pricing{0.0, 0.0, 0.0, 0.0, 1.0});
+        check(ranking.perGroup && ranking.groups.size() == 2,
+              "shipping prices: two groups for one set of boxes that take them");
+        check(ranking.cheapestFor(p, 0) == 1 && ranking.cheapestFor(p, 1) == 1,
+              "the light parcel's cheapest is S by price, the heavy one's S by the smaller volume");
+        const BoxRanking unpriced = BoxRanking::of(p, Pricing{0.0, 0.0, 0.0, 0.0, 0.0});
+        check(!unpriced.perGroup && unpriced.groups.size() == 1 && unpriced.cheapestFor(p, 0) == 0,
+              "without a shipping weight: one group, one order (ties to the lower index)");
+    }
+    {
+        // Two candidates the same volume: a cube and a flat box. The board
+        // area takes the cube.
+        BoxSizingProblem p;
+        addBox(p, 400, 400, 25);   // B0: 4,000,000 mm3, board 2 (160,000 + 10,000 + 10,000)
+        addBox(p, 200, 200, 100);  // B1: 4,000,000 mm3, board 2 (40,000 + 20,000 + 20,000)
+        addParcel(p, 100, 100, 20, -1, 10);
+        Solver::Config construction;
+        construction.time_limit = std::chrono::seconds(0);
+        DecomposedCalculator calculator;
+        defaultConstraints().weight("boardAreaCost", 1.0).into(calculator);
+        Solver(construction).solve(p, calculator);
+        check(p.parcels[0].box == 1 && p.boardArea() == 10 * 160000,
+              "the board area sends the parcel to the cube");
+    }
+    {
+        int optimal = 0;
+        int changed = 0;  // the weights ship a parcel in another box than the default solve
+        const int instances = 8;
+        for (int i = 0; i < instances; ++i) {
+            const int limit = 2 + i % 3;
+            BoxSizingProblem p = randomInstance(12, 50, limit, 300 + i, i % 2 == 0 ? 0.0 : 5000.0);
+            // Parcels half as long: most fit several sizes, so the set is a
+            // choice and not forced by the largest parcels.
+            for (Parcel& parcel : p.parcels) {
+                parcel.length /= 2;
+                parcel.width /= 2;
+                parcel.height /= 2;
+            }
+            addRates(p);
+            // A shipping price unit is worth 20 litres of air, a mm2 of board
+            // 200 mm3; one instance in four prices only the board, one only
+            // the shipping, and one prices the shipping alone (no air, no
+            // box cost).
+            const double air = i % 4 == 3 ? 0.0 : 1.0;
+            const double board = i % 4 == 0 || i % 4 == 1 ? 200.0 : 0.0;
+            const double shipping = i % 4 == 1 ? 0.0 : i % 4 == 3 ? 1.0 : 20000000.0;
+            const double optimum = pricedOptimum(p, limit, air, board, shipping);
+            Solver::Config config;
+            config.time_limit = std::chrono::seconds(20);
+            config.step_limit = 20000;
+            config.seed = 1;
+            DecomposedCalculator calculator;
+            defaultConstraints()
+                    .weight("voidVolumeCost", air)
+                    .weight("boxCost", air)
+                    .weight("boardAreaCost", board)
+                    .weight("shippingCost", shipping)
+                    .into(calculator);
+            BoxSizingProblem plain = p;
+            Solver(config).solve(plain);
+            Solver(config).solve(p, calculator);
+            if (plain.assignment() != p.assignment()) ++changed;
+            if (p.score.hard == 0 && std::fabs(p.score.soft - optimum) <= 1e-9 * -optimum) {
+                ++optimal;
+            } else {
+                std::printf("    instance %d, limit %d: %s, the optimum is %.1f\n", i, limit,
+                            p.score.str().c_str(), optimum);
+            }
+        }
+        check(optimal == instances, std::to_string(optimal) + " of " + std::to_string(instances) +
+                                            " priced instances (12 sizes, 50 parcels, three "
+                                            "zones) at the enumerated optimum");
+        // Board and billed weight grow with the box, as the air does, so the
+        // set that ships the least air is often the cheapest by them too.
+        check(changed > 0,
+              std::to_string(changed) + " of them solved otherwise without the opt-in costs");
+    }
+    {
+        // Rate tables and divisors at the default weights: the same solve,
+        // on the default path and on the default assembly.
+        for (bool assembly : {false, true}) {
+            BoxSizingProblem plain = randomInstance(20, 200, 4, 77, 250.0);
+            BoxSizingProblem priced = plain;
+            addRates(priced);
+            Solver::Config config;
+            config.time_limit = std::chrono::seconds(20);
+            config.step_limit = 5000;
+            config.seed = 2;
+            for (BoxSizingProblem* p : {&plain, &priced}) {
+                DecomposedCalculator calculator;
+                addDefaultConstraints(calculator);
+                if (assembly) {
+                    Solver(config).solve(*p, calculator);
+                } else {
+                    Solver(config).solve(*p);
+                }
+            }
+            check(plain.assignment() == priced.assignment() && plain.score == priced.score,
+                  std::string(assembly ? "default assembly" : "default path") +
+                          ": rate tables at weight 0 change nothing");
+        }
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -748,6 +979,7 @@ int main() {
     verifyOptimum();
     verifyAcceptor();
     verifyParallelStarts();
+    verifyOptInCosts();
     if (failures == 0) {
         std::printf("All box-sizing checks passed.\n");
         return 0;

@@ -68,6 +68,29 @@ inline bs::BoxSizingProblem randomInstance(int boxCount, int parcelCount, int ma
     return problem;
 }
 
+// Shipping prices on a random instance: every box bills by its size at
+// `divisor` (5,000 in mm and g: 1 kg per 5 litres), and the parcels ship to
+// three zones, the first priced by the table without a zone. The breaks run
+// to 30 kg, above the dimensional weight of the largest box (600 x 450 x 400:
+// 21.6 kg) and the heaviest parcel (20 kg), and the farther zone pays more
+// per break.
+inline void addRates(bs::BoxSizingProblem& problem, std::int64_t divisor = 5000) {
+    for (bs::Box& box : problem.boxes) box.dimDivisor = divisor;
+    const std::int64_t limits[] = {1000, 2000, 5000, 10000, 20000, 30000};
+    for (int zone = 0; zone < 3; ++zone) {
+        bs::RateTable table;
+        if (zone > 0) table.zone = "Z" + std::to_string(zone);
+        for (int i = 0; i < 6; ++i) {
+            table.breaks.push_back({limits[i], (3.0 + 1.5 * i) * (1.0 + 0.5 * zone)});
+        }
+        problem.rateTables.push_back(table);
+    }
+    for (std::size_t p = 0; p < problem.parcels.size(); ++p) {
+        if (p % 3 != 0) problem.parcels[p].zone = "Z" + std::to_string(p % 3);
+    }
+    problem.prepared = false;
+}
+
 inline bool sameScore(const bs::Score& a, const bs::Score& b) {
     return a.hard == b.hard && std::fabs(a.soft - b.soft) < 1e-9;
 }

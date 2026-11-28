@@ -12,8 +12,11 @@ Score, at the default weights (1 each):
            + distinct boxes in use above max_box_types)                      # box_type_limit_cost
   soft = -(quantity x (box volume - parcel volume), over the parcels         # void_volume_cost
            + quantity x the box's cost, over the parcels)                    # box_cost
-`box_type_cost` (the number of boxes in use, soft) is opt-in at weight 0: a weight on it
-is the fixed cost of stocking one more size. The problem carries no weights: change one
+Three soft costs are opt-in at weight 0: `box_type_cost` (the number of boxes in use: a
+weight on it is the fixed cost of stocking one more size), `board_area_cost` (quantity x
+the board of the box, 2 (lw + lh + wh)) and `shipping_cost` (quantity x the price of the
+billed weight, max(weight, ceil(box volume / dim_divisor)), in the rate table of the
+parcel's zone). The problem carries no weights: change one
 through a constraint selection (see `optimaru.box_sizing.constraints`).
 `constraint_info()` lists every constraint with its default level and weight.
 
@@ -40,6 +43,8 @@ from ._core import (
     BoxSizingProblem,
     ConstraintInfo,
     Parcel,
+    RateBreak,
+    RateTable,
     Score,
     Solver,
     SolverConfig,
@@ -61,6 +66,8 @@ __all__ = [
     "BoxSizingProblem",
     "ConstraintInfo",
     "Parcel",
+    "RateBreak",
+    "RateTable",
     "Score",
     "Solver",
     "SolverConfig",
@@ -120,7 +127,8 @@ def solve(
 
     A model that sets a parameter whose costs the selection leaves out is refused with
     ValueError (`models.parameter_uses`: `max_weight`, `cost`, `required`,
-    `max_box_types`); an engine object is solved as it is.
+    `max_box_types`, `dim_divisor`, `zone`, `rate_tables`); an engine object is solved as
+    it is.
 
     Raises ValueError for a parcel that fits none of the candidate boxes (by size and
     weight), for more required boxes than `max_box_types`, and for facts out of range.

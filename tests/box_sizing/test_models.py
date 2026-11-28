@@ -21,12 +21,15 @@ def test_the_field_names_are_the_contract():
         "boxes",
         "parcels",
         "max_box_types",
+        "rate_tables",
         "warm_start",
         "score_hard",
         "score_soft",
         "box_types_used",
         "void_volume",
         "fill_ratio",
+        "board_area",
+        "shipping_cost",
     ]
     assert list(bs.models.BoxModel.model_fields) == [
         "id",
@@ -36,19 +39,35 @@ def test_the_field_names_are_the_contract():
         "max_weight",
         "cost",
         "required",
+        "dim_divisor",
         "parcels",
+        "billed_weight",
+        "shipping_cost",
     ]
-    assert list(bs.models.ParcelModel.model_fields) == ["id", "length", "width", "height", "weight", "quantity", "box"]
+    assert list(bs.models.ParcelModel.model_fields) == [
+        "id",
+        "length",
+        "width",
+        "height",
+        "weight",
+        "quantity",
+        "zone",
+        "box",
+    ]
+    assert list(bs.models.RateTableModel.model_fields) == ["zone", "breaks"]
+    assert list(bs.models.RateBreakModel.model_fields) == ["max_weight", "price"]
     assert "model_input" in BoxSizingRequest.model_fields
 
 
 def test_the_defaults(nested):
     model = nested()
     box, parcel = model.boxes[0], model.parcels[2]
-    assert (box.max_weight, box.cost, box.required, box.parcels) == (None, 0.0, False, None)
-    assert (parcel.weight, parcel.quantity, parcel.box) == (0, 1, None)
-    assert (model.max_box_types, model.warm_start) == (None, False)
+    assert (box.max_weight, box.cost, box.required, box.dim_divisor, box.parcels) == (None, 0.0, False, None, None)
+    assert (box.billed_weight, box.shipping_cost) == (None, None)
+    assert (parcel.weight, parcel.quantity, parcel.zone, parcel.box) == (0, 1, None, None)
+    assert (model.max_box_types, model.rate_tables, model.warm_start) == (None, [], False)
     assert (model.score_hard, model.box_types_used, model.void_volume, model.fill_ratio) == (None, None, None, None)
+    assert (model.board_area, model.shipping_cost) == (None, None)
 
 
 def test_solve_takes_the_model_and_returns_a_solved_model(nested):
@@ -63,6 +82,101 @@ def test_solve_takes_the_model_and_returns_a_solved_model(nested):
     assert (solved.box_types_used, solved.void_volume) == (2, 80000)
     assert solved.fill_ratio == pytest.approx((10 * 1000 + 5 * 6000 + 27000) / (15 * 8000 + 27000))
     assert [box.parcels for box in solved.boxes] == [0, 15, 1]
+    # 2 (lw + lh + wh): M 2,400, L 5,400. Without a divisor or rate tables nothing is billed.
+    assert solved.board_area == 15 * 2400 + 5400
+    assert solved.shipping_cost is None and {(box.billed_weight, box.shipping_cost) for box in solved.boxes} == {
+        (None, None)
+    }
+
+
+def priced_data(**fields) -> dict:
+    """The nested problem, billed: divisor 10 (S bills 100, M 800, L 2,700) and two zones."""
+    data = nested_data(**fields)
+    for box in data["boxes"]:
+        box["dim_divisor"] = 10
+    data["parcels"][0] |= {"weight": 50}  # bills 100 in S, 800 in M
+    data["parcels"][1] |= {"weight": 900, "zone": "far"}  # bills 900 in M, 2,700 in L
+    data["parcels"][2] |= {"weight": 3000}  # bills 3,000 in L
+    data["rate_tables"] = [
+        {
+            "breaks": [
+                {"max_weight": 500, "price": 2.0},
+                {"max_weight": 1000, "price": 3.0},
+                {"max_weight": 5000, "price": 8.0},
+            ]
+        },
+        {"zone": "far", "breaks": [{"max_weight": 1000, "price": 5.0}, {"max_weight": 5000, "price": 12.0}]},
+    ]
+    return data
+
+
+def test_billed_weight_and_shipping_cost_are_reported_per_box():
+    model = BoxSizingProblemModel.model_validate(priced_data(max_box_types=2))
+    solved = bs.solve(model, time_limit_seconds=0.1, random_seed=1)
+    assert boxes_of(solved) == {"small": "M", "medium": "M", "large": "L"}
+    assert [box.billed_weight for box in solved.boxes] == [0, 10 * 800 + 5 * 900, 3000]
+    assert [box.shipping_cost for box in solved.boxes] == [0.0, 10 * 3.0 + 5 * 5.0, 8.0]
+    assert solved.shipping_cost == 63.0
+    # At the default weights the shipping cost is reported, not scored.
+    assert solved.score_soft == -80000.0
+
+
+def test_the_shipping_cost_moves_parcels_when_it_is_picked():
+    """S (bills 100) ships the small parcel at 2 against 3 in M: worth 30 of price, which a
+    weight of 10,000 makes worth more than the 70,000 of air the third size saves."""
+    from optimaru.box_sizing.constraints import BoxTypeLimitCost, ShippingCost, get_constraints
+
+    model = BoxSizingProblemModel.model_validate(priced_data(max_box_types=3))
+    picks = [ShippingCost(weight=10_000) if spec.name == "shipping_cost" else spec for spec in get_constraints()]
+    solved = bs.solve(model, time_limit_seconds=0.1, random_seed=1, constraints=picks)
+    assert boxes_of(solved)["small"] == "S" and solved.shipping_cost == 10 * 2.0 + 5 * 5.0 + 8.0
+    assert BoxTypeLimitCost  # the limit of 3 holds every size
+
+
+def test_only_dim_divisors_report_the_billed_weight_but_no_price(nested):
+    data = nested_data()
+    data["boxes"][0]["dim_divisor"] = 1  # S bills 1,000 per shipment
+    solved = bs.solve(BoxSizingProblemModel.model_validate(data), time_limit_seconds=0)
+    assert [box.billed_weight for box in solved.boxes] == [10 * 1000, 0, 0]
+    assert solved.shipping_cost is None and solved.boxes[0].shipping_cost is None
+
+
+@pytest.mark.parametrize(
+    ("edit", "message"),
+    [
+        (lambda d: d["rate_tables"].append(dict(d["rate_tables"][1])), "zone 'far' is given twice"),
+        (
+            lambda d: d["rate_tables"][0]["breaks"].reverse(),
+            "the rate table without a zone: the breaks' max_weight must be strictly ascending",
+        ),
+        (lambda d: d["parcels"][1].update(zone="near"), "parcel 'medium': no rate table has zone 'near'"),
+        (lambda d: d["rate_tables"].pop(0), "parcel 'small': no zone, and no rate table without a zone"),
+        (lambda d: d.update(rate_tables=[]), "parcel 'medium': no rate table has zone 'far'"),
+    ],
+)
+def test_rate_tables_that_cannot_price_every_parcel_are_refused(edit, message):
+    data = priced_data()
+    edit(data)
+    with pytest.raises(ValidationError, match=message):
+        BoxSizingProblemModel.model_validate(data)
+
+
+def test_billed_weight_an_exact_total_cannot_hold_is_refused_only_once_weight_is_billed():
+    data = nested_data()
+    data["parcels"][0] |= {"weight": 10**12, "quantity": 10_000}
+    data["boxes"][2]["max_weight"] = None
+    bs.solve(BoxSizingProblemModel.model_validate(data), time_limit_seconds=0)
+    data["boxes"][0]["dim_divisor"] = 1000
+    with pytest.raises(ValueError, match="the billed weight is too large for an exact total"):
+        bs.solve(BoxSizingProblemModel.model_validate(data), time_limit_seconds=0)
+
+
+def test_a_billed_weight_above_the_top_break_is_refused_by_the_engine():
+    data = priced_data()
+    data["rate_tables"][0]["breaks"].pop()  # the zone-less table now stops at 1,000; L bills 2,700
+    model = BoxSizingProblemModel.model_validate(data)
+    with pytest.raises(ValueError, match="parcel 'small' bills 2700 in box 'L', above the top break \\(1000\\)"):
+        bs.solve(model, time_limit_seconds=0)
 
 
 def test_json_round_trip_preserves_everything(nested):
@@ -88,6 +202,20 @@ def test_the_core_round_trip_keeps_the_facts(nested):
     assert [parcel.box for parcel in back.parcels] == ["L", None, None]
 
 
+def test_the_core_round_trip_keeps_the_rates():
+    model = BoxSizingProblemModel.model_validate(priced_data())
+    core = model.to_core()
+    assert core.boxes[0].dim_divisor == 10 and core.parcels[1].zone == "far"
+    assert [(table.zone, [(b.max_weight, b.price) for b in table.breaks]) for table in core.rate_tables] == [
+        (None, [(500, 2.0), (1000, 3.0), (5000, 8.0)]),
+        ("far", [(1000, 5.0), (5000, 12.0)]),
+    ]
+    back = BoxSizingProblemModel.from_core(core)
+    assert back.rate_tables == model.rate_tables
+    assert [parcel.zone for parcel in back.parcels] == [None, "far", None]
+    assert [box.dim_divisor for box in back.boxes] == [10, 10, 10]
+
+
 def test_extra_fields_are_rejected():
     with pytest.raises(ValidationError):
         BoxSizingProblemModel.model_validate(nested_data(void_weight=2))
@@ -110,6 +238,8 @@ def test_extra_fields_are_rejected():
         ("parcels", "weight", -1),
         ("parcels", "quantity", 0),
         ("parcels", "quantity", 2**53 + 1),
+        ("boxes", "dim_divisor", 0),
+        ("parcels", "zone", ""),
     ],
 )
 def test_a_fact_out_of_range_is_refused(where, field, value):

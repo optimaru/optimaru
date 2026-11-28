@@ -34,22 +34,30 @@ void prepareSolve(BoxSizingProblem& problem) {
 }
 
 // The prices a picked assembly gives the sizes: the weights of its
-// voidVolumeCost, boxCost and boxTypeCost picks, each summed over its picks
-// (a constraint left out weighs 0). Only the weights are read: a pick moved
-// to the hard level, or shaped by an exponent or an offset, is priced as if
-// it were soft and linear, which changes which steps are proposed and never
-// how one is judged. An assembly that prices neither the void nor the cost
-// still orders the sizes by volume: the smaller box first.
-Pricing pricingOf(const optimaru::DecomposedObjective<BoxSizingProblem>& calculator) {
-    Pricing pricing{0.0, 0.0, 0.0};
+// voidVolumeCost, boxCost, boardAreaCost, shippingCost and boxTypeCost picks,
+// each summed over its picks (a constraint left out weighs 0). Only the
+// weights are read: a pick moved to the hard level, or shaped by an exponent
+// or an offset, is priced as if it were soft and linear, which changes which
+// steps are proposed and never how one is judged. An assembly that prices
+// none of the void, the cost, the board and the shipping still orders the
+// sizes by volume: the smaller box first.
+Pricing pricingOf(const optimaru::DecomposedObjective<BoxSizingProblem>& calculator,
+                  const BoxSizingProblem& problem) {
+    Pricing pricing{0.0, 0.0, 0.0, 0.0, 0.0};
     for (const auto& constraint : calculator.unit_constraint_list()) {
         if (constraint->name == "voidVolumeCost") pricing.voidWeight += constraint->weight;
         if (constraint->name == "boxCost") pricing.costWeight += constraint->weight;
+        if (constraint->name == "boardAreaCost") pricing.boardWeight += constraint->weight;
+        if (constraint->name == "shippingCost") pricing.shippingWeight += constraint->weight;
     }
     for (const auto& constraint : calculator.global_constraint_list()) {
         if (constraint->name == "boxTypeCost") pricing.typeWeight += constraint->weight;
     }
-    if (pricing.voidWeight == 0.0 && pricing.costWeight == 0.0) pricing.voidWeight = 1.0;
+    const bool shipping = pricing.shippingWeight != 0.0 && !problem.rateTables.empty();
+    if (pricing.voidWeight == 0.0 && pricing.costWeight == 0.0 && pricing.boardWeight == 0.0 &&
+        !shipping) {
+        pricing.voidWeight = 1.0;
+    }
     return pricing;
 }
 
@@ -143,8 +151,8 @@ void Solver::solve(BoxSizingProblem& problem,
     optimaru::check_config(config_);
     prepareSolve(problem);
     if (!problem.parcels.empty()) {
-        const auto ranking =
-                std::make_shared<const BoxRanking>(BoxRanking::of(problem, pricingOf(calculator)));
+        const auto ranking = std::make_shared<const BoxRanking>(
+                BoxRanking::of(problem, pricingOf(calculator, problem)));
         constructGreedy(problem, *ranking);
         runEngine(config_, problem, calculator, ranking);
     }

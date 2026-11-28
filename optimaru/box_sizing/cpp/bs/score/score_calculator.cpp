@@ -51,6 +51,51 @@ void requireBoxesInRange(const BoxSizingProblem& problem) {
     }
 }
 
+// The rate tables: zones unique and not empty, breaks ascending, prices
+// finite and >= 0.
+void requireRateTables(const BoxSizingProblem& problem) {
+    for (std::size_t t = 0; t < problem.rateTables.size(); ++t) {
+        const RateTable& table = problem.rateTables[t];
+        const std::string who = table.zone ? "the rate table of zone '" + *table.zone + "'"
+                                           : std::string("the rate table without a zone");
+        if (table.zone && table.zone->empty()) refuse("a rate table has an empty zone");
+        if (problem.tableOf(table.zone) != static_cast<int>(t)) {
+            refuse(who + " is given twice: one rate table per zone");
+        }
+        if (table.breaks.empty()) refuse(who + " has no breaks");
+        for (std::size_t i = 0; i < table.breaks.size(); ++i) {
+            const RateBreak& rateBreak = table.breaks[i];
+            if (rateBreak.maxWeight < 0) refuse(who + ": a break's max_weight must be >= 0");
+            if (i > 0 && rateBreak.maxWeight <= table.breaks[i - 1].maxWeight) {
+                refuse(who + ": the breaks' max_weight must be strictly ascending");
+            }
+            if (!std::isfinite(rateBreak.price) || rateBreak.price < 0.0) {
+                refuse(who + ": a break's price must be finite and >= 0");
+            }
+        }
+    }
+}
+
+// Every parcel's billed weight in every box that takes it is within its
+// table's top break: past it a rate table says nothing. Needs the rest of
+// prepare.
+void requireCoveredByRates(const BoxSizingProblem& problem) {
+    if (problem.rateTables.empty()) return;
+    for (int p = 0; p < problem.parcelCount(); ++p) {
+        const RateTable& table = problem.rateTables[problem.parcelTable[p]];
+        const std::int64_t top = table.breaks.back().maxWeight;
+        for (int b = 0; b < problem.boxCount(); ++b) {
+            if (!problem.fits(p, b) || problem.billedWeight(p, b) <= top) continue;
+            refuse("parcel '" + problem.parcels[p].id + "' bills " +
+                   std::to_string(problem.billedWeight(p, b)) + " in box '" + problem.boxes[b].id +
+                   "', above the top break (" + std::to_string(top) + ") of " +
+                   (table.zone ? "the rate table of zone '" + *table.zone + "'"
+                               : std::string("the rate table without a zone")) +
+                   ": add a break that covers it");
+        }
+    }
+}
+
 }  // namespace
 
 void ScoreCalculator::prepare(BoxSizingProblem& problem) {
@@ -65,8 +110,14 @@ void ScoreCalculator::prepare(BoxSizingProblem& problem) {
     if (problem.boxes.empty()) refuse("boxes must hold at least one candidate box");
     std::unordered_set<std::string> ids;
     std::int64_t largestVolume = 0;
+    // The heaviest billed weight a shipment can have: over every box, also
+    // those a parcel does not fit, so the bound below is on the safe side.
+    std::int64_t largestBilled = 0;
+    bool priced = false;  // a box has a dimDivisor, or there are rate tables
     problem.boxSides.clear();
     problem.boxVolume.clear();
+    problem.boxArea.clear();
+    problem.boxDimWeight.clear();
     for (const Box& box : problem.boxes) {
         if (box.id.empty()) refuse("a box has an empty id");
         if (!ids.insert(box.id).second) refuse("box ids must be unique: '" + box.id + "'");
@@ -80,15 +131,26 @@ void ScoreCalculator::prepare(BoxSizingProblem& problem) {
         if (!std::isfinite(box.cost) || box.cost < 0.0) {
             refuse(who + ": cost must be finite and >= 0");
         }
+        if (box.dimDivisor && *box.dimDivisor < 1) {
+            refuse(who + ": dim_divisor must be at least 1, not " +
+                   std::to_string(*box.dimDivisor));
+        }
+        if (box.dimDivisor) priced = true;
         problem.boxSides.push_back(sortedSides(box.length, box.width, box.height));
         problem.boxVolume.push_back(box.length * box.width * box.height);
+        problem.boxArea.push_back(boardAreaOf(box));
+        problem.boxDimWeight.push_back(dimWeightOf(box));
         largestVolume = std::max(largestVolume, problem.boxVolume.back());
+        largestBilled = std::max(largestBilled, problem.boxDimWeight.back());
     }
+    requireRateTables(problem);
+    if (!problem.rateTables.empty()) priced = true;
 
     ids.clear();
     long double quantities = 0.0L;
     problem.parcelSides.clear();
     problem.parcelVolume.clear();
+    problem.parcelTable.clear();
     for (const Parcel& parcel : problem.parcels) {
         if (parcel.id.empty()) refuse("a parcel has an empty id");
         if (!ids.insert(parcel.id).second) {
@@ -105,6 +167,16 @@ void ScoreCalculator::prepare(BoxSizingProblem& problem) {
         quantities += static_cast<long double>(parcel.quantity);
         problem.parcelSides.push_back(sortedSides(parcel.length, parcel.width, parcel.height));
         problem.parcelVolume.push_back(parcel.length * parcel.width * parcel.height);
+        largestBilled = std::max(largestBilled, parcel.weight);
+        if (parcel.zone && parcel.zone->empty()) refuse(who + ": zone must not be empty");
+        const int table = problem.tableOf(parcel.zone);
+        if (table < 0 && (parcel.zone || !problem.rateTables.empty())) {
+            refuse(who + ": " +
+                   (parcel.zone ? "no rate table has zone '" + *parcel.zone + "'"
+                                : std::string("no zone, and no rate table without a zone")) +
+                   ": add a rate table for it");
+        }
+        problem.parcelTable.push_back(table);
     }
     // Every void is at most quantity * the largest box volume, so below this
     // bound every sum of voids is a whole number a double holds exactly.
@@ -113,6 +185,15 @@ void ScoreCalculator::prepare(BoxSizingProblem& problem) {
         refuse("the shipped volume is too large for an exact score: the summed quantities times "
                "the largest box volume must stay below 2^53; use a coarser length unit");
     }
+    // The billed weight is reported as a whole number per box: below this
+    // bound every total is exact. Only problems that bill by weight are held
+    // to it.
+    if (priced && quantities * static_cast<long double>(largestBilled) >
+                          static_cast<long double>(kMaxVolume)) {
+        refuse("the billed weight is too large for an exact total: the summed quantities times "
+               "the heaviest billed weight must stay below 2^53; use a coarser weight unit");
+    }
+    requireCoveredByRates(problem);
 
     problem.prepared = true;
 }

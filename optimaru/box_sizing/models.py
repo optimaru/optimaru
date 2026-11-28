@@ -28,6 +28,8 @@ __all__ = [
     "BoxSizingProblemModel",
     "BoxSizingRequest",
     "ParcelModel",
+    "RateBreakModel",
+    "RateTableModel",
     "parameter_uses",
     "solve_request",
     "with_initial_solution",
@@ -38,6 +40,9 @@ MAX_SIDE = 2_000_000
 MAX_WEIGHT = 1_000_000_000_000
 #: No quantity can be larger: the engine refuses a shipped volume above 2^53 (kMaxVolume).
 MAX_QUANTITY = 2**53
+#: The largest weight break of a rate table and the largest dim_divisor (a dimensional weight
+#: can pass MAX_WEIGHT).
+MAX_BREAK = 2**62
 
 
 class BoxModel(StrictModel):
@@ -57,8 +62,31 @@ class BoxModel(StrictModel):
         default=False,
         description="Already stocked and staying: it counts as in use even when no parcel takes it.",
     )
+    dim_divisor: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_BREAK,
+        description=(
+            "Dimensional-weight divisor: a parcel in this box bills at least ceil(box volume / dim_divisor) "
+            "(5000 in mm and g is 1 kg per 5 litres); None = it bills its own weight."
+        ),
+    )
     parcels: int | None = Field(
         default=None, ge=0, description="Output: how many parcels (quantities summed) ship in this box."
+    )
+    billed_weight: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Output: over the parcels in this box, quantity x billed weight (the parcel's weight, or the box's "
+            "dimensional weight when that is more). Reported when some box has a dim_divisor or there are "
+            "rate tables."
+        ),
+    )
+    shipping_cost: float | None = Field(
+        default=None,
+        ge=0,
+        description="Output: over the parcels in this box, quantity x the price of a shipment. Reported with rate tables.",
     )
 
 
@@ -72,7 +100,31 @@ class ParcelModel(StrictModel):
     height: int = Field(gt=0, le=MAX_SIDE)
     weight: int = Field(default=0, ge=0, le=MAX_WEIGHT, description="Weight of one shipment.")
     quantity: int = Field(default=1, ge=1, le=MAX_QUANTITY, description="How many shipments had this size.")
+    zone: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Which rate table prices it (`RateTableModel.zone`); None = the table without a zone.",
+    )
     box: str | None = Field(default=None, description="Id of the box it ships in; None = not decided.")
+
+
+class RateBreakModel(StrictModel):
+    """One weight break of a rate table: a shipment billed at most `max_weight` costs `price`."""
+
+    max_weight: int = Field(ge=0, le=MAX_BREAK, description="The heaviest billed weight at this price.")
+    price: float = Field(ge=0, allow_inf_nan=False, description="What one shipment costs to ship.")
+
+
+class RateTableModel(StrictModel):
+    """What one shipment costs to ship, by its billed weight: the price of the first break whose
+    `max_weight` is at least the billed weight."""
+
+    zone: str | None = Field(
+        default=None, min_length=1, description="The parcels it prices (`ParcelModel.zone`); None = those without one."
+    )
+    breaks: list[RateBreakModel] = Field(
+        min_length=1, description="The weight breaks, `max_weight` strictly ascending."
+    )
 
 
 def _sides(thing) -> tuple[int, int, int]:
@@ -116,6 +168,14 @@ class BoxSizingProblemModel(StrictModel):
     max_box_types: int | None = Field(
         default=None, ge=1, description="How many distinct boxes may be in use (required ones included)."
     )
+    rate_tables: list[RateTableModel] = Field(
+        default_factory=list,
+        description=(
+            "What a shipment costs to ship by its billed weight, one table per zone; scored by shipping_cost "
+            "(opt-in). Every parcel's zone needs its table, and its billed weight in every box that takes it "
+            "a break."
+        ),
+    )
     warm_start: bool = Field(
         default=False,
         description=(
@@ -143,6 +203,14 @@ class BoxSizingProblemModel(StrictModel):
             "Output: shipped parcel volume / shipped box volume. A parcel larger than its box (which does "
             "not fit it) counts as the box's volume, as it counts no air in void_volume."
         ),
+    )
+    board_area: int | None = Field(
+        default=None, ge=0, description="Output: sum over the parcels of quantity x 2 (lw + lh + wh) of their box."
+    )
+    shipping_cost: float | None = Field(
+        default=None,
+        ge=0,
+        description="Output: sum over the parcels of quantity x the price of a shipment. Reported with rate tables.",
     )
 
     @model_validator(mode="after")
@@ -182,7 +250,29 @@ class BoxSizingProblemModel(StrictModel):
         required = sum(box.required for box in self.boxes)
         if self.max_box_types is not None and required > self.max_box_types:
             raise ValueError(f"max_box_types is {self.max_box_types}, but {required} boxes are required")
+        self._check_rates()
         return self
+
+    def _check_rates(self) -> None:
+        """One rate table per zone, breaks ascending, and a table for every parcel's zone (the
+        engine's checks; it also refuses a billed weight above a table's top break)."""
+        zones = set()
+        for table in self.rate_tables:
+            name = "the rate table without a zone" if table.zone is None else f"the rate table of zone {table.zone!r}"
+            if table.zone in zones:
+                raise ValueError(f"{name} is given twice: one rate table per zone")
+            zones.add(table.zone)
+            limits = [rate_break.max_weight for rate_break in table.breaks]
+            if any(later <= earlier for earlier, later in zip(limits, limits[1:])):
+                raise ValueError(f"{name}: the breaks' max_weight must be strictly ascending")
+        for parcel in self.parcels:
+            if parcel.zone not in zones and (parcel.zone is not None or self.rate_tables):
+                missing = (
+                    f"no rate table has zone {parcel.zone!r}"
+                    if parcel.zone is not None
+                    else "no zone, and no rate table without a zone"
+                )
+                raise ValueError(f"parcel {parcel.id!r}: {missing}: add a rate table for it")
 
     def to_core(self) -> _core.BoxSizingProblem:
         """pydantic -> engine object (the output fields are ignored; the engine recomputes them)."""
@@ -192,7 +282,9 @@ class BoxSizingProblemModel(StrictModel):
         position = {box.id: index for index, box in enumerate(self.boxes)}
         return _core.BoxSizingProblem(
             boxes=[
-                _core.Box(box.id, box.length, box.width, box.height, box.max_weight, box.cost, box.required)
+                _core.Box(
+                    box.id, box.length, box.width, box.height, box.max_weight, box.cost, box.required, box.dim_divisor
+                )
                 for box in self.boxes
             ],
             parcels=[
@@ -204,11 +296,19 @@ class BoxSizingProblemModel(StrictModel):
                     parcel.weight,
                     parcel.quantity,
                     -1 if parcel.box is None else position[parcel.box],
+                    parcel.zone,
                 )
                 for parcel in self.parcels
             ],
             max_box_types=self.max_box_types,
             warm_start=self.warm_start,
+            rate_tables=[
+                _core.RateTable(
+                    [_core.RateBreak(rate_break.max_weight, rate_break.price) for rate_break in table.breaks],
+                    table.zone,
+                )
+                for table in self.rate_tables
+            ],
         )
 
     @classmethod
@@ -216,6 +316,13 @@ class BoxSizingProblemModel(StrictModel):
         """engine object -> pydantic, including the boxes of the parcels, the score and the derived outputs."""
         boxes = problem.boxes
         shipped = problem.parcels_per_box()
+        rate_tables = problem.rate_tables
+        billed = (
+            problem.billed_weight_per_box()
+            if rate_tables or any(box.dim_divisor is not None for box in boxes)
+            else None
+        )
+        shipping = problem.shipping_cost_per_box() if rate_tables else None
         data = {
             "boxes": [
                 BoxModel(
@@ -226,7 +333,10 @@ class BoxSizingProblemModel(StrictModel):
                     max_weight=box.max_weight,
                     cost=box.cost,
                     required=box.required,
+                    dim_divisor=box.dim_divisor,
                     parcels=shipped[index],
+                    billed_weight=None if billed is None else billed[index],
+                    shipping_cost=None if shipping is None else shipping[index],
                 )
                 for index, box in enumerate(boxes)
             ],
@@ -238,17 +348,27 @@ class BoxSizingProblemModel(StrictModel):
                     height=parcel.height,
                     weight=parcel.weight,
                     quantity=parcel.quantity,
+                    zone=parcel.zone,
                     box=None if parcel.box < 0 else boxes[parcel.box].id,
                 )
                 for parcel in problem.parcels
             ],
             "max_box_types": problem.max_box_types,
+            "rate_tables": [
+                {
+                    "zone": table.zone,
+                    "breaks": [{"max_weight": b.max_weight, "price": b.price} for b in table.breaks],
+                }
+                for table in rate_tables
+            ],
             "warm_start": problem.warm_start,
             "score_hard": problem.score.hard,
             "score_soft": problem.score.soft,
             "box_types_used": problem.box_types_used(),
             "void_volume": problem.void_volume(),
             "fill_ratio": problem.fill_ratio(),
+            "board_area": problem.board_area(),
+            "shipping_cost": None if shipping is None else sum(shipping),
         }
         # A problem the engine has solved or scored: the fit of every parcel is its to check.
         return cls.model_validate(data, context={"checked_by_the_engine": True})
@@ -269,8 +389,15 @@ def parameter_uses(problem: BoxSizingProblemModel) -> list[ParameterUse]:
             uses.append(ParameterUse(where, "cost", 0.0, ("box_cost",)))
         if box.required:
             uses.append(ParameterUse(where, "required", False, ("box_type_limit_cost", "box_type_cost")))
+        if box.dim_divisor is not None:
+            uses.append(ParameterUse(where, "dim_divisor", None, ("shipping_cost",)))
+    for parcel in problem.parcels:
+        if parcel.zone is not None:
+            uses.append(ParameterUse(f"parcel {parcel.id}", "zone", None, ("shipping_cost",)))
     if problem.max_box_types is not None:
         uses.append(ParameterUse("the problem", "max_box_types", None, ("box_type_limit_cost",)))
+    if problem.rate_tables:
+        uses.append(ParameterUse("the problem", "rate_tables", [], ("shipping_cost",)))
     return uses
 
 
@@ -295,8 +422,9 @@ def with_initial_solution(problem, solution):
     seeded = problem.model_copy(deep=True)
     seeded.score_hard = seeded.score_soft = None
     seeded.box_types_used = seeded.void_volume = seeded.fill_ratio = None
+    seeded.board_area = seeded.shipping_cost = None
     for box in seeded.boxes:
-        box.parcels = None
+        box.parcels = box.billed_weight = box.shipping_cost = None
     for parcel in seeded.parcels:
         box = parcels.get(parcel.id, {}).get("box")
         if box is not None and (not isinstance(box, str) or box not in known):

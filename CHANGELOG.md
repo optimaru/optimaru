@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Box sizing: board area and shipping cost by billed weight.** Two opt-in soft costs, both at
+  weight 0 by default, so every request that was valid before solves exactly as before:
+  - `board_area_cost` (`BoardAreaCost`): per box, `quantity x 2 (lw + lh + wh)`, the board of
+    the boxes shipped.
+  - `shipping_cost` (`ShippingCost`): per box, `quantity x` the price of a shipment's billed
+    weight in the rate table of its zone. New input fields: box `dim_divisor` (a parcel in the
+    box bills at least `ceil(box volume / dim_divisor)`), parcel `zone`, and the problem's
+    `rate_tables` (one per zone: `zone`, and `breaks` of `max_weight` and `price`). The
+    parameter check asks for `shipping_cost` in the selection when any of them is set.
+  - New outputs: `board_area` and `shipping_cost` on the problem, `billed_weight` and
+    `shipping_cost` on every box (where weight is billed). Compiled objects: `RateTable`,
+    `RateBreak`, `Box.dim_divisor`, `Parcel.zone`, `BoxSizingProblem.rate_tables`,
+    `board_area()`, `billed_weight_per_box()`, `shipping_cost_per_box()`.
+  - The construction and the moves price the sizes with the picked weights of both. A shipping
+    price depends on the parcel, so with a weight on `shipping_cost` the parcels that pay alike
+    in every box form a group with its own order of the boxes.
+  - The CP-SAT model of `benchmarks/box-sizing` takes `board_area_weight` and `shipping_weight`.
+  - At the default weights the 20 benchmark instances give the published results, and
+    step-limited solves take the same steps as before on both paths. On the same instances,
+    billed (three zones, ten breaks), the search at 2 s ties CP-SAT's 30 s result (same
+    objective, 4 workers) on 10 and 11 of 20 instances for two weightings and is ahead on the
+    others; the plan of the least air pays up to 6.8% more freight (1.6% on average) than the
+    plan the shipping cost picks. A shipping weight costs 8% to 29% of the steps per second.
 - **Documentation by version.** The documentation site has a version menu: `latest/` (the newest
   release), `dev/` (`main`) and one copy per release minor since 0.4, each linking to repository files
   at its own tag. The old addresses redirect to `latest/`.

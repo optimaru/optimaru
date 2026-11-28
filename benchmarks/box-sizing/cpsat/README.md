@@ -30,9 +30,18 @@ a solution of the model has hard 0 and `level="soft"` has no meaning there. The 
 is not modelled, and the model takes no constraint selection. A box `cost` must be a multiple
 of 0.001: the costs are scaled by the smallest power of ten that makes them whole.
 
+The two other opt-in costs can be added with their weights, `build(problem,
+board_area_weight=..., shipping_weight=...)` and the same keywords on `solve`: the board area
+(`quantity x 2 (lw + lh + wh)`) and the shipping cost (`quantity x` the price of the billed
+weight in the parcel's rate table). A shipping price depends on the parcel, so with a
+shipping weight a group is the parcels that fit the same boxes and pay the same price in
+each. The objective is then the engine's soft score under the default constraints with
+`board_area_cost` and `shipping_cost` at those weights; a weighted board area or rate-table
+price must be a multiple of 0.001 too.
+
 `tests/test_model.py` checks the model's objective against the engine's soft score of the
 same assignment, and both solvers against an enumeration of every set of sizes on instances
-small enough to enumerate.
+small enough to enumerate, with and without the board area and the shipping cost.
 
 ## Engine comparison
 

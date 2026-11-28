@@ -439,6 +439,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | box sizing | box `max_weight` (None), `cost` (0.0) | `box_weight_cost`, `box_cost` |
 | | box `required` (False) | `box_type_limit_cost` or `box_type_cost` |
 | | `max_box_types` (None) | `box_type_limit_cost` |
+| | box `dim_divisor` (None), parcel `zone` (None), `rate_tables` ([]) | `shipping_cost` |
 | container loading | container `max_weight` (None) | `container_weight_cost` |
 | | item `max_load_on_top` (None) | `stacking_load_cost` |
 | | item `unload_order` (None) | `unloading_order_cost` |
