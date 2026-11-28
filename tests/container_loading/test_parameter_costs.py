@@ -8,6 +8,7 @@ from optimaru.container_loading.constraints import (
     ContainerWeightCost,
     GroupSplitCost,
     IncompleteGroupCost,
+    OptionalItemCost,
     SingleContainerCost,
     StackingLoadCost,
     StackingRuleCost,
@@ -30,7 +31,7 @@ def problem(**fields) -> ContainerLoadingProblemModel:
             {"id": "b", "length": 5, "width": 5, "height": 5, "unload_order": 1},
             {"id": "c", "length": 5, "width": 5, "height": 5, "group": "order"},
             {"id": "d", "length": 5, "width": 5, "height": 5, "max_stack_layers": 2, "stack_group": "food"},
-            {"id": "e", "length": 5, "width": 5, "height": 5, "priority": 4, "group": "set"},
+            {"id": "e", "length": 5, "width": 5, "height": 5, "priority": 4, "group": "set", "optional": True},
         ],
         "stacking_rules": [{"top": "food", "bottom": "food"}],
         "group_rules": [{"id": "set", "all_or_none": True, "single_container": True}],
@@ -50,6 +51,7 @@ CHECKED = [
     ("stacking_rules", "stacking_rule_cost", StackingRuleCost),
     ("all_or_none", "incomplete_group_cost", IncompleteGroupCost),
     ("single_container", "single_container_cost", SingleContainerCost),
+    ("optional", "optional_item_cost", OptionalItemCost),
 ]
 
 
@@ -108,7 +110,14 @@ def test_a_compiled_problem_is_solved_as_it_is():
 
 
 def test_a_priority_needs_one_of_the_costs_that_count_left_out_items():
+    items = [{"id": "a", "length": 5, "width": 5, "height": 5, "priority": 4}]
+    model = problem(
+        containers=[{"id": "c", "length": 10, "width": 10, "height": 10}],
+        items=items,
+        stacking_rules=[],
+        group_rules=[],
+    )
     picks = without(get_constraints(), "unplaced_item_cost")
-    cl.solve(problem(), time_limit_seconds=0, constraints=picks)  # optional_item_cost is still in
+    cl.solve(model, time_limit_seconds=0, constraints=picks)  # optional_item_cost is still in
     with pytest.raises(ValueError, match="sets priority, but the constraints leave out unplaced_item_cost"):
-        cl.solve(problem(), time_limit_seconds=0, constraints=without(picks, "optional_item_cost"))
+        cl.solve(model, time_limit_seconds=0, constraints=without(picks, "optional_item_cost"))

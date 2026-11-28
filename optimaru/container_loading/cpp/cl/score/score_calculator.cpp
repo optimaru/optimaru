@@ -141,7 +141,9 @@ void appendOrientations(const Item& item, std::vector<Orientation>& out) {
 
 // Per flagged group (all-or-none ones when `allOrNone`, else the
 // single-container ones), how many of its items a container's list holds and
-// how many of those found a place.
+// how many of those found a place. Written apart from
+// PlacedGroupConstraint::tally on purpose: this full recompute is what the
+// incremental component is checked against.
 void groupTally(const ContainerLoadingProblem& problem, const std::vector<int>& members,
                 const Packing& packing, bool allOrNone, std::vector<detail::GroupTally>& out) {
     out.clear();

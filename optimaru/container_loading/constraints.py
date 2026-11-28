@@ -351,7 +351,9 @@ class IncompleteGroupCost(Constraint):
     """Groups loaded in part although their rule asks for all or none. Default: hard, weight 1.
 
     For each group whose `group_rules` entry sets `all_or_none`, the smaller of its placed
-    items and the items left out: what it takes to load it whole or not at all. A global
+    items and the items left out: what it takes to load it whole or not at all. Use it on
+    groups of `optional` items: a group of required items is already all through
+    `UnplacedItemCost`, and taking one more of them out trades one cost for the other. A global
     constraint: a single total."""
 
     name = "incomplete_group_cost"

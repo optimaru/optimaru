@@ -229,6 +229,10 @@ struct PlacedGroupConstraint : ClGlobalConstraint {
 
     double cost() const override { return static_cast<double>(total_); }
 
+    // Nothing but cost() reads the tallies and reset() rebuilds them, so a
+    // selection that leaves the constraint at weight 0 pays nothing.
+    bool idle_at_weight_zero() const override { return true; }
+
     bool supports_preview() const override { return true; }
     double preview_cost(const ContainerLoadingProblem& problem,
                         const optimaru::PreviewedUnit* changes, int count) const override {

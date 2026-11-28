@@ -414,8 +414,10 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
     (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
     docs/use-cases/README.md. The sizes and `min_support_ratio` are read by the decoder,
     whatever the selection, and so are `bottom_only` and `max_stack_height`; `cost` is
-    `used_container_cost`'s own scale; `optional` also changes what unplaced_item_cost and
-    container_weight_cost count and what the decoder leaves out."""
+    `used_container_cost`'s own scale. `optional` needs optional_item_cost although it also
+    changes what unplaced_item_cost and container_weight_cost count and what the decoder leaves
+    out: without the cost an optional item left out would count nowhere (pick it at weight 0
+    to mean that)."""
     uses = []
     for container in problem.containers:
         where = f"container {container.id}"
@@ -437,6 +439,8 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
         for field in ("max_stack_layers", "stack_group"):
             if getattr(item, field) is not None:
                 uses.append(ParameterUse(where, field, None, ("stacking_rule_cost",)))
+        if item.optional:
+            uses.append(ParameterUse(where, "optional", False, ("optional_item_cost",)))
         if item.priority != 1:
             uses.append(ParameterUse(where, "priority", 1, ("unplaced_item_cost", "optional_item_cost")))
     for rule in problem.group_rules:

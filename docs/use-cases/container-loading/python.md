@@ -194,7 +194,8 @@ a pick at weight 0 counts. Here: a container's `max_weight` (`container_weight_c
 `max_offset_length` / `max_offset_width` (`balance_limit_cost`), an item's
 `max_load_on_top` (`stacking_load_cost`), `unload_order` (`unloading_order_cost`), `group`
 (`group_split_cost`), `max_stack_layers` / `stack_group` (`stacking_rule_cost`) and a
-`priority` other than 1 (`unplaced_item_cost` or `optional_item_cost`), the problem's
+`priority` other than 1 (`unplaced_item_cost` or `optional_item_cost`) and `optional`
+(`optional_item_cost`), the problem's
 `stacking_rules` (`stacking_rule_cost`), and a group rule's `all_or_none`
 (`incomplete_group_cost`) and `single_container` (`single_container_cost`). `bottom_only` and `max_stack_height`
 are the decoder's and need no cost.

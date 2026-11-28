@@ -313,11 +313,13 @@ What the raw costs mean exactly:
   *placed* where they found a place. `incomplete_group_cost` counts, for an `all_or_none`
   group, the smaller of the placed and the left-out items: five items with three placed
   cost 2, with none or all placed 0. All or none is a choice only where the items are
-  `optional` (others already count in `unplaced_item_cost`); the group is left out whole
+  `optional` (others already count in `unplaced_item_cost`, and taking one more of them out
+  only trades one hard cost for the other); the group is left out whole
   by listing it where there is no room, which needs a container that is full.
   `single_container_cost` counts, for a `single_container` group, the containers holding
   a placed item of it beyond the first; an item left out splits nothing. `group_split_cost`
-  still counts every group's spread by the lists, softly.
+  still counts every group's spread by the lists, softly. A rule with both flags false is
+  accepted and does nothing.
 - **Container weight** counts the whole list, an unplaced item included: what the solve
   gave to a container belongs to it. An unplaced `optional` item is the exception: it is
   out of the load, and its weight with it. `loaded_weight` is the weight of the placed items
@@ -341,8 +343,9 @@ What the raw costs mean exactly:
 
 `max_weight`, `max_load_on_top`, `unload_order`, `group`, `max_stack_layers`,
 `stack_group`, `stacking_rules`, `max_offset_length`, `max_offset_width`, `priority`
-(either `unplaced_item_cost` or `optional_item_cost` will do) and a group rule's
-`all_or_none` and `single_container` act only through their cost (a `stack_group` no rule names too: it is refused without
+(either `unplaced_item_cost` or `optional_item_cost` will do), `optional`
+(`optional_item_cost`: without it an optional item left out would count nowhere) and a
+group rule's `all_or_none` and `single_container` act only through their cost (a `stack_group` no rule names too: it is refused without
 `stacking_rule_cost` all the same).
 A model that sets one of them while its constraint selection leaves that cost out is
 refused with `ValueError` naming the field and the cost to add; a pick at weight 0
@@ -351,9 +354,7 @@ counts. `models.parameter_uses(model)` lists the fields an input sets, and
 every use case. It is checked where the input is the JSON model (`solve_request`,
 `solve(model)`); a compiled problem is solved as given. The sizes, `rotations`,
 `min_support_ratio`, `bottom_only` and `max_stack_height` are the decoder's and hold under
-every selection, and `optional` changes what the decoder leaves out and what
-`unplaced_item_cost` and `container_weight_cost` count; `cost` is `used_container_cost`'s
-own scale.
+every selection; `cost` is `used_container_cost`'s own scale.
 
 ### Scoring and the Python API
 
@@ -440,8 +441,9 @@ adaptive ruin-and-recreate kicks, and four moves of the domain
 - **Construction** (`construction.first_fit_decreasing`,
   `cpp/cl/construct/construction.hpp`). The items no list holds go in this order: with
   unloading orders, what leaves last first; the `optional` items after the others and the
-  higher priorities first, so that what room runs short for is what matters least; the
-  `bottom_only` items before the others, so
+  higher priorities first, so that what room runs short for is what matters least (this
+  ranks above `bottom_only`: a stackable item of a higher priority may take the floor
+  first); the `bottom_only` items before the others, so
   that they find the floor free; the items with a `max_load_on_top` after all the others,
   so that they end up on top; then group by group, the group with the most
   volume first; inside a group largest first, by volume, then by base area. Each goes
