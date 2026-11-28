@@ -111,18 +111,18 @@ class UnplacedItemCost(Constraint):
     search finds it another container or another place in the order."""
 
     name = "unplaced_item_cost"
-    label_en = "Items without a place"
-    label_ko = "자리를 찾지 못한 물품"
+    label_en = "Unplaced items"
+    label_ko = "적재 위치가 없는 물품"
     description_en = (
         "The items of a container's loading order that could not be placed: no free position "
         "inside the container where the item fits in an allowed orientation without overlapping "
         "another item and with enough of its base supported. One unit of cost is one such item; "
-        "0 means every item stands somewhere."
+        "0 means all items are placed."
     )
     description_ko = (
-        "컨테이너의 적재 순서에 있지만 놓을 자리를 찾지 못한 물품을 셉니다. 허용된 방향으로 "
+        "컨테이너의 적재 순서에 있지만 적재 위치를 찾지 못한 물품을 셉니다. 허용된 방향으로 "
         "컨테이너 안에 들어가고, 다른 물품과 겹치지 않으며, 바닥 면이 충분히 받쳐지는 위치가 "
-        "없는 경우입니다. 물품 1개가 비용 1이며, 0이면 모든 물품이 자리를 잡았습니다."
+        "없는 경우입니다. 물품 1개가 비용 1이며, 0이면 모든 물품의 적재 위치가 정해진 것입니다."
     )
 
 
