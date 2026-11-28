@@ -1,12 +1,13 @@
 # Container loading
 
-The C++ engine (`core/optimaru/`) packs boxes in three dimensions. It can load pallets
-and rack bays, plan a vehicle load around the unloading order at each stop, or pack
-an order into low-cost shipping cartons from a catalog. This use case was developed
-for optimaru and uses the extreme-point placement method of Crainic, Perboli and Tadei (2008).
+This use case packs boxes in three dimensions using the C++ engine (`core/optimaru/`).
+It can load pallets and rack bays, arrange a route's parcels for unloading at its
+stops, or minimise shipping carton cost using sizes from a catalog. The use case is
+original to optimaru and uses the extreme-point placement method of Crainic, Perboli
+and Tadei (2008).
 
-The solver chooses the **loading order** for each container. A decoder places each
-item in sequence and returns its coordinates.
+The solver chooses the **loading order** for each container. A decoder places the
+items in that order and computes their coordinates. Items that do not fit stay unplaced.
 
 Python API details: [`python.md`](python.md).
 
