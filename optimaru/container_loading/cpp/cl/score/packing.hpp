@@ -57,8 +57,9 @@ namespace cl {
 //     first place that only blocks, the first that overloads and leaving the
 //     item unplaced are weighed by ContainerLoadingProblem::breakWeights (the
 //     weights of the solve's constraints: per pair added, per unit of weight
-//     over a limit, per stacking rule, layer limit or segregation distance
-//     broken, per item left out times its priority) and the cheapest is
+//     over a limit, per place that breaks a stacking rule, a layer limit or a
+//     segregation distance, per item left out times its priority) and the
+//     cheapest is
 //     taken; of equal costs blocking, then overloading, then leaving out. A
 //     list in the construction's order (what leaves last first) comes out
 //     with every stop nearer the door than the stops after it wherever the
@@ -186,6 +187,13 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
 // point once the decode has looked at it. For the tests of that cache.
 void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,
                  const Point& point, int room[3]);
+
+// Whether an item that leaves at `order`, put at `point` in orientation `o`,
+// would block a placed box or be blocked by one, as the decoder checks it
+// (looking only at the cells that can hold such a box), and how many such
+// boxes there are, counted over every box. For the tests of the first.
+bool wouldBlock(const Packing& packing, int order, const Point& point, const Orientation& o);
+int pairsAdded(const Packing& packing, int order, const Point& point, const Orientation& o);
 
 // --- costs of one decoded container -----------------------------------------
 // Each is the raw cost of the constraint of the same name

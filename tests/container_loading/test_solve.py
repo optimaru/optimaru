@@ -516,3 +516,31 @@ def test_the_decoder_weighs_a_blocking_place_by_the_weights_of_the_solve():
     urgent.items = items
     cl.Solver(keep).solve(urgent)
     assert urgent.unplaced_items() == [] and urgent.score.hard == -2
+
+
+def test_the_decoder_weighs_an_overloading_place_by_the_weights_of_the_solve():
+    """A box that carries nothing fills the floor; a 5 kg box's only place is on it. At the default
+    weights 5,000 g over the limit cost more than one unplaced box: it is left out. With an unplaced
+    box weighted 10,000 it goes on top, and stacking_load_cost counts the 5,000."""
+    fixed = cl.Rotation.FIXED
+
+    def pallet() -> cl.ContainerLoadingProblem:
+        problem = cl.ContainerLoadingProblem(
+            [cl.Container("pallet", 4, 4, 8)],
+            [
+                cl.Item("glass", 4, 4, 4, weight=1000, rotations=fixed, max_load_on_top=0),
+                cl.Item("pans", 4, 4, 4, weight=5000, rotations=fixed),
+            ],
+        )
+        problem.set_loading([[0, 1]])
+        return problem
+
+    keep = cl.SolverConfig(stop={"time_limit_seconds": 0})
+    plain = pallet()
+    cl.Solver(keep).solve(plain)
+    assert plain.unplaced_items() == [1] and plain.score.hard == -1
+    weighted = pallet()
+    picks = replace_default(get_constraints(), "unplaced_item_cost", UnplacedItemCost(weight=10_000))
+    cl.Solver(keep).solve_with_constraints(weighted, picks)
+    assert weighted.unplaced_items() == []
+    assert cl.constraint_costs(weighted)["stacking_load_cost"]["costs"] == [5000]

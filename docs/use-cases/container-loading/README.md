@@ -251,9 +251,15 @@ is the whole problem: ten parcels for three stops in one van):
   item rather than stay out, but stays out rather than block two or put any weight on a
   box that carries no more; with the weights a warehouse system sends (an unplaced item
   1,000, a pair 10, 1 per gram) it blocks up to 100 pairs, or overloads by up to 1 kg,
-  rather than stay out. A constraint left out of the selection weighs nothing, and an
-  exponent other than 1 is read as 1. The weights are those of the last solve (the
-  defaults on a problem never solved), and `calculate_score` keeps them. So a list in
+  rather than stay out. A constraint left out of the selection weighs nothing; a rule,
+  layer limit or segregation distance counts once per place, however many it breaks; and
+  each pick counts as linear in its raw cost, whatever its exponent, offset or clip. The
+  weights are those of the last solve (the defaults on a problem never solved), and
+  `calculate_score` and `constraint_costs` keep them, whatever selection the latter is
+  given. They are not part of the JSON model: `to_core()` starts from the defaults, so a
+  model solved under other constraints is placed again as that solve placed it by a solve
+  of no steps with the same constraints (`time_limit_seconds=0`), not by
+  `calculate_score`. So a list in
   stop blocks (what leaves last first) comes out with each stop in front of the later
   ones wherever the room allows. This follows the items' facts, whether or not
   `unloading_order_cost`, `stacking_load_cost` and `stacking_rule_cost` are in the

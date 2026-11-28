@@ -903,6 +903,8 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
                                 weights.overload,
                                 static_cast<double>(overloadExcess(problem, out, weight, point,
                                                                    orientation, supports, added))));
+                    // A rule, a layer limit or a segregation distance counts once
+                    // per place, however many it breaks.
                     if (stacked && breaksStacking(problem, out, item, point, orientation, reach))
                         cost = cost.plus(Cost::of(weights.stacking, 1.0));
                     if (spaced && tooClose(problem, out, item, point, orientation))
@@ -944,6 +946,14 @@ void decode(const ContainerLoadingProblem& problem, int container, const std::ve
     out.unplacedCost = -1;
     out.segregationPairs = -1;
     out.axleExcess = -1;
+}
+
+bool wouldBlock(const Packing& packing, int order, const Point& point, const Orientation& o) {
+    return blocks(packing, order, point, o);
+}
+
+int pairsAdded(const Packing& packing, int order, const Point& point, const Orientation& o) {
+    return blockCount(packing, order, point, o);
 }
 
 void measureRoom(const ContainerLoadingProblem& problem, int container, const Packing& packing,

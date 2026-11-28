@@ -391,7 +391,13 @@ class ContainerLoadingProblemModel(StrictModel):
     def to_core(self) -> _core.ContainerLoadingProblem:
         """pydantic -> engine object. Each container's list is its `loading_order()`: what a
         solve filled in when there is one, else `initial_items`. The other outputs are
-        ignored; the engine derives them again."""
+        ignored; the engine derives them again.
+
+        The engine object starts with the default weights for what its decoder weighs when an
+        item can only break an order or a limit (the weights of a solve's constraints are not
+        part of the model). A model solved under other constraints is placed again as that
+        solve placed it by a solve of no steps with the same constraints
+        (`cl.solve(model, time_limit_seconds=0, constraints=...)`), not by `calculate_score`."""
         index = {item.id: i for i, item in enumerate(self.items)}
         return _core.ContainerLoadingProblem(
             containers=[

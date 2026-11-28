@@ -42,8 +42,9 @@ void registerMoves(optimaru::Solver<ContainerLoadingProblem>& engine, const Solv
 // What the decoder weighs when an item can only break an order or a limit:
 // the weights the constraints it is scored with put on leaving it out, on an
 // unloading pair and on a unit of weight over a limit, per level. A
-// constraint picked twice counts twice; one left out counts nothing. Each is
-// read as linear in its raw cost (an exponent other than 1 is not modelled).
+// constraint picked twice counts twice; one left out counts nothing. Only the
+// weight and the level are read: each pick counts as linear in its raw cost
+// and as a penalty, whatever its exponent, offset or clip.
 void setBreakWeights(ContainerLoadingProblem& problem,
                      const optimaru::DecomposedObjective<ContainerLoadingProblem>& calculator) {
     BreakWeights weights;

@@ -10,6 +10,8 @@
 //       stack height, no overlap, enough support, bottomOnly on the floor), a decode
 //       resumed from any shared prefix equals a decode from scratch, and the
 //       room every free point keeps equals the room measured afresh
+//   (b2) the decoder's blocking check, which looks only at the cells that can
+//       hold a blocking box, against a count over every box;
 //   (c) the costs of one decoded container by hand: stacking load (passed
 //       down, shared by contact area, exact at loads of 5.6e10), unloading
 //       order (in front, on top),
@@ -626,7 +628,8 @@ void verifyDecoderProperties() {
             Packing resumed = base;
             decode(p, 0, other, resumed, static_cast<int>(keep));
             if (!sameBoxes(resumed, fresh) || freePoints(resumed) != freePoints(fresh) ||
-                resumed.level != fresh.level || resumed.above != fresh.above)
+                resumed.level != fresh.level || resumed.above != fresh.above ||
+                resumed.carried != fresh.carried)
                 ++resumeMismatches;
             staleRoomCount += staleRooms(p, 0, resumed);
         }
@@ -637,9 +640,57 @@ void verifyDecoderProperties() {
                   " random lists decode to valid loadings (checked without the decoder)");
     check(placed > 1000 && unplaced > 100, "the lists exercise placed and unplaced items");
     check(resumeMismatches == 0,
-          "a decode resumed from a shared prefix equals the decode from scratch");
+          "a decode resumed from a shared prefix equals the decode from scratch (the loads "
+          "passed down to limited boxes included, bit for bit)");
     check(staleRoomCount == 0,
           "every free point's kept room equals the room measured afresh, resumed or not");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (b2) The unloading-order check that skips cells, against counting every box.
+// -------------------------------------------------------------------------
+void verifyBlockingCheck() {
+    std::printf("== (b2) The cell-pruned blocking check equals a count over every box ==\n");
+    std::mt19937_64 rng(23);
+    int mismatches = 0;
+    long long checked = 0;
+    long long blocking = 0;
+    for (int round = 0; round < 30; ++round) {
+        // 48 to 200 items, so the decode files the boxes in 3 to 12 cells.
+        ContainerLoadingProblem p = randomProblem(rng, 1, 48 + static_cast<int>(rng() % 153));
+        p.containers[0].length = 60;
+        p.containers[0].width = 10;
+        p.containers[0].height = 12;
+        for (Item& item : p.items) item.unloadOrder = static_cast<int>(rng() % 8);
+        ScoreCalculator::prepare(p);
+        std::vector<int> list(p.items.size());
+        for (std::size_t i = 0; i < list.size(); ++i) list[i] = static_cast<int>(i);
+        std::shuffle(list.begin(), list.end(), rng);
+        // Decode the first part of the list, then ask about every free point
+        // and orientation of every item left.
+        list.resize(list.size() * 2 / 3);
+        Packing packing;
+        decode(p, 0, list, packing);
+        for (std::size_t item = 0; item < p.items.size(); ++item) {
+            const int order = *p.items[item].unloadOrder;
+            for (const Point& point : packing.points) {
+                if (point.died != Point::kOpen) continue;
+                for (int o = p.orientationStart[item]; o < p.orientationStart[item + 1]; ++o) {
+                    const Orientation& orientation = p.orientations[static_cast<std::size_t>(o)];
+                    const bool pruned = wouldBlock(packing, order, point, orientation);
+                    const int pairs = pairsAdded(packing, order, point, orientation);
+                    ++checked;
+                    blocking += pairs > 0 ? 1 : 0;
+                    if (pruned != (pairs > 0)) ++mismatches;
+                }
+            }
+        }
+    }
+    std::printf("    %lld places checked, %lld of them blocking\n", checked, blocking);
+    check(checked > 10000 && blocking > 1000 && blocking < checked,
+          "the places checked block and do not block");
+    check(mismatches == 0, "a place blocks exactly when it adds a pair");
     std::printf("\n");
 }
 
@@ -1699,6 +1750,7 @@ void verifySolver() {
 int main() {
     verifyDecoderByHand();
     verifyDecoderProperties();
+    verifyBlockingCheck();
     verifyCostsByHand();
     verifyCache();
     verifyScoreCalculator();

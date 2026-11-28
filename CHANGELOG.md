@@ -92,7 +92,11 @@
   and the 20-stop cut trucks fall from 10.8/48.0/50.7 to 7.0/36.7/17.3 per truck; at the warehouse weights the unplaced boxes there fall by
   40–75%. The 15-stop catalog trucks reach hard 0 within 0.2 s where they took up to 5 s.
   Loads without unloading orders, limits or rules are decoded exactly as before (the
-  benchmarks give the same results at the same speed).
+  benchmarks give the same results at the same speed). The demo with stacking limits runs at
+  34,000 steps per second as with #174; 0.9.0 ran it at 46,000 (the decoder now looks past
+  places that would overload a box). The decoder's weights are not part of the JSON model: a
+  model solved under other constraints is placed again as that solve placed it by a solve of no
+  steps with the same constraints.
 
 - **Container loading: vehicle loads in stop order.** A cargo space with items for many stops
   often came back with hundreds of unloading-order pairs left. Four changes:
