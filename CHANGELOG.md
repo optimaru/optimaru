@@ -9,8 +9,8 @@ order picking (`OrderPickingSolution` takes a `warehouse`, `calculate_distance` 
 `LocationModel.column` is a string; C++ `op::Warehouse` is an object), several C++ header moves
 (`model/` is `solution/`, no umbrella header, `accept/` and `select/` back at the top,
 `LocalSearch` is `Solver::run`), and every random draw now goes through the engine's own
-functions, so a seeded solve gives another (equally good) result than 0.8.0 did, with the same draws on
-every platform.
+functions, so a seeded solve gives a different (equally good) result from 0.8.0's, and the same
+draws on every platform.
 
 - **New use case: container loading (`optimaru.container_loading`).** Three-dimensional loading
   of boxes into containers: pallets and rack bays, a vehicle's cargo space in the order of its
