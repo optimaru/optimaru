@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Container loading: container types with a quantity.** A `ContainerModel` takes `quantity`
+  (1 by default, as before; n = up to n alike; None = as many as needed), so a carton catalog or a
+  fleet lists each type once; the engine gets the copies (`id#1`, `id#2`, ..., tagged with the
+  type's id) and the solved model reports the used ones in the type's `instances`. A warm start
+  takes `initial_instances`; `with_initial_solution` and solving a solved model go on from the
+  instances. Listing copies still works.
 - **Container loading: axle loads.** Container `tare_weight` and `axle_groups` (two: `id`,
   `position` from the closed end, `max_load`, optional `empty_load`), the loads by the lever rule
   at departure and after each stop's items are unloaded, scored by the new hard constraint

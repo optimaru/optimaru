@@ -13,6 +13,7 @@ from optimaru.container_loading.models import (
     ContainerModel,
     ItemModel,
     solve_request,
+    with_initial_solution,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -60,6 +61,8 @@ def test_the_field_names_are_the_contract():
         "tags",
         "tare_weight",
         "axle_groups",
+        "quantity",
+        "initial_instances",
         "initial_items",
         "items",
         "unplaced_items",
@@ -68,6 +71,7 @@ def test_the_field_names_are_the_contract():
         "fill_ratio",
         "used_length",
         "axle_loads",
+        "instances",
     ]
     assert list(ItemModel.model_fields) == [
         "id",
@@ -288,6 +292,23 @@ def test_solve_request_is_solve_with_the_request_settings():
             ),
             "tare_weight or the empty loads",
         ),
+        (lambda data: data["containers"][0].update(quantity=0), "greater than or equal to 1"),
+        (lambda data: data["containers"][0].update(initial_instances=[["stop1-crate"]]), "for a quantity other than 1"),
+        (
+            lambda data: data["containers"][0].update(quantity=2, initial_items=["stop1-crate"]),
+            "takes initial_instances",
+        ),
+        (
+            lambda data: (
+                data["containers"].append(dict(data["containers"][0], id="van-1#1"))
+                or data["containers"][0].update(quantity=2)
+            ),
+            "must not look like the copies",
+        ),
+        (
+            lambda data: data["containers"][0].update(quantity=2, initial_instances=[["stop1-crate"], [], []]),
+            "more loading orders than its quantity",
+        ),
         (lambda data: data.update(segregation_rules=[{"a": "x", "b": "y", "distance": 0}]), "greater than 0"),
         (lambda data: data.update(segregation_rules=[{"a": "", "b": "y"}]), "at least 1 character"),
         (lambda data: data["items"][0].update(segregation_class=""), "at least 1 character"),
@@ -425,3 +446,60 @@ def test_axle_groups_go_through_and_the_loads_come_back_by_stage():
     assert loads[0].loads == pytest.approx({"front": 65.0, "rear": 85.0})
     assert loads[1].loads == pytest.approx({"front": 70.0, "rear": 30.0})
     assert solved.containers[0].axle_groups == model.containers[0].axle_groups
+
+
+def _cartons(quantity, **container):
+    return ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [{"id": "box", "length": 8, "width": 4, "height": 4, "quantity": quantity, **container}],
+            "items": [{"id": f"c{i}", "length": 4, "width": 4, "height": 4, "rotations": "fixed"} for i in range(5)],
+        }
+    )
+
+
+def test_a_type_with_a_quantity_is_its_copies_and_reports_the_used_ones():
+    """Five cubes, two to a box: three boxes of the type are used, reported as instances."""
+    model = _cartons(4)
+    assert [copy_id for _, copy_id, _ in model.copies()] == ["box#1", "box#2", "box#3", "box#4"]
+    solved = cl.solve(model, time_limit_seconds=1.0, random_seed=0)
+    box = solved.containers[0]
+    assert (solved.score_hard, solved.containers_used) == (0, 3)
+    assert box.items is None and box.quantity == 4
+    assert [len(instance.items) for instance in box.instances] == [2, 2, 1] or sorted(
+        len(instance.items) for instance in box.instances
+    ) == [1, 2, 2]
+    assert {item.container for item in solved.items} == {instance.id for instance in box.instances}
+    # A solved model goes on from its instances, and with_initial_solution carries them over.
+    again = cl.solve(solved, config=cl.SolverConfig(stop={"time_limit_seconds": 0}))
+    assert [instance.items for instance in again.containers[0].instances] == [i.items for i in box.instances]
+    seeded = with_initial_solution(model, solved)
+    assert seeded.containers[0].initial_instances == [instance.items for instance in box.instances]
+    assert cl.solve(seeded, config=cl.SolverConfig(stop={"time_limit_seconds": 0})).score_hard == 0
+
+
+def test_too_few_copies_leave_items_out_and_as_many_as_needed_does_not():
+    short = cl.solve(_cartons(2), time_limit_seconds=0.5, random_seed=0)
+    assert short.score_hard == -1 and len(short.unplaced_items) == 1
+    needed = _cartons(None)
+    assert needed.needed_copies(needed.containers[0]) == 5  # 2 x 3 + 1 for five cubes, at most one per cube
+    solved = cl.solve(needed, time_limit_seconds=0.5, random_seed=0)
+    assert (solved.score_hard, solved.containers_used) == (0, 3)
+
+
+def test_listing_copies_still_works_and_allowed_containers_name_a_type():
+    model = ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [
+                {"id": "dry", "length": 8, "width": 4, "height": 4, "quantity": None},
+                {"id": "cold-1", "length": 8, "width": 4, "height": 4, "tags": ["reefer"]},
+            ],
+            "items": [
+                {"id": "milk", "length": 4, "width": 4, "height": 4, "allowed_containers": ["reefer"]},
+                {"id": "flour", "length": 4, "width": 4, "height": 4, "allowed_containers": ["dry"]},
+            ],
+        }
+    )
+    solved = cl.solve(model, time_limit_seconds=0.5, random_seed=0)
+    by_id = {item.id: item for item in solved.items}
+    assert solved.score_hard == 0
+    assert by_id["milk"].container == "cold-1" and by_id["flour"].container.startswith("dry#")
