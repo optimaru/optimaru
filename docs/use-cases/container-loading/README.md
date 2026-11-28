@@ -320,9 +320,9 @@ adaptive ruin-and-recreate kicks, and three moves of the domain
   unloading orders, what leaves last first; the items with a `max_load_on_top` after all
   the others, so that they end up on top; then group by group, the group with the most
   volume first; inside a group largest first, by volume, then by base area. Each goes
-  into the first container that *takes* it: one whose weight limit holds and whose decode
-  still places everything it placed before plus the new item, with no more weight on an
-  item than it carries and no more items in the way of an earlier stop than before.
+  into the first container that *takes* it: one whose weight limit holds and whose decode,
+  with the new item added, leaves no more items unplaced than before, no more weight on an
+  item than it carries and no more items in the way of an earlier stop.
   Containers are tried in this order: those that already hold an item of the item's
   group, the other containers in use, then the empty ones, cheapest per volume first. An
   item no container takes goes to the one with the most free volume. It is
@@ -332,7 +332,8 @@ adaptive ruin-and-recreate kicks, and three moves of the domain
   container stops costing only once its last item has left, which no single-item move can
   show the acceptor. This move takes one of the least filled containers in use and moves
   its items, largest first, each to the fullest other container that still takes it (as
-  above). What no other container takes stays, so the move may be partial: the score
+  above, and the moved item itself must find a place there). What no other container
+  takes stays, so the move may be partial: the score
   stays and the source is nearer to empty.
 - **`RepackPairMove`** (`custom_moves.repack`). `group_split_cost` is a step function
   too: a group spread over two containers costs the same until its last item has joined

@@ -56,17 +56,20 @@ void constructLoading(ContainerLoadingProblem& problem) {
     // A group's items go one after the other, the group with the most volume
     // first: what belongs together then fills the same containers. An item
     // without a group stands for itself.
-    std::vector<std::int64_t> groupVolume(static_cast<std::size_t>(problem.groupCount), 0);
+    // Summed in double: a group's volume is not bounded by a container's, and
+    // an int64 sum of items near the size limits could overflow.
+    std::vector<double> groupVolume(static_cast<std::size_t>(problem.groupCount), 0.0);
     for (int item : pending) {
         const int group = problem.groupOf[static_cast<std::size_t>(item)];
         if (group >= 0)
             groupVolume[static_cast<std::size_t>(group)] +=
-                    problem.items[static_cast<std::size_t>(item)].volume();
+                    static_cast<double>(problem.items[static_cast<std::size_t>(item)].volume());
     }
     const auto together = [&problem, &groupVolume](int item) {
         const int group = problem.groupOf[static_cast<std::size_t>(item)];
         return group >= 0 ? groupVolume[static_cast<std::size_t>(group)]
-                          : problem.items[static_cast<std::size_t>(item)].volume();
+                          : static_cast<double>(
+                                    problem.items[static_cast<std::size_t>(item)].volume());
     };
     std::stable_sort(pending.begin(), pending.end(), [&problem, &together](int a, int b) {
         const Item& first = problem.items[static_cast<std::size_t>(a)];

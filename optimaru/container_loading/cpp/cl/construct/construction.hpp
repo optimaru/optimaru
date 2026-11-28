@@ -30,9 +30,9 @@ bool loadsBefore(const ContainerLoadingProblem& problem, int a, int b);
 // first (an item without a group stands for itself); inside a group largest
 // first, by volume, then by base area. Each goes into
 // the first container that takes it: one whose weight limit holds and whose
-// decode still places everything it placed before plus the new item, with no
-// more weight on an item than it carries and no more items in the way of an
-// earlier stop than before. Containers are
+// decode, with the new item added, leaves no more items unplaced than before,
+// no more weight on an item than it carries and no more items in the way of an
+// earlier stop. Containers are
 // tried in this order: those
 // that already hold an item of the item's group, the other containers in use,
 // then the empty ones, cheapest per volume first.

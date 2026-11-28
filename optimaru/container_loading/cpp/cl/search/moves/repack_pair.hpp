@@ -89,17 +89,18 @@ public:
             pool_.insert(pool_.end(), list.begin(), list.end());
         }
         optimaru::random_shuffle(pool_.begin(), pool_.end(), rng);  // random among equals
-        groupVolume_.assign(static_cast<std::size_t>(problem.groupCount), 0);
+        groupVolume_.assign(static_cast<std::size_t>(problem.groupCount), 0.0);
         for (int item : pool_) {
             const int group = problem.groupOf[static_cast<std::size_t>(item)];
             if (group >= 0)
                 groupVolume_[static_cast<std::size_t>(group)] +=
-                        problem.items[static_cast<std::size_t>(item)].volume();
+                        static_cast<double>(problem.items[static_cast<std::size_t>(item)].volume());
         }
         const auto together = [this, &problem](int item) {
             const int group = problem.groupOf[static_cast<std::size_t>(item)];
             return group >= 0 ? groupVolume_[static_cast<std::size_t>(group)]
-                              : problem.items[static_cast<std::size_t>(item)].volume();
+                              : static_cast<double>(
+                                        problem.items[static_cast<std::size_t>(item)].volume());
         };
         std::stable_sort(pool_.begin(), pool_.end(), [&problem, &together](int a, int b) {
             if (together(a) != together(b)) return together(a) > together(b);
@@ -247,7 +248,7 @@ private:
     std::vector<int> sharing_;
     std::vector<char> inFirst_;
     std::vector<int> pool_;
-    std::vector<std::int64_t> groupVolume_;
+    std::vector<double> groupVolume_;  // a sum over many items: double, no int64 overflow
     std::vector<int> spare_;
     std::vector<int> plan_[3];
     std::vector<int> trial_;

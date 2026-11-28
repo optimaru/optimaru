@@ -15,6 +15,9 @@
 //       every constraint weighted, repeated and shifted components included
 //   (h) a step-limited solve(problem, calculator) under ScoreChecks::Full; the
 //       score it reports == a fresh recompute of the same assembly
+//   (i) groupSplitCost's previews when both changed containers hold the same
+//       group, by hand: a group leaving one container, moving between two,
+//       and two groups changing at once
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -563,6 +566,76 @@ void verifyPreviews() {
 }
 
 // -------------------------------------------------------------------------
+// (i) groupSplitCost previews where both changed units share a group.
+// -------------------------------------------------------------------------
+void verifyGroupSplitPreviews() {
+    std::printf("== (i) groupSplitCost previews, two units sharing a group ==\n");
+    ContainerLoadingProblem p;
+    for (int c = 0; c < 3; ++c) addContainer(p, 10, 10, 10);
+    const auto item = [&p](const char* group) {
+        const int index = addItem(p, 2, 2, 2);
+        if (group != nullptr) itemOf(p, index).group = group;
+        return index;
+    };
+    const int g0 = item("g"), g1 = item("g"), g2 = item("g");
+    const int h0 = item("h"), h1 = item("h");
+    const int x = item(nullptr), y = item(nullptr), z = item(nullptr);
+    // A = [g0 g1 x], B = [g2 y h0], C = [z h1]: g in A and B, h in B and C.
+    p.containers[0].items = {g0, g1, x};
+    p.containers[1].items = {g2, y, h0};
+    p.containers[2].items = {z, h1};
+    ScoreCalculator::prepare(p);
+
+    DecomposedCalculator calculator;
+    defaultConstraints().only({"groupSplitCost"}).into(calculator);
+    optimaru::Editor<ContainerLoadingProblem> editor(p, calculator, optimaru::ScoreChecks::Full);
+    checkScore("start: g and h are each split once", editor.score(), 0, -2.0);
+
+    const auto setLists = [&](const std::vector<std::vector<int>>& lists) {
+        for (std::size_t c = 0; c < lists.size(); ++c) {
+            if (p.containers[c].items == lists[c]) continue;
+            editor.begin_list_edit(static_cast<int>(c));
+            p.containers[c].items = lists[c];
+            editor.end_list_edit(static_cast<int>(c));
+        }
+    };
+    const std::vector<std::vector<int>> start = {p.containers[0].items, p.containers[1].items,
+                                                 p.containers[2].items};
+    // Check a served preview against the applied move and the hand count, then undo.
+    const auto expect = [&](const std::string& label, bool served, const Score& preview,
+                            const std::vector<std::vector<int>>& after, double soft) {
+        check(served, label + ": the preview is served");
+        setLists(after);
+        const Score applied = editor.score();
+        check(sameScore(preview, applied), label + ": preview == applied score");
+        checkScore(label, applied, 0, soft);
+        setLists(start);
+    };
+
+    Score preview;
+    // g leaves B for A; x goes the other way: g is together, h still split.
+    bool served = calculator.preview_swap(0, 2, 1, 0, preview);
+    expect("swap g2 <-> x: g joins A", served, preview, {{g0, g1, g2}, {x, y, h0}, {z, h1}}, -1.0);
+    // g's B item moves to C: g leaves B and enters C, the -1 and +1 cancel.
+    served = calculator.preview_segment_move(1, 0, 1, 2, 0, preview);
+    expect("move g2 B -> C: g still split", served, preview, {{g0, g1, x}, {y, h0}, {g2, z, h1}},
+           -2.0);
+    // h's B item swaps with C's z: h ends in C alone, both units saw h.
+    served = calculator.preview_swap(1, 2, 2, 0, preview);
+    expect("swap h0 <-> z: h joins C", served, preview, {{g0, g1, x}, {g2, y, z}, {h0, h1}}, -1.0);
+    // [g2 y] from B to A for x: g together in A, h unchanged (B and C).
+    served = calculator.preview_exchange(0, 2, 1, 1, 0, 2, preview);
+    expect("exchange [x] <-> [g2 y]: g joins A", served, preview,
+           {{g0, g1, g2, y}, {x, h0}, {z, h1}}, -1.0);
+    // B's g2 for C's h1: g moves from B to C (still split), h gathers in B.
+    served = calculator.preview_exchange(1, 0, 1, 2, 1, 1, preview);
+    expect("exchange [g2] <-> [h1]: h joins B", served, preview,
+           {{g0, g1, x}, {h1, y, h0}, {z, g2}}, -1.0);
+    check(editor.score() == Score{0, -2.0}, "the start's score is back after the undos");
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
 // (h) ScoreChecks::Full solves on the plugin path.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve() {
@@ -620,6 +693,7 @@ int main() {
     verifyConstraintTotals();
     verifyPreviews();
     verifyFullAssertSolve();
+    verifyGroupSplitPreviews();
 
     if (failures == 0) {
         std::printf("All container-loading plugin checks PASSED.\n");

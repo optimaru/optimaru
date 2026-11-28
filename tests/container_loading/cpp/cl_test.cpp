@@ -15,7 +15,8 @@
 //       list kept, later stops loaded first, deterministic
 //   (g) the moves: EmptyContainerMove empties a container, RepackPairMove
 //       gathers the groups two containers share, SwitchContainerMove moves a
-//       load to a cheaper container or splits it over two, all undo exactly
+//       load to a cheaper container or splits it over two (never over ones
+//       that cost more together), all undo exactly
 //   (h) the solver: the demo under ScoreChecks::Full, a zero budget returns the
 //       construction, parallel starts return the best single start
 #include <algorithm>
@@ -885,6 +886,44 @@ void verifyMoves() {
               "a load too heavy for one small carton is split over two: -3.5 to -2");
         harness.undo(move);
         check(listsOf(p) == lists, "and the split is undone exactly");
+    }
+    {
+        // The same load, but the small cartons cost 2 each: the split would
+        // open 4 for a carton of 3.5 and stops there, and the whole load does
+        // not fit one small carton's weight limit. Nothing is in use besides
+        // the large carton, so the fallback has nowhere to go either.
+        for (const double smallCost : {2.0, 1.75}) {
+            ContainerLoadingProblem p;
+            addContainer(p, 4, 2, 2);
+            addContainer(p, 4, 2, 2);
+            addContainer(p, 6, 4, 4);
+            p.containers[0].maxWeight = p.containers[1].maxWeight = 5;
+            p.containers[0].cost = p.containers[1].cost = smallCost;
+            p.containers[2].cost = 3.5;
+            p.containers[2].items = {addItem(p, 2, 2, 2, Rotation::Fixed, 4),
+                                     addItem(p, 2, 2, 2, Rotation::Fixed, 4)};
+            ScoreCalculator::prepare(p);
+            MoveHarness harness(p);
+            const auto lists = listsOf(p);
+            SwitchContainerMove move(p);
+            bool anyApplied = false;
+            bool everSplit = false;
+            for (std::uint64_t seed = 0; seed < 16; ++seed) {
+                std::mt19937_64 rng(seed);
+                if (!harness.apply(move, rng)) continue;
+                anyApplied = true;
+                everSplit = everSplit || (p.containers[2].items.empty() &&
+                                          harness.editor.score() == Score{0, -2 * smallCost});
+                harness.undo(move);
+            }
+            if (smallCost > 1.75) {
+                check(!anyApplied && listsOf(p) == lists,
+                      "a split dearer than the carton it leaves is not made (2 + 2 > 3.5)");
+            } else {
+                check(everSplit && listsOf(p) == lists,
+                      "and one that costs exactly as much is (1.75 + 1.75 = 3.5)");
+            }
+        }
     }
     std::printf("\n");
 }

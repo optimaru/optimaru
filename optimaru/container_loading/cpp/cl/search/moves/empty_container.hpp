@@ -26,9 +26,15 @@ namespace cl {
 // items, largest first (random among equal volumes), each to the fullest
 // other container in use that still takes it: one whose weight limit holds
 // and whose decode, with the item added where its unloading order asks,
-// places the item and everything it placed before, with no more weight on an
-// item than it carries and no more items in the way of an earlier stop than
-// before.
+// places the item, leaves no more items unplaced than before, and has no more
+// weight above what an item carries and no more items in the way of an
+// earlier stop than before. (The unplaced count is compared, not the set: an
+// item of the target may trade its place with one that had none. The hard
+// score is the same either way.)
+//
+// "In use" here means the list is not empty, placed or not; the score's
+// usedContainerCost counts only containers with a placed item. The acceptor
+// judges every move, so the difference only widens what the move tries.
 //
 // Items no other container takes stay where they are. The move is then a
 // partial one: the score usually stays, and the source is nearer to empty for
@@ -59,19 +65,21 @@ public:
         saved_.clear();
 
         // Census: the containers in use, with the volume and weight of their lists.
+        // A list's volume counts its unplaced items too, so it is not bounded by
+        // the container's and is summed in double (an int64 could overflow).
         used_.clear();
-        volume_.assign(containerCount, 0);
+        volume_.assign(containerCount, 0.0);
         weight_.assign(containerCount, 0);
         for (std::size_t c = 0; c < containerCount; ++c) {
             const Container& container = problem.containers[c];
             if (container.items.empty()) continue;
             for (int item : container.items) {
-                volume_[c] += problem.items[static_cast<std::size_t>(item)].volume();
+                volume_[c] +=
+                        static_cast<double>(problem.items[static_cast<std::size_t>(item)].volume());
                 weight_[c] += problem.items[static_cast<std::size_t>(item)].weight;
             }
-            used_.push_back(
-                    {static_cast<double>(volume_[c]) / static_cast<double>(container.volume()),
-                     rng(), static_cast<int>(c)});
+            used_.push_back({volume_[c] / static_cast<double>(container.volume()), rng(),
+                             static_cast<int>(c)});
         }
         if (used_.size() < 2) return relocateOneItem(ctx, rng, entities, saved_);
 
@@ -102,7 +110,9 @@ public:
                 const auto index = static_cast<std::size_t>(c);
                 if (c == source) continue;
                 const Container& container = problem.containers[index];
-                if (volume_[index] + box.volume() > container.volume()) continue;
+                if (volume_[index] + static_cast<double>(box.volume()) >
+                    static_cast<double>(container.volume()))
+                    continue;
                 if (container.maxWeight && weight_[index] + box.weight > *container.maxWeight)
                     continue;
                 if (!planned_[index]) {
@@ -128,7 +138,7 @@ public:
                 broken_[index] = broken;
                 unplaced_[index] = after.unplaced();
                 plan_[index].swap(trial_);
-                volume_[index] += box.volume();
+                volume_[index] += static_cast<double>(box.volume());
                 weight_[index] += box.weight;
                 moved_.push_back(item);
                 break;
@@ -172,7 +182,7 @@ private:
 
     // Scratch, reused across moves.
     std::vector<Candidate> used_;
-    std::vector<std::int64_t> volume_;
+    std::vector<double> volume_;
     std::vector<std::int64_t> weight_;
     std::vector<int> members_;
     std::vector<std::vector<int>> plan_;

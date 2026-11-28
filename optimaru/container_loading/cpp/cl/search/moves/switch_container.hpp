@@ -103,16 +103,18 @@ private:
                int source) {
         ContainerLoadingProblem& problem = ctx.editor.solution();
         const std::vector<int> list = problem.containers[static_cast<std::size_t>(source)].items;
-        std::int64_t volume = 0;
+        double volume = 0.0;  // unplaced items included, so in double (no int64 overflow)
         std::int64_t weight = 0;
         for (int item : list) {
-            volume += problem.items[static_cast<std::size_t>(item)].volume();
+            volume += static_cast<double>(problem.items[static_cast<std::size_t>(item)].volume());
             weight += problem.items[static_cast<std::size_t>(item)].weight;
         }
         fitting_.clear();
         for (int target : targets_) {
             const Container& to = problem.containers[static_cast<std::size_t>(target)];
-            if (to.volume() < volume || (to.maxWeight && weight > *to.maxWeight)) continue;
+            if (static_cast<double>(to.volume()) < volume ||
+                (to.maxWeight && weight > *to.maxWeight))
+                continue;
             fitting_.push_back(target);
         }
         if (fitting_.empty()) return false;

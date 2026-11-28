@@ -16,6 +16,10 @@ namespace cl {
 // What the domain's moves share: writing whole lists through the editor,
 // taking them back, drawing one of a list, and the small move they fall back
 // on.
+//
+// In the moves a container is "in use" when its list is not empty, placed or
+// not; usedContainerCost and containers_used() count only containers with a
+// placed item. Not a bug: the acceptor judges every move by the score.
 
 // One of `list`'s elements, uniformly (the list is not empty).
 template <typename T>

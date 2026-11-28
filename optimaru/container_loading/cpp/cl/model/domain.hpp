@@ -24,8 +24,11 @@ namespace cl {
 using Score = optimaru::Score;
 
 // Lengths and weights are whole numbers in the caller's unit (the guide's
-// examples use mm and g). The bounds keep a volume inside an int64 and a hard
-// cost far below the engine's limit for one contribution.
+// examples use mm and g). The bounds keep one item's or one container's
+// volume inside an int64 (and so the volume of what a container holds, which
+// cannot exceed its own), and a hard cost far below the engine's limit for one
+// contribution. Sums over a whole list (unplaced items included) or a group
+// are taken in double where the moves and the construction compare them.
 constexpr int kMaxLength = 1'000'000;
 constexpr std::int64_t kMaxWeight = 1'000'000'000;
 
