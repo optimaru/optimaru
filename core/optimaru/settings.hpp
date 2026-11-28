@@ -12,11 +12,11 @@
 #include <vector>
 
 #include "optimaru/score/score.hpp"
-// Only the plugin point, never the schemes umbrella: search/select/schemes.hpp
+// Only the plugin point, never the schemes umbrella: select/schemes.hpp
 // includes this header back, so including it here would be a cycle. Which
 // side of it wins depends on include order, so it built for some translation
 // units and left SelectionScheme undefined for others.
-#include "optimaru/search/select/scheme.hpp"
+#include "optimaru/select/scheme.hpp"
 
 namespace optimaru {
 
@@ -222,7 +222,7 @@ struct AlnsSettings {
     int max_ruin_count = 60;
     // Operator adaptation. RouletteWheel is w = decay*w + (1-decay)*reward,
     // rewards indexed by MoveOutcome (NewBest / Better / Accepted / Rejected);
-    // see search/select/ for the other three schemes.
+    // see select/ for the other three schemes.
     SelectionScheme selection_type = SelectionScheme::RouletteWheel;
     double operator_decay = 0.8;
     std::vector<double> rewards{33.0, 9.0, 3.0, 0.0};

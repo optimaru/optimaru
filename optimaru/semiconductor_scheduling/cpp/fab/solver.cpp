@@ -15,7 +15,7 @@
 #include "fab/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/search/accept/acceptors.hpp"
+#include "optimaru/accept/acceptors.hpp"
 
 namespace fab {
 

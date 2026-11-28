@@ -32,7 +32,7 @@
 //       a bin, fills one, trades between two full bins and finds no trade
 //       where there is none, and never adds a hard violation on a plain
 //       instance
-//   (k) FillLateAcceptance (bp/search/accept/fill_late_acceptance.hpp): a step that keeps
+//   (k) FillLateAcceptance (bp/accept/fill_late_acceptance.hpp): a step that keeps
 //       the score is taken when the fill does not fall and about one time
 //       in eight when it does, a refusal leaves the acceptor's copy as it
 //       was, a step that changes the score follows late acceptance, an
@@ -53,7 +53,7 @@
 
 #include "bp/construct/construction.hpp"
 #include "bp/model/domain.hpp"
-#include "bp/search/accept/fill_late_acceptance.hpp"
+#include "bp/accept/fill_late_acceptance.hpp"
 #include "bp/score/incremental_calculator.hpp"
 #include "bp/search/moves/moves.hpp"
 #include "bp/score/score_calculator.hpp"

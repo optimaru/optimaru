@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_SEARCH_ACCEPT_ACCEPTORS_HPP
-#define OPTIMARU_SEARCH_ACCEPT_ACCEPTORS_HPP
+#ifndef OPTIMARU_ACCEPT_ACCEPTORS_HPP
+#define OPTIMARU_ACCEPT_ACCEPTORS_HPP
 
 // The Acceptor interface and every built-in acceptance rule, one per file,
 // plus the factory.
@@ -10,14 +10,14 @@
 #include <cstdint>
 #include <memory>
 
-#include "optimaru/search/accept/acceptor.hpp"
-#include "optimaru/search/accept/hill_climbing.hpp"
-#include "optimaru/search/accept/late_acceptance.hpp"
-#include "optimaru/search/accept/entity_tabu.hpp"
-#include "optimaru/search/accept/simulated_annealing.hpp"
-#include "optimaru/search/accept/great_deluge.hpp"
-#include "optimaru/search/accept/step_counting_hill_climbing.hpp"
-#include "optimaru/search/accept/record_to_record_travel.hpp"
+#include "optimaru/accept/acceptor.hpp"
+#include "optimaru/accept/hill_climbing.hpp"
+#include "optimaru/accept/late_acceptance.hpp"
+#include "optimaru/accept/entity_tabu.hpp"
+#include "optimaru/accept/simulated_annealing.hpp"
+#include "optimaru/accept/great_deluge.hpp"
+#include "optimaru/accept/step_counting_hill_climbing.hpp"
+#include "optimaru/accept/record_to_record_travel.hpp"
 #include "optimaru/score/levels.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/settings.hpp"
@@ -66,4 +66,4 @@ std::unique_ptr<Acceptor> make_acceptor(const Settings& config, const Score& ini
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_SEARCH_ACCEPT_ACCEPTORS_HPP
+#endif  // OPTIMARU_ACCEPT_ACCEPTORS_HPP

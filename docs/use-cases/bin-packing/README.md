@@ -145,7 +145,7 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 - `construction` — best-fit decreasing around a seed, compaction
 - `optimaru/bin_packing/cpp/bp/search/moves/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
   and `TradeMove` (header-only, so the tests drive them directly)
-- `optimaru/bin_packing/cpp/bp/search/accept/fill_late_acceptance.hpp` — late acceptance with the rule for a
+- `optimaru/bin_packing/cpp/bp/accept/fill_late_acceptance.hpp` — late acceptance with the rule for a
   step that keeps the score (`acceptance.fill_tie_break`)
 - `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
@@ -207,7 +207,7 @@ of bins has the same score, and plain late acceptance takes every step from one 
 next, so the change and swap moves undo what `TradeMove` gains. With `acceptance.fill_tie_break`
 (the default) such a step is taken when it does not lower the *fill*, the sum of the
 squared bin loads, and otherwise one time in eight
-(`optimaru/bin_packing/cpp/bp/search/accept/fill_late_acceptance.hpp`). The fill is not part
+(`optimaru/bin_packing/cpp/bp/accept/fill_late_acceptance.hpp`). The fill is not part
 of the score: the score, `stop.target_score`, the unimproved limits and `on_new_best` see
 the number of bins alone. A step that changes the score is judged as before.
 

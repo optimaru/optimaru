@@ -37,8 +37,8 @@ def test_a_use_case_keeps_only_its_sources_under_cpp():
     Inside cpp/<ns>/ every use case files by role, under the names the engine uses in
     core/optimaru/: the entry points (solver, constraints.hpp) at the top, model/ (the
     domain and its data), score/ (the monolithic calculators), constraints/ (one component per
-    file), and, where the use case has its own, construct/ and search/ (its moves/ and accept/,
-    as in the engine's search/)."""
+    file), and, where the use case has its own, construct/, search/ (its moves/, as in the
+    engine's search/) and accept/."""
     tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)
     if tracked.returncode != 0:
         pytest.skip("not a git checkout")
@@ -54,8 +54,8 @@ def test_a_use_case_keeps_only_its_sources_under_cpp():
     # School timetabling has a second entry point next to solver: the canonical model's own
     # solver and constraint assembly.
     canonical = {"canonical_solver.hpp", "canonical_solver.cpp", "canonical_constraints.hpp"}
-    roles = {"model", "score", "constraints", "construct", "search"}
-    search_roles = {"moves", "accept"}
+    roles = {"model", "score", "constraints", "construct", "search", "accept"}
+    search_roles = {"moves"}
     for name in sorted(USE_CASES):
         extra = entries[name] - {"CMakeLists.txt", "bindings.cpp", "main.cpp"}
         assert len(extra) == 1, (name, extra)

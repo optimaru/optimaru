@@ -505,7 +505,7 @@ optimaru/<use case>/
         │                            tuned incremental score (default path)
         ├── constraints/*_cost.hpp   one plugin component per constraint
         └── construct/, search/      only where the use case has its own
-            (moves/, accept/)        construction, moves or acceptor
+            (moves/), accept/        construction, moves or acceptor
 tests/<use case>/
 ├── test_*.py                        pytest suite
 └── cpp/<ns>_test.cpp, <ns>_plugin_test.cpp

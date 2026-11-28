@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Breaking (C++): `accept/` and `select/` are folders of the engine again.** The acceptance
+  rules and the adaptive operator selection are not operators the step loop draws: they decide
+  whether it keeps a move and which operator it draws next, for moves and ruin-and-recreate
+  alike. They move out of `search/` to `core/optimaru/accept/` and `core/optimaru/select/`;
+  `search/` keeps the operators (`operators.hpp`, `strategies.hpp`, `moves/`,
+  `ruin_recreate/`). C++ that includes them follows the paths (`"optimaru/accept/acceptors.hpp"`,
+  `"optimaru/select/schemes.hpp"`), and the include guards are `OPTIMARU_ACCEPT_*` and
+  `OPTIMARU_SELECT_*`. Bin packing's own acceptor moves the same way, to `bp/accept/`. Nothing
+  changes in the Python package or in what the solvers do.
 - **Breaking (C++): the step loop is the solver's.** `optimaru::LocalSearch` and
   `search/local_search.hpp` are gone. What the class ran was never one local search: it is the
   whole iteration of a solve (choose a move, score it, ask the acceptor, tell the selectors, and
@@ -11,8 +20,8 @@
   stagnation kick to `search/ruin_recreate/kick.hpp` (`StagnationKick`), the ruin operators of a
   solve and their adaptive selection to `search/ruin_recreate/ruin_pool.hpp` (`RuinPool`), the
   built-in strategies and the draw among them to `search/strategies.hpp` (`BuiltinStrategies`),
-  the acceptor factory to `search/accept/acceptors.hpp` (`make_acceptor`) and the outcome of a
-  candidate to `search/select/scheme.hpp` (`classify_outcome`). `Solver`'s public interface is
+  the acceptor factory to `accept/acceptors.hpp` (`make_acceptor`) and the outcome of a
+  candidate to `select/scheme.hpp` (`classify_outcome`). `Solver`'s public interface is
   unchanged, and so is every solve: the same seed and step limit give the same result. Nothing
   changes in the Python package.
 - **Fix: a kick on a single entity or element.** With one entity (or one element) and kicks on,

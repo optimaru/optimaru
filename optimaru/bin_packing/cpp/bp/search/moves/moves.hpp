@@ -377,7 +377,7 @@ private:
 // The move cannot hold what it gains on its own: plain late acceptance takes
 // every step that keeps the score, and the change and swap moves undo the
 // trades as fast as they are made. FillLateAcceptance
-// (bp/search/accept/fill_late_acceptance.hpp) compares equal scores by the same sum of
+// (bp/accept/fill_late_acceptance.hpp) compares equal scores by the same sum of
 // squared loads; the two are meant to run together.
 //
 // It checks the capacity only; colours and conflicts are judged by the

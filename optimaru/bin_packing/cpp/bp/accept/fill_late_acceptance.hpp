@@ -1,5 +1,5 @@
-#ifndef BP_SEARCH_ACCEPT_FILL_LATE_ACCEPTANCE_HPP
-#define BP_SEARCH_ACCEPT_FILL_LATE_ACCEPTANCE_HPP
+#ifndef BP_ACCEPT_FILL_LATE_ACCEPTANCE_HPP
+#define BP_ACCEPT_FILL_LATE_ACCEPTANCE_HPP
 
 #include <algorithm>
 #include <cstddef>
@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "bp/model/domain.hpp"
-#include "optimaru/search/accept/acceptor.hpp"
+#include "optimaru/accept/acceptor.hpp"
 
 namespace bp {
 
