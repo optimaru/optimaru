@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+**From 0.8.0.** Two new use cases, box sizing (`optimaru.box_sizing`, the 23rd) and container
+loading (`optimaru.container_loading`, the 24th), and order picking on any warehouse layout (a
+grid of any size, or named locations with a distance table). **Breaking:** some public names of
+order picking (`OrderPickingSolution` takes a `warehouse`, `calculate_distance` a third argument,
+`LocationModel.column` is a string; C++ `op::Warehouse` is an object), several C++ header moves
+(`model/` is `solution/`, no umbrella header, `accept/` and `select/` back at the top,
+`LocalSearch` is `Solver::run`), and every random draw now goes through the engine's own
+functions, so a seeded solve gives another (equally good) result than 0.8.0 did, with the same draws on
+every platform.
 
 - **New use case: container loading (`optimaru.container_loading`).** Three-dimensional loading
   of boxes into containers: pallets and rack bays, a vehicle's cargo space in the order of its
