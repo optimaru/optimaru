@@ -109,6 +109,8 @@ FIELDS: dict[str, tuple[str, str]] = {
     "employee_window_max_days": ("custom_moves", "employee_window_max_days"),
     "empty_bin_moves": ("custom_moves", "empty_bin"),
     "empty_bin_candidates": ("custom_moves", "empty_bin_candidates"),
+    "empty_container_moves": ("custom_moves", "empty_container"),
+    "empty_container_candidates": ("custom_moves", "empty_container_candidates"),
     "guided_moves": ("custom_moves", "guided"),
     "open_box_moves": ("custom_moves", "open_box"),
     "order_consolidate_moves": ("custom_moves", "order_consolidate"),
@@ -128,6 +130,7 @@ FIELDS: dict[str, tuple[str, str]] = {
     "smart_class_swap_candidates": ("custom_moves", "smart_class_swap_candidates"),
     "swap_box_moves": ("custom_moves", "swap_box"),
     "swap_facility_moves": ("custom_moves", "swap_facility"),
+    "switch_container_moves": ("custom_moves", "switch_container"),
     "team_count_moves": ("custom_moves", "team_count"),
     "trade_moves": ("custom_moves", "trade"),
     # moves: the move mix, by relative weight (0 turns a move off)

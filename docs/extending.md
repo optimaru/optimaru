@@ -1,7 +1,7 @@
 # Extending a use case
 
 How to add a move or a cost to one of the use cases under `optimaru/`. The
-steps are the same for all 23, with the few differences in file names listed
+steps are the same for all 24, with the few differences in file names listed
 under the table below. The examples use real code you can open next to this
 guide: bin packing's `EmptyBinMove` for a move and vehicle routing's
 `LatencyCost` for a cost.
@@ -82,7 +82,7 @@ Where a use case differs from the table:
 - Employee scheduling and school timetabling have no
   `Solver.solve_with_constraints`: their `Solver.solve(x, calculator)` takes the
   picks as a calculator. The package-level `solve(x, constraints=picks)` is the
-  same for all 23.
+  same for all 24.
 
 The engine is header-only, in `core/optimaru/`. You never edit it to add a
 move or a cost: both plug in from the use case.

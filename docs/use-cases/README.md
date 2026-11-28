@@ -13,6 +13,7 @@ Each use case is an independent problem built on the engine in
 | [bin-packing](bin-packing) | `optimaru.bin_packing` |
 | [box-sizing](box-sizing) | `optimaru.box_sizing` |
 | [conference-scheduling](conference-scheduling) | `optimaru.conference_scheduling` |
+| [container-loading](container-loading) | `optimaru.container_loading` |
 | [employee-scheduling](employee-scheduling) | `optimaru.employee_scheduling` |
 | [facility-location](facility-location) | `optimaru.facility_location` |
 | [flight-crew-scheduling](flight-crew-scheduling) | `optimaru.flight_crew_scheduling` |
@@ -33,11 +34,12 @@ Each use case is an independent problem built on the engine in
 | [vehicle-routing](vehicle-routing) | `optimaru.vehicle_routing` |
 
 Every use case is a C++ domain on the optimaru engine with a pybind11 Python
-package; they all share one constraint contract (below). Six of them
-(assembly-line-balancing, bin-packing, knapsack, max-cut, quadratic-assignment
-and semiconductor-scheduling) also carry a pure-Python reference scorer as
-`tests/<use case>/reference_<use case>.py`, an independent oracle the C++ costs are
-tested against.
+package; they all share one constraint contract (below). Seven of them
+(assembly-line-balancing, bin-packing, container-loading, knapsack, max-cut,
+quadratic-assignment and semiconductor-scheduling) also carry a pure-Python reference
+scorer as `tests/<use case>/reference_<use case>.py`, an independent oracle the C++ costs
+are tested against (container loading's scores the positions a solve returned, and checks
+that they are a loading at all).
 
 ## One way to solve
 
@@ -108,7 +110,7 @@ accepted, in JSON, as keywords and as attributes: `timelimit` for
 `time_limit_seconds` and `num_workers` for `parallel_solver_count`. The request
 is not changed. What comes back:
 
-- In 17 use cases the request wraps the problem model as `model_input`, and
+- In 19 use cases the request wraps the problem model as `model_input`, and
   `solve_request` returns what `solve` returns for that model: a new, solved
   model.
 - Employee scheduling, order picking, pickup & delivery and vehicle routing
@@ -437,6 +439,10 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | box sizing | box `max_weight` (None), `cost` (0.0) | `box_weight_cost`, `box_cost` |
 | | box `required` (False) | `box_type_limit_cost` or `box_type_cost` |
 | | `max_box_types` (None) | `box_type_limit_cost` |
+| container loading | container `max_weight` (None) | `container_weight_cost` |
+| | item `max_load_on_top` (None) | `stacking_load_cost` |
+| | item `unload_order` (None) | `unloading_order_cost` |
+| | item `group` (None) | `group_split_cost` |
 | conference scheduling | talk `speakers`, tags, `audience_*`, `content_tags`, `language` ("en"), `favorite_count`, `crowd_control_risk`, `prerequisite_talks`, `mutually_exclusive_talks_tags`; speaker and room `unavailable_timeslots` and tag lists; room `capacity`, `talk_types`; timeslot tags; `minimum_consecutive_talks_pause_in_minutes` (30; 0 needs nothing) | the costs that read each field, listed in `_TALK_COSTS`, `_SPEAKER_COSTS`, `_ROOM_COSTS` and `_TIMESLOT_COSTS` of `conference_scheduling/models.py` |
 | employee scheduling | shift `required_skill` ("") | `required_skill_cost` |
 | | worker `unavailable_dates`, `undesired_dates`, `desired_dates` ([]) | `employee_unavailability_cost`, `undesired_day_cost`, `desired_day_cost` |

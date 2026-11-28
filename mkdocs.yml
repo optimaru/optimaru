@@ -1,5 +1,5 @@
 site_name: optimaru
-site_description: Metaheuristic optimization engine for routing, scheduling, timetabling and allocation, with 23 ready-to-use models.
+site_description: Metaheuristic optimization engine for routing, scheduling, timetabling and allocation, with 24 ready-to-use models.
 # The homepage builds the same site under its own /engine-docs/ and sets the URL.
 site_url: !ENV [OPTIMARU_DOCS_SITE_URL, "https://optimaru.github.io/optimaru/"]
 repo_url: https://github.com/optimaru/optimaru

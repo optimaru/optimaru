@@ -1,7 +1,7 @@
 # optimaru
 
 A metaheuristic optimization engine for real-world routing, scheduling,
-timetabling and allocation, with 23 ready-to-use models you call from Python. The solver core is
+timetabling and allocation, with 24 ready-to-use models you call from Python. The solver core is
 header-only C++17 and ships compiled in the wheel.
 
 ## Quick start
@@ -52,7 +52,7 @@ their defaults. More in the [use-case guides](use-cases/README.md) and the
 
 ## Where to go next
 
-- **[Use cases](use-cases/README.md)**: the 23 models, the constraint contract
+- **[Use cases](use-cases/README.md)**: the 24 models, the constraint contract
   they share (names, levels, the `weight` / `level` / `exponent` / `offset` /
   `clip` knobs), and one guide per use case.
 - **[API reference](reference/vehicle-routing.md)**: generated from the package

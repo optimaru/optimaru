@@ -19,6 +19,7 @@ taken as the result.
 | [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated, 5 sizes (20) |
 | [box-sizing](box-sizing) | OR-Tools CP-SAT | the demo instance + generated, 5 sizes (20) |
 | [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | the demo conference + generated, 2 to 5 days (20) |
+| [container-loading](container-loading) | OR-Tools CP-SAT (free placement) | generated with a known optimum, 5 to 500 items (20) |
 | [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated), 5 sizes (20) |
 | [facility-location](facility-location) | OR-Tools CP-SAT | generated, 5 sizes (20) |
 | [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated, 5 sizes (20) |
@@ -36,12 +37,16 @@ taken as the result.
 The CP-SAT models come from
 [external-solver](https://github.com/optimaru/external-solver), installed from
 its GitHub release tag (`external_solver.<subpackage>`); the models and their
-own tests live there. Three benchmarks are set up differently: school-timetabling
+own tests live there. Four benchmarks are set up differently: school-timetabling
 keeps its CP-SAT model (`teacher_scheduling`) and its parity test in
 [`school-timetabling/cpsat`](school-timetabling/cpsat), the project that also holds its
 comparison (`school_timetabling_cpsat`, `school-timetabling-compare`), box-sizing keeps its
 model (`box_sizing_cpsat.model`) and the model's tests in [`box-sizing/cpsat`](box-sizing/cpsat)
-and does not install external-solver, and vehicle-routing is
+and does not install external-solver; container-loading keeps its CP-SAT model in
+[`container-loading/cpsat`](container-loading/cpsat) (`container_loading_cpsat.model`) and does
+not install it either: that model places items freely where the engine decodes loading
+orders, so the comparison scores both answers from where the items stand
+(`container_loading_cpsat.evaluator`); and vehicle-routing is
 the single `uv` project [`vehicle-routing`](vehicle-routing), which runs the
 OR-Tools Routing solver. Every other comparison is a `uv` project in
 `benchmarks/<slug>/cpsat` that installs `optimaru` from this checkout (an
@@ -187,6 +192,11 @@ changes no search of a published benchmark. The box-sizing table came with the u
 case, on 2026-11-28 (the checkout that added it, after 0.8.0): the engine's 20 runs first,
 then CP-SAT's, on 4 workers where the other tables give it 8, with nothing else timed
 beside them.
+
+The container-loading tables came with their use case too. They were measured on the same Mac on 2026-11-28, on the
+checkout that added it (after 0.8.0), with CP-SAT at four workers and the engine
+and CP-SAT runs one after the other, while other jobs were running on the
+machine.
 
 How far a number repeats differs by use case. Against the tables this run
 replaced (2026-11-10 to 2026-11-12, optimaru 0.5.0 to 0.5.1):

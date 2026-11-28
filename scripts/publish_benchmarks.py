@@ -61,6 +61,7 @@ COMPARED = (
     "bed-allocation",
     "box-sizing",
     "conference-scheduling",
+    "container-loading",
     "employee-scheduling",
     "facility-location",
     "flight-crew-scheduling",

@@ -1,0 +1,27 @@
+[project]
+name = "container-loading-cpsat"
+version = "0.1.0"
+description = "CP-SAT model of container loading with free placement, and the engine vs CP-SAT comparison."
+requires-python = ">=3.11,<4.0"
+dependencies = ["optimaru", "cpsat-plugins>=0.1.0", "ortools>=9.15,<10", "pydantic>=2"]
+
+[project.scripts]
+container-loading-compare = "container_loading_cpsat.benchmark:main"
+container-loading-known-optimum = "container_loading_cpsat.known_optimum:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["container_loading_cpsat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+optimaru = { path = "../../..", editable = true }
+cpsat-plugins = { path = "../../cpsat-common", editable = true }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
