@@ -16,7 +16,8 @@ Each step below is marked in `Solver::run` with a comment that names it
 
 Paths are relative to the repository root. Settings are named as Python reads
 them (`config.<group>.<name>`, see `optimaru/_config.py`); the C++ `Settings` in
-[`core/optimaru/settings.hpp`](../core/optimaru/settings.hpp) has the same groups.
+[`core/optimaru/settings.hpp`](../core/optimaru/settings.hpp) has the same groups apart
+from `cost`, which a use case reads itself (`stop` is of type `Limits` there).
 
 | Step | Where | To add one |
 | --- | --- | --- |
@@ -83,15 +84,15 @@ one move cannot run far past the time limit.
 
 The search has stalled when no new best has come for as many steps as it usually
 takes between new bests (eight times their moving average), and at least for the
-configured trigger. Each kick that finds nothing doubles the wait; a new best
-resets it. Where late acceptance runs in stages of growing history, a stall can
+configured trigger. Each kick that finds nothing doubles the wait, up to 4096
+times the trigger; a new best resets it. Where late acceptance runs in stages of growing history, a stall can
 start the next stage instead of a kick.
 
 - Code: the `patience` and `stalled` lines of `Solver::run`, and `HistoryStages`
   in [`core/optimaru/search/accept/history_stages.hpp`](../core/optimaru/search/accept/history_stages.hpp).
 - Settings: `config.alns_trigger` (`enabled`, `unimproved_steps`). The stages are
   `AcceptanceSettings::history_growth` in C++, which a use case sets in its
-  `solver.cpp` where it measured that they pay (facility location and quadratic
+  solver where it measured that they pay (facility location and quadratic
   assignment, for two).
 
 ### 5. Ruin and recreate kick
@@ -222,7 +223,8 @@ many solves from different seeds on threads and keeps the best.
   use case: [`CONTRIBUTING.md`](../CONTRIBUTING.md) has the setup and the short
   recipes, [`extending.md`](extending.md) the full steps with real code.
 - Issues labelled
-  [good first issue](https://github.com/optimaru/optimaru/labels/good%20first%20issue)
-  are small and self-contained.
+  [good first issue](https://github.com/optimaru/optimaru/labels/good%20first%20issue),
+  when there are some, are small and self-contained. Otherwise propose your own with
+  the "Move or constraint idea" issue template.
 - A change to steps 3 to 11 in the engine must keep every use case's seeded results
   and speed: see [Changing the engine](../CONTRIBUTING.md#changing-the-engine).

@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: optimaru version
-      description: python -c "import optimaru; print(optimaru.__version__)", or the commit of a source build.
+      description: "`python -c 'import optimaru; print(optimaru.__version__)'`, or the commit of a source build."
     validations:
       required: true
   - type: input

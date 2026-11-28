@@ -106,6 +106,19 @@ def test_the_idea_issue_template_offers_every_use_case():
     assert options - {"several", "the engine"} == USE_CASES
 
 
+def test_the_solver_marks_every_step_of_how_it_solves():
+    """docs/how-it-solves.md numbers the steps of Solver::run; the loop marks each with a
+    "How it solves, <n>" comment (a range like 6-8 counts for each), so neither can drop one."""
+    steps = {int(n) for n in re.findall(r"^### (\d+)\. ", (ROOT / "docs" / "how-it-solves.md").read_text(), re.M)}
+    marked = set()
+    for first, last in re.findall(
+        r"How it solves, (\d+)(?:-(\d+))?", (ROOT / "core" / "optimaru" / "solver.hpp").read_text()
+    ):
+        marked |= set(range(int(first), int(last or first) + 1))
+    assert steps == set(range(1, len(steps) + 1)), f"how-it-solves.md: steps {sorted(steps)}"
+    assert marked == steps, f"solver.hpp marks {sorted(marked)}, the doc has {sorted(steps)}"
+
+
 def test_ci_reads_the_use_cases_off_the_repository():
     """ci.yml lists no use case by hand: its `use-cases` job globs the same stubs as USE_CASES
     above, and the three matrices take their lists from that job."""

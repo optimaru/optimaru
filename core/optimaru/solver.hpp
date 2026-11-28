@@ -372,7 +372,7 @@ private:
                     entity_count = static_cast<int>(custom_entities.size());
                 }
                 // How it solves, 9: the candidate's score, incremental or a
-                // preview (above); 10: the acceptor.
+                // preview (above). How it solves, 10: the acceptor.
                 if (applied) {
                     const bool accepted = acceptor->accepts(
                             candidate_score, current_score, best_score, entities, entity_count,
