@@ -137,28 +137,6 @@ struct PlacedGroupConstraint : ClGlobalConstraint {
     virtual bool flagged(const ContainerLoadingProblem& problem, int group) const = 0;
     virtual std::int64_t groupCost(int listed, int placed, int holders) const = 0;
 
-    // The raw cost of a whole solution from per-container tallies, for
-    // ScoreCalculator.
-    std::int64_t totalOf(const ContainerLoadingProblem& problem,
-                         const std::vector<std::vector<GroupTally>>& tallies) const {
-        const auto groups = static_cast<std::size_t>(problem.groupCount);
-        std::vector<int> listed(groups, 0), placed(groups, 0), holders(groups, 0);
-        for (const std::vector<GroupTally>& unit : tallies) {
-            for (const GroupTally& tally : unit) {
-                const auto g = static_cast<std::size_t>(tally.group);
-                listed[g] += tally.listed;
-                placed[g] += tally.placed;
-                holders[g] += tally.placed > 0 ? 1 : 0;
-            }
-        }
-        std::int64_t total = 0;
-        for (std::size_t g = 0; g < groups; ++g) {
-            if (flagged(problem, static_cast<int>(g)))
-                total += groupCost(listed[g], placed[g], holders[g]);
-        }
-        return total;
-    }
-
     // The tally of the flagged groups in one container's decoded list.
     void tally(const ContainerLoadingProblem& problem, const std::vector<int>& members,
                const Packing& packing, std::vector<GroupTally>& out) const {
@@ -166,17 +144,16 @@ struct PlacedGroupConstraint : ClGlobalConstraint {
         for (std::size_t position = 0; position < members.size(); ++position) {
             const int group = problem.groupOf[static_cast<std::size_t>(members[position])];
             if (group < 0 || !flagged_[static_cast<std::size_t>(group)]) continue;
-            GroupTally* found = nullptr;
-            for (GroupTally& entry : out) {
-                if (entry.group == group) found = &entry;
-            }
-            if (found == nullptr) {
+            int& at = slot_[static_cast<std::size_t>(group)];
+            if (at < 0) {
+                at = static_cast<int>(out.size());
                 out.push_back({group, 0, 0});
-                found = &out.back();
             }
-            ++found->listed;
-            if (packing.boxOf[position] >= 0) ++found->placed;
+            GroupTally& found = out[static_cast<std::size_t>(at)];
+            ++found.listed;
+            if (packing.boxOf[position] >= 0) ++found.placed;
         }
+        for (const GroupTally& entry : out) slot_[static_cast<std::size_t>(entry.group)] = -1;
     }
 
     void reset(const ContainerLoadingProblem& problem,
@@ -184,6 +161,8 @@ struct PlacedGroupConstraint : ClGlobalConstraint {
         context_->reset(problem);
         const auto groups = static_cast<std::size_t>(problem.groupCount);
         flagged_.assign(groups, 0);
+        slot_.assign(groups, -1);
+        deltaSlot_.assign(groups, -1);
         active_ = false;
         for (std::size_t g = 0; g < groups; ++g) {
             flagged_[g] = flagged(problem, static_cast<int>(g)) ? 1 : 0;
@@ -249,6 +228,7 @@ struct PlacedGroupConstraint : ClGlobalConstraint {
             tally(problem, members, context_->cache.packing(problem, unit, members), scratch_);
             for (const GroupTally& entry : scratch_) shift(entry, +1);
         }
+        for (const Shift& change : delta_) deltaSlot_[static_cast<std::size_t>(change.group)] = -1;
         std::int64_t total = total_;
         for (const Shift& change : delta_) {
             const auto g = static_cast<std::size_t>(change.group);
@@ -287,17 +267,15 @@ private:
         holders_[g] += sign * (entry.placed > 0 ? 1 : 0);
     }
     void shift(const GroupTally& entry, int sign) const {
-        Shift* found = nullptr;
-        for (Shift& change : delta_) {
-            if (change.group == entry.group) found = &change;
-        }
-        if (found == nullptr) {
+        int& at = deltaSlot_[static_cast<std::size_t>(entry.group)];
+        if (at < 0) {
+            at = static_cast<int>(delta_.size());
             delta_.push_back({entry.group, 0, 0, 0});
-            found = &delta_.back();
         }
-        found->listed += sign * entry.listed;
-        found->placed += sign * entry.placed;
-        found->holders += sign * (entry.placed > 0 ? 1 : 0);
+        Shift& found = delta_[static_cast<std::size_t>(at)];
+        found.listed += sign * entry.listed;
+        found.placed += sign * entry.placed;
+        found.holders += sign * (entry.placed > 0 ? 1 : 0);
     }
 
     PackingContext* context_ = nullptr;
@@ -311,6 +289,10 @@ private:
     std::vector<int> touched_;
     mutable std::vector<GroupTally> scratch_;
     mutable std::vector<Shift> delta_;
+    // Per group: its entry in the tally being built, and in delta_ (-1 =
+    // none), so that both stay linear in the items however many groups.
+    mutable std::vector<int> slot_;
+    mutable std::vector<int> deltaSlot_;
 };
 
 }  // namespace detail

@@ -296,8 +296,6 @@ ConstraintTotals ScoreCalculator::calculateTotals(ContainerLoadingProblem& probl
     prepare(problem);
     ConstraintTotals totals;
     Packing packing;
-    const IncompleteGroupCost incomplete;
-    const SingleContainerCost single;
     std::vector<std::vector<detail::GroupTally>> allOrNone(problem.containers.size());
     std::vector<std::vector<detail::GroupTally>> together(problem.containers.size());
     for (std::size_t c = 0; c < problem.containers.size(); ++c) {
@@ -321,8 +319,26 @@ ConstraintTotals ScoreCalculator::calculateTotals(ContainerLoadingProblem& probl
         totals.loadBalanceCost += balancePerMille(problem, unit, packing);
     }
     totals.groupSplitCost = GroupSplitCost::splits(problem);
-    if (problem.anyAllOrNone) totals.incompleteGroupCost = incomplete.totalOf(problem, allOrNone);
-    if (problem.anySingleContainer) totals.singleContainerCost = single.totalOf(problem, together);
+    // The group rules, from the tallies: all or none = min(placed, left out); one
+    // container = the containers holding a placed item, beyond the first.
+    const auto groups = static_cast<std::size_t>(problem.groupCount);
+    std::vector<int> listed(groups, 0), placed(groups, 0), holders(groups, 0);
+    for (const auto& unit : allOrNone) {
+        for (const detail::GroupTally& tally : unit) {
+            listed[static_cast<std::size_t>(tally.group)] += tally.listed;
+            placed[static_cast<std::size_t>(tally.group)] += tally.placed;
+        }
+    }
+    for (const auto& unit : together) {
+        for (const detail::GroupTally& tally : unit)
+            holders[static_cast<std::size_t>(tally.group)] += tally.placed > 0 ? 1 : 0;
+    }
+    for (std::size_t g = 0; g < groups; ++g) {
+        if (problem.groupAllOrNone[g])
+            totals.incompleteGroupCost += std::min(placed[g], listed[g] - placed[g]);
+        if (problem.groupSingleContainer[g] && holders[g] > 1)
+            totals.singleContainerCost += holders[g] - 1;
+    }
     return totals;
 }
 

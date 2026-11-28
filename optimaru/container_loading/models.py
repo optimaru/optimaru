@@ -211,7 +211,7 @@ class StackingRuleModel(StrictModel):
 
 
 class GroupRuleModel(StrictModel):
-    """How the items whose `group` is `id` are loaded."""
+    """How the items whose `group` is `id` are loaded. A rule with both flags false does nothing."""
 
     id: str = Field(min_length=1, description="The group: an item's `group`.")
     all_or_none: bool = Field(

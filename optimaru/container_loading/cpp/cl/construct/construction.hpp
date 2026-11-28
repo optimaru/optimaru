@@ -29,7 +29,8 @@ bool loadsBefore(const ContainerLoadingProblem& problem, int a, int b);
 // Puts every item that is in no container's list into one, and leaves the
 // lists it finds (a warm start) as they are. The items go in this order: with
 // unloading orders, what leaves last first; the optional items after the
-// others, the higher priorities first; the bottomOnly items before the
+// others, the higher priorities first (a group that mixes them is not kept
+// together by this; the search gathers it); the bottomOnly items before the
 // others; the items with a maxLoadOnTop after all the others; then group by group, the group with
 // the most volume first (an item without a group stands for itself); inside a group largest first,
 // by volume, then by base area. Each goes into the first container that takes it: one whose weight

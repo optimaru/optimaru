@@ -15,8 +15,10 @@ namespace cl {
 // not at all.
 //
 // It counts the items the lists hold: an item that found no place is left
-// out. All or none is a choice only for optional items; a group of others is
-// already all, through unplacedItemCost.
+// out. All or none is a choice only for optional items: a required item left
+// out counts in unplacedItemCost and here as well, so for a group of
+// required items taking one more out only trades one hard cost for the
+// other.
 struct IncompleteGroupCost final : detail::PlacedGroupConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
