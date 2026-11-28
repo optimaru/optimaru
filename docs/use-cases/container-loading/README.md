@@ -464,8 +464,8 @@ A solved model is itself a starting point: `to_core()` loads the `items` (and
 An unplaced item does not keep its place in the order: it is loaded back after the placed
 ones, which stand where they stood, so such a model can only come back with fewer unplaced
 items than the solve reported, though not necessarily with a lower hard score: an item
-placed now may stand on a fragile item or in front of an earlier stop. `initial_items` is read only where a container has no
-`items` yet.
+placed now may stand on a fragile item or in front of an earlier stop. `initial_items` is
+read only where a container has no `items` yet.
 
 ## C++
 
