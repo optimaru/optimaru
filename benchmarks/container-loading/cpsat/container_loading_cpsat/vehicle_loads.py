@@ -93,7 +93,8 @@ Box = tuple[tuple[int, int, int], tuple[int, int, int], int]  # corner, size, st
 
 
 def _cut(corner: tuple[int, int, int], size: tuple[int, int, int], pieces: int, rng: random.Random) -> list:
-    """Cut a box into about `pieces` boxes with sides of at least 200, in steps of 50."""
+    """Cut a box into about `pieces` boxes, in steps of 50, never a side below 200 by a cut (a slab
+    thinner than that stays as thin)."""
     boxes = [(corner, size)]
     while len(boxes) < pieces:
         boxes.sort(key=lambda box: box[1][0] * box[1][1] * box[1][2])
@@ -122,6 +123,8 @@ def cut_witness(seed: int, truck: str, stops: int, boxes: int, fill: float = 0.5
     x = 0
     for k, stop in enumerate(range(stops, 0, -1)):
         slab = length - x if k == stops - 1 else max(200, 10 * round(length * shares[k] / sum(shares) / 10))
+        if slab <= 0:  # the slabs before it took the whole length: too many stops for the truck
+            raise ValueError(f"{stops} stops leave no room for the last slab in a length of {length}")
         placed += [(at, size, stop) for at, size in _cut((x, 0, 0), (slab, width, height), per_slab, rng)]
         x += slab
 

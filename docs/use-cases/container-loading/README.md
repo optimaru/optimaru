@@ -192,7 +192,10 @@ is the whole problem: ten parcels for three stops in one van):
   out with each stop in front of the later ones wherever the room allows. An item with an
   `unload_order` also takes, of the orientations feasible at its point, the shallowest
   along x first (then the one that divides the room best), so that a stop builds a thin
-  wall across the space and not a long row.
+  wall across the space and not a long row. This follows the items' facts, whether or not
+  `unloading_order_cost` and `stacking_load_cost` are in the selection; a model that sets
+  `unload_order` or `max_load_on_top` without its cost is refused anyway
+  ([Parameters and their costs](#parameters-and-their-costs)).
 - The decode reads the sizes, the rotations, `min_support_ratio`, the unloading orders,
   the weights and the load limits, and nothing of the containers' weight limits or the
   groups. Whatever it does, every constraint is a cost computed on its result. So a hard

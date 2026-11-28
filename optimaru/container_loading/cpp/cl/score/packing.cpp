@@ -83,6 +83,7 @@ void truncate(const ContainerLoadingProblem& problem, Packing& packing, int keep
             point.died = Point::kOpen;
             stale = true;
         }
+        if (point.room[0] < 0) continue;  // not measured yet
         // The boxes taken away (still in `boxes` past `kept`) may have stopped
         // the rays of points that stay.
         for (std::size_t r = kept; r < packing.boxes.size() && !stale; ++r) {
