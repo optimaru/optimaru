@@ -9,8 +9,8 @@
 
 #include "optimaru/construct/cheapest_insertion.hpp"
 #include "optimaru/construct/first_fit.hpp"
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/settings.hpp"
 
 namespace optimaru {

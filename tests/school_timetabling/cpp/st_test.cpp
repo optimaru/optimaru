@@ -18,7 +18,7 @@
 #include "st/score/incremental_calculator.hpp"
 #include "st/score/score_calculator.hpp"
 #include "st/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace st;

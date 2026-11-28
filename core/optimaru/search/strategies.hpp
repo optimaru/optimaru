@@ -9,9 +9,9 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/model/element_index.hpp"
-#include "optimaru/model/neighborhoods.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/element_index.hpp"
+#include "optimaru/solution/neighborhoods.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/search/moves/descent.hpp"
 #include "optimaru/search/moves/ejection_chain.hpp"
 #include "optimaru/search/moves/granular_local_search.hpp"

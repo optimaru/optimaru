@@ -6,8 +6,8 @@
 
 #include <random>
 
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/search/moves/move_draw.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/utils/random.hpp"

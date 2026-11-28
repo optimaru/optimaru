@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "pdp/search/moves/request_insertion.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/utils/random.hpp"
 
 namespace pdp {

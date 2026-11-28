@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "optimaru/construct/initialization_order.hpp"
-#include "optimaru/model/editor.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/editor.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/settings.hpp"
 

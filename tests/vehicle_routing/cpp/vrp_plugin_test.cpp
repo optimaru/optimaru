@@ -46,7 +46,7 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/constraints.hpp"
 #include "vrp/model/demo_data.hpp"

@@ -9,10 +9,10 @@
 #include <random>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
-#include "optimaru/model/element_index.hpp"
+#include "optimaru/solution/solution_traits.hpp"
+#include "optimaru/solution/element_index.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
-#include "optimaru/model/snapshot.hpp"
+#include "optimaru/solution/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
 #include "optimaru/utils/random.hpp"
 

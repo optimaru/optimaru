@@ -26,7 +26,7 @@
 #include "mnt/score/incremental_calculator.hpp"
 #include "mnt/score/score_calculator.hpp"
 #include "mnt/solver.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
 using namespace mnt;

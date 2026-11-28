@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/search/operators.hpp"
 #include "optimaru/search/ruin_recreate/random_ruin.hpp"
 #include "optimaru/search/ruin_recreate/related_ruin.hpp"

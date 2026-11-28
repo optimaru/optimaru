@@ -4,7 +4,7 @@
 #ifndef OPTIMARU_SEARCH_MOVES_PREVIEW_EVALUATION_HPP
 #define OPTIMARU_SEARCH_MOVES_PREVIEW_EVALUATION_HPP
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 
 namespace optimaru {
 

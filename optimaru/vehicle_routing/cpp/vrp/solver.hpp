@@ -6,7 +6,7 @@
 #include <memory>
 #include <utility>
 
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/select/schemes.hpp"
 #include "optimaru/score/decomposed_objective.hpp"

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_MODEL_SOLUTION_TRAITS_HPP
-#define OPTIMARU_MODEL_SOLUTION_TRAITS_HPP
+#ifndef OPTIMARU_SOLUTION_SOLUTION_TRAITS_HPP
+#define OPTIMARU_SOLUTION_SOLUTION_TRAITS_HPP
 
 #include <stdexcept>
 #include <string>
@@ -98,4 +98,4 @@ inline void require_pinned_values(const Solution& solution) {
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_MODEL_SOLUTION_TRAITS_HPP
+#endif  // OPTIMARU_SOLUTION_SOLUTION_TRAITS_HPP

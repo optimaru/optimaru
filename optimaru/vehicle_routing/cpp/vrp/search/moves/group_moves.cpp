@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/utils/random.hpp"
 
 namespace vrp {

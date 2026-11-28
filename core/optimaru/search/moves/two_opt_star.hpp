@@ -6,7 +6,7 @@
 
 #include <random>
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/search/moves/list_move.hpp"
 #include "optimaru/search/moves/move_draw.hpp"
 #include "optimaru/utils/random.hpp"

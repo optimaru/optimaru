@@ -352,7 +352,7 @@ score whenever one is served.
 **Compute what you can once per rebuild.** `on_reset()` runs when the objective is
 rebuilt. A sequence-shaped objective is also rebuilt when a compound move is
 rejected and the routes are put back from a snapshot (`SolutionSnapshot::restore` in
-the engine's `model/snapshot.hpp`). The moves that do that (route elimination, ruin
+the engine's `solution/snapshot.hpp`). The moves that do that (route elimination, ruin
 and recreate as a move, the iterated local search) are off here by default, or need
 previews: the counter saw 3 calls of `on_reset()`
 in 300,000 steps. With `strategies.route_elimination_weight = 0.1` it saw 2,997 in 30,000. So

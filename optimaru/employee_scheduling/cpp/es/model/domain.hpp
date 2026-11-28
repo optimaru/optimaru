@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "optimaru/score/score.hpp"
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 
 namespace es {
 

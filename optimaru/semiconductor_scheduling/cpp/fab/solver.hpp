@@ -5,7 +5,7 @@
 
 #include "fab/model/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
-#include "optimaru/model/editor.hpp"
+#include "optimaru/solution/editor.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/solver_config.hpp"
 

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/solution/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/hard_medium_soft_score.hpp"
 #include "optimaru/score/levels.hpp"

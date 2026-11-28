@@ -306,7 +306,7 @@ core/optimaru/
 │                                 NeighborSettings, AlnsSettings, ...
 ├── solver_config.hpp             what every use case's Solver::Config shares:
 │                                 its bases, their Settings, parallel starts
-├── model/                        the solution as the engine sees it
+├── solution/                     the solution as the engine sees it
 │   ├── solution_traits.hpp       SolutionTraits, Shape (Assignment | Sequence),
 │   │                             pinning
 │   ├── editor.hpp                every write, bracketed by the objective's hooks
