@@ -1330,3 +1330,23 @@ def test_the_first_solve_sent_to_an_api_is_logged(api, caplog):
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
     assert [record.getMessage() for record in caplog.records] == [f"solving on the optimaru API at {api.url}"]
+
+
+def test_container_types_with_a_quantity_come_back_as_instances(api):
+    """The result of a model with container types is the one a local solve gives: the type with its
+    instances, not the copies the engine solved."""
+    from optimaru import container_loading as cl
+    from optimaru.container_loading.models import ContainerLoadingProblemModel
+
+    problem = ContainerLoadingProblemModel.model_validate(
+        {
+            "containers": [{"id": "box", "length": 8, "width": 4, "height": 4, "quantity": None}],
+            "items": [{"id": f"c{i}", "length": 4, "width": 4, "height": 4, "rotations": "fixed"} for i in range(5)],
+        }
+    )
+    config = cl.SolverConfig()
+    config.stop.step_limit = 200
+    solved = cl.solve(problem, time_limit_seconds=30, random_seed=3, config=config)
+    here = cl.solve.__wrapped__(problem, time_limit_seconds=30, random_seed=3, config=config)
+    assert solved.containers[0].instances and solved.containers[0].quantity is None
+    assert solved.model_dump(mode="json") == here.model_dump(mode="json")

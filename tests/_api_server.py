@@ -121,6 +121,10 @@ def solve_as_the_api(slug: str, body: dict[str, Any], calls: list) -> dict[str, 
             problem = models.with_initial_solution(problem, body["initial_solution"])
         core = problem.to_core()
         domain.solve.__wrapped__(core, **keywords)
+        # A use case whose model is not the engine object one to one (container loading's types
+        # with a quantity) builds its result from the problem and the engine object.
+        if hasattr(models, "solved_model"):
+            return models.solved_model(problem, core).model_dump(mode="json")
         return model.from_core(core).model_dump(mode="json")
     request = getattr(models, REQUEST_USE_CASES[slug][0]).model_validate(body["request"])
     if body.get("initial_solution") is not None:
