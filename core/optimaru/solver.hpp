@@ -118,7 +118,8 @@ public:
     // Add a stop rule of the use case's own to the built-in limits
     // (stop/stop_condition.hpp), asked after them; the factory makes a fresh
     // one for every solve, and for every start of a multi-start run, on that
-    // start's thread: it must be safe to call concurrently.
+    // start's thread: it must be safe to call concurrently. A criterion that
+    // fires ends its own start only; the others go on to their own limits.
     void add_stop_criterion(std::function<std::unique_ptr<StopCriterion>()> factory) {
         stop_criterion_factories_.push_back(std::move(factory));
     }

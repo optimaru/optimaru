@@ -11,7 +11,7 @@
   further, as the progress of the solve. `Solver::add_stop_criterion` adds a `StopCriterion`
   (`stop/stop_criterion.hpp`) of the use case's own, asked after the built-in ones, made fresh
   for every solve and every start of a multi-start run. Every seeded solve gives the same
-  result as before.
+  result as before. `StopCondition` can no longer be copied (it may own added criteria).
 - **Source layout: one file per construction heuristic; a use case's own construction.**
   `construct/first_fit.hpp` (assignment shape: first fit, first fit decreasing with a
   difficulty order) and `construct/cheapest_insertion.hpp` (sequence shape) hold the two

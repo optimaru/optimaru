@@ -107,8 +107,6 @@ public:
         return g < 0.0 ? 0.0 : (g > 1.0 ? 1.0 : g);
     }
 
-    const StopState& state() const { return state_; }
-
 private:
     StopRequested requested_;
     MaxRuntime runtime_;

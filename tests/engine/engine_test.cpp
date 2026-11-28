@@ -1197,8 +1197,9 @@ void testCustomStopCriterion() {
         stop.should_stop(25, Score{0, 0.0}, /*force_time_check=*/true);
         check(std::fabs(stop.progress() - 0.25) < 0.01, "its progress counts");
     }
-    {  // Every start of a multi-start run gets its own.
-        made = 0;
+    {  // Every start of a multi-start run gets its own, made on that start's
+        // thread: the counter is atomic, as anything a factory shares must be.
+        std::atomic<int> madeByStarts{0};
         optimaru::Settings multi = config;
         multi.run.parallel_starts = 3;
         TaskAssignment t = buildTaskInstance();
@@ -1206,11 +1207,11 @@ void testCustomStopCriterion() {
         std::int64_t sink[3] = {0, 0, 0};
         std::atomic<int> next{0};
         starts.add_stop_criterion([&]() -> std::unique_ptr<optimaru::StopCriterion> {
-            ++made;
+            ++madeByStarts;
             return std::make_unique<StopAtStep>(50, &sink[next++ % 3]);
         });
         starts.solve_multistart(t, [] { return std::make_unique<TaskAssignmentCalculator>(); });
-        check(made == 3, "every start of a multi-start run makes its own");
+        check(madeByStarts.load() == 3, "every start of a multi-start run makes its own");
     }
 }
 

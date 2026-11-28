@@ -297,6 +297,32 @@ To change how the initial solution is built:
    (`core/optimaru/solver_config.hpp`) makes one engine solver per start in its
    `solve_one`: register the construction there, on each.
 
+### A stop rule of your own
+
+The stop settings (`config.stop`: time, steps, time or steps without a new best, a
+target score) cover most solves. A rule they cannot express, such as "stop within 1%
+of a known lower bound on the cost", is a `StopCriterion`
+(`core/optimaru/stop/stop_criterion.hpp`):
+
+```cpp
+struct NearBound final : optimaru::StopCriterion {
+    explicit NearBound(double bound) : bound_(bound) {}  // a lower bound on the cost
+    bool reached(const optimaru::StopState& state) override {
+        return state.best_score.hard == 0 && -state.best_score.soft <= 1.01 * bound_;
+    }
+    double bound_;
+};
+solver.add_stop_criterion([] { return std::make_unique<NearBound>(12000.0); });
+```
+
+It is asked once a step, after the built-in limits, with the `StopState` of
+`stop/stop_state.hpp` (step, best score, start, last new best). Its clock, `state.now`,
+is sampled every 64 steps, so a time-based rule fires up to 63 steps late. The factory
+makes one criterion per solve, and in a multi-start run one per start, on that start's
+thread: what it refers to must be safe to use concurrently, and a criterion that fires
+ends only its own start. A use case that solves through `solve_parallel_starts`
+registers it on each start's solver, as with its moves.
+
 ## Adding a cost
 
 A constraint is one named component. Its level (hard / medium / soft), weight
