@@ -294,9 +294,7 @@ def test_stacking_rules_and_layers_are_met_where_there_is_room():
         cl.Item(f"{kind}-{i}", 4, 4, 4, weight=1, stack_group=kind, max_stack_layers=2)
         for i, kind in enumerate(["food", "food", "chem"] * 4)
     ]
-    problem = cl.ContainerLoadingProblem(
-        [cl.Container("pallet", 12, 8, 12)], items, stacking_rules=[("chem", "food")]
-    )
+    problem = cl.ContainerLoadingProblem([cl.Container("pallet", 12, 8, 12)], items, stacking_rules=[("chem", "food")])
     cl.solve(problem, time_limit_seconds=1.0, random_seed=1)
     assert problem.score.hard == 0 and not problem.unplaced_items()
     assert max(item.z for item in problem.items) == 4
