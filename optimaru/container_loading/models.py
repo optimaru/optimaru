@@ -75,7 +75,7 @@ class ItemModel(StrictModel):
         description="Lower leaves first (a route's stop number). None = no order.",
     )
     group: str | None = Field(
-        default=None, description="Items of one group belong in one container (the items of an order)."
+        default=None, min_length=1, description="Items of one group belong in one container (the items of an order)."
     )
 
     container: str | None = Field(

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -78,7 +79,8 @@ public:
                         static_cast<double>(problem.items[static_cast<std::size_t>(item)].volume());
                 weight_[c] += problem.items[static_cast<std::size_t>(item)].weight;
             }
-            used_.push_back({volume_[c] / static_cast<double>(container.volume()), rng(),
+            used_.push_back({volume_[c] / static_cast<double>(container.volume()),
+                             optimaru::random_index(rng, std::numeric_limits<int>::max()),
                              static_cast<int>(c)});
         }
         if (used_.size() < 2) return relocateOneItem(ctx, rng, entities, saved_);
@@ -172,7 +174,7 @@ public:
 private:
     struct Candidate {
         double fill;
-        std::uint64_t tieBreak;
+        int tieBreak;
         int container;
         bool operator<(const Candidate& other) const {
             if (fill != other.fill) return fill < other.fill;

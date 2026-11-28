@@ -347,13 +347,19 @@ int balancePerMille(const ContainerLoadingProblem& problem, int container, const
 
 namespace {
 
+// A 64-bit hash taken a word at a time: each word is folded in and the state
+// mixed with splitmix64's finalizer (a bijection), so one changed word always
+// changes the state. A reset runs it over every item, so it is kept cheap.
 struct Hash {
-    std::uint64_t value = 1469598103934665603ull;
+    std::uint64_t value = 0x9e3779b97f4a7c15ull;
     void add(std::uint64_t word) {
-        for (int byte = 0; byte < 8; ++byte) {
-            value ^= (word >> (8 * byte)) & 0xffu;
-            value *= 1099511628211ull;
-        }
+        std::uint64_t x = value ^ word;
+        x ^= x >> 30;
+        x *= 0xbf58476d1ce4e5b9ull;
+        x ^= x >> 27;
+        x *= 0x94d049bb133111ebull;
+        x ^= x >> 31;
+        value = x + 0x9e3779b97f4a7c15ull;
     }
     void add(double number) {
         std::uint64_t word = 0;

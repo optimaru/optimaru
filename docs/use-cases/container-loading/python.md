@@ -139,6 +139,14 @@ when a solve has filled them in, else its `initial_items`; `from_core()` decodes
 problem first (`cl.update_placements`), so the positions describe the loading orders the
 problem holds, and reports `problem.score` as a solve or `calculate_score` last set it.
 
+Two ways to go on from a solved model start from different places. `cl.solve(solved)`
+loads each container's `items` and then its `unplaced_items`, so the items a solve gave to
+a container stay with it and are tried again there. `with_initial_solution(problem,
+solved)` copies only the placed `items` into `initial_items`, so the unplaced items are
+constructed afresh and may go to any container. Use the first to go on with the same
+solve; use the second to carry a loading over to a problem whose containers or items
+changed, or to let the unplaced items look for another container.
+
 `solve_request` takes a pydantic request, `models.ContainerLoadingRequest`: the problem
 model as `model_input`, with the settings of the solve under the names of `solve`'s
 keywords (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,

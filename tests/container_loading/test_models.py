@@ -231,3 +231,8 @@ def test_a_bad_model_is_refused(change, message):
     change(data)
     with pytest.raises(ValidationError, match=message):
         ContainerLoadingProblemModel.model_validate(data)
+
+
+def test_an_empty_group_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        ItemModel(id="a", length=1, width=1, height=1, group="")

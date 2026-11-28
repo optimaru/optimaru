@@ -144,7 +144,7 @@ public:
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
     // (sizes, rotations, the support ratio) are not the ones the kept decodes
-    // were made for. The facts are compared through a 64-bit FNV-1a hash,
+    // were made for. The facts are compared through a 64-bit hash,
     // which is trusted: a collision (practically impossible) would keep
     // decodes made for other facts.
     void reset(const ContainerLoadingProblem& problem);

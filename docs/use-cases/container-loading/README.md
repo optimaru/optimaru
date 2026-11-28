@@ -102,7 +102,7 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `rotations` | `"all"`, `"upright"` or `"fixed"`, `"all"` | all = the six axis-parallel orientations; upright = the height stays vertical (two); fixed = as given |
 | `max_load_on_top` | int or None, None | weight this item can carry; 0 = nothing on top; None = no limit |
 | `unload_order` | int or None, None | lower leaves first (a route's stop number); None = no order |
-| `group` | str or None, None | items of one group belong in one container (the items of an order) |
+| `group` | non-empty str or None, None | items of one group belong in one container (the items of an order) |
 | `container` | output, id or None | the container it stands in; None = not placed |
 | `sequence` | output, int | 0-based place in its container's loading order |
 | `x`, `y`, `z` | output, int | its corner nearest the origin |
