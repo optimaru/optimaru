@@ -63,6 +63,9 @@ public:
     std::int64_t reheats() const { return reheats_; }
 
 private:
+    // With a best soft score of 0 (every parcel fills its box) the bar is the
+    // best score itself and the refill changes nothing: there is nothing
+    // below the best to walk through that could lead anywhere better.
     void reheat() {
         const double gap = kGaps[static_cast<std::size_t>(reheats_) % std::size(kGaps)];
         const Score bar{best_.hard, best_.soft - gap * std::fabs(best_.soft)};

@@ -58,6 +58,20 @@ def test_a_seeded_solve_is_not_worse_than_its_seed(nested):
     assert (resumed.score_hard, resumed.score_soft) >= (seed.score_hard, seed.score_soft)
 
 
+def test_a_seed_with_more_sizes_than_the_limit_is_brought_under_it(nested):
+    """The construction keeps every box a seed ships in, so a seed can start above
+    max_box_types. Closing a size is a move, and the search returns a plan within the limit."""
+    problem = nested(max_box_types=2)
+    seed = {"parcels": [{"id": "small", "box": "S"}, {"id": "medium", "box": "M"}, {"id": "large", "box": "L"}]}
+    seeded = with_initial_solution(problem, seed)
+    start = bs.solve(seeded, time_limit_seconds=0)
+    assert (start.box_types_used, start.score_hard) == (3, -1)
+    config = bs.SolverConfig(stop={"time_limit_seconds": 60, "step_limit": 2000})
+    solved = bs.solve(seeded, config=config)
+    assert (solved.box_types_used, solved.score_hard) == (2, 0)
+    assert boxes_of(solved) == {"small": "M", "medium": "M", "large": "L"}
+
+
 def test_the_seed_is_used_once(nested):
     core = with_initial_solution(nested(), {"parcels": [{"id": "small", "box": "L"}]}).to_core()
     assert core.warm_start is True

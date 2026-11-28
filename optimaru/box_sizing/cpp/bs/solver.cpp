@@ -35,8 +35,11 @@ void prepareSolve(BoxSizingProblem& problem) {
 
 // The prices a picked assembly gives the sizes: the weights of its
 // voidVolumeCost, boxCost and boxTypeCost picks, each summed over its picks
-// (a constraint left out weighs 0). An assembly that prices neither the void
-// nor the cost still orders the sizes by volume: the smaller box first.
+// (a constraint left out weighs 0). Only the weights are read: a pick moved
+// to the hard level, or shaped by an exponent or an offset, is priced as if
+// it were soft and linear, which changes which steps are proposed and never
+// how one is judged. An assembly that prices neither the void nor the cost
+// still orders the sizes by volume: the smaller box first.
 Pricing pricingOf(const optimaru::DecomposedObjective<BoxSizingProblem>& calculator) {
     Pricing pricing{0.0, 0.0, 0.0};
     for (const auto& constraint : calculator.unit_constraint_list()) {
@@ -63,8 +66,9 @@ void registerMoves(optimaru::Solver<BoxSizingProblem>& engine, const Solver::Con
 }
 
 // Shared engine wiring for both solve() overloads: late-acceptance local
-// search (+ ALNS kicks) and the domain's moves, driven by whichever calculator
-// the caller brought (the monolithic incremental one, or a plugin assembly).
+// search and the domain's moves (and the ALNS kicks when the Config turns
+// them on), driven by whichever calculator the caller brought (the monolithic
+// incremental one, or a plugin assembly).
 // The engine's construction heuristic finds nothing left to place:
 // constructGreedy assigned every parcel.
 void runEngine(const Solver::Config& config, BoxSizingProblem& problem,

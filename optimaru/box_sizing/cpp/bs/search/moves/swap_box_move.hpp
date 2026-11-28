@@ -28,6 +28,11 @@ namespace bs {
 // other group costs the size it is in what it pays more in the next cheapest
 // size that takes it, the new one included. A group no other size of the set
 // takes makes its size as good as impossible to close.
+//
+// The loss of a group is charged to its cheapest size in use, which is where
+// the last move on the set put it. A parcel that a change move or a seed left
+// in another size is counted as if it were there too: the choice is a guess
+// at what to propose, and the acceptor judges the trade by the real score.
 class SwapBoxMove final : public OpenSetMove {
 public:
     static constexpr int kRandomClose = 4;

@@ -17,7 +17,7 @@ come only from constraint selections, and the defaults are the C++ components'
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 
 from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
@@ -73,10 +73,35 @@ class ParcelModel(StrictModel):
     box: str | None = Field(default=None, description="Id of the box it ships in; None = not decided.")
 
 
-def _fits(parcel: ParcelModel, box: BoxModel) -> bool:
-    """By size, in some rotation, and by weight: the engine's BoxSizingProblem::fits."""
-    sides = zip(sorted((parcel.length, parcel.width, parcel.height)), sorted((box.length, box.width, box.height)))
-    return all(p <= b for p, b in sides) and (box.max_weight is None or parcel.weight <= box.max_weight)
+def _sides(thing) -> tuple[int, int, int]:
+    """The three sides, ascending: a parcel may be turned any way."""
+    low, middle, high = sorted((thing.length, thing.width, thing.height))
+    return low, middle, high
+
+
+def _parcels_no_box_takes(boxes: list[BoxModel], parcels: list[ParcelModel]) -> list[ParcelModel]:
+    """The parcels that fit none of `boxes`, by size in some rotation and by weight (the
+    engine's BoxSizingProblem::fits).
+
+    The boxes are tried largest first, so a parcel that fits is found at the first or second
+    box and the scan is one pass over the parcels in practice; only a parcel that fits none
+    is tried against every box."""
+    candidates = sorted(
+        ((*_sides(box), box.max_weight) for box in boxes),
+        key=lambda sides: sides[0] * sides[1] * sides[2],
+        reverse=True,
+    )
+    left_over = []
+    for parcel in parcels:
+        low, middle, high = _sides(parcel)
+        weight = parcel.weight
+        for box_low, box_middle, box_high, max_weight in candidates:
+            if low <= box_low and middle <= box_middle and high <= box_high:
+                if max_weight is None or weight <= max_weight:
+                    break
+        else:
+            left_over.append(parcel)
+    return left_over
 
 
 class BoxSizingProblemModel(StrictModel):
@@ -112,9 +137,15 @@ class BoxSizingProblemModel(StrictModel):
     )
 
     @model_validator(mode="after")
-    def _check(self) -> BoxSizingProblemModel:
+    def _validate(self, info: ValidationInfo) -> BoxSizingProblemModel:
+        # `from_core` reads a problem the engine has just checked: it passes this context so
+        # the scan over the parcels is not made a second time on the way out of a solve.
+        return self._check(fits=not (info.context or {}).get("checked_by_the_engine", False))
+
+    def _check(self, *, fits: bool = True) -> BoxSizingProblemModel:
         """Ids are unique, a parcel's box is a candidate, and the problem can be feasible at all:
-        every parcel fits some candidate, and the required boxes fit under the limit."""
+        every parcel fits some candidate (skipped with ``fits=False``), and the required boxes
+        fit under the limit."""
         box_ids = [box.id for box in self.boxes]
         if len(box_ids) != len(set(box_ids)):
             raise ValueError("box ids must be unique")
@@ -125,11 +156,11 @@ class BoxSizingProblemModel(StrictModel):
         for parcel in self.parcels:
             if parcel.box is not None and parcel.box not in known:
                 raise ValueError(f"parcel {parcel.id!r}: box {parcel.box!r} is not one of the candidate boxes")
-            if not any(_fits(parcel, box) for box in self.boxes):
-                raise ValueError(
-                    f"parcel {parcel.id!r} ({parcel.length} x {parcel.width} x {parcel.height}, weight "
-                    f"{parcel.weight}) fits none of the candidate boxes: add a box that takes it, or leave it out"
-                )
+        for parcel in _parcels_no_box_takes(self.boxes, self.parcels) if fits else ():
+            raise ValueError(
+                f"parcel {parcel.id!r} ({parcel.length} x {parcel.width} x {parcel.height}, weight "
+                f"{parcel.weight}) fits none of the candidate boxes: add a box that takes it, or leave it out"
+            )
         required = sum(box.required for box in self.boxes)
         if self.max_box_types is not None and required > self.max_box_types:
             raise ValueError(f"max_box_types is {self.max_box_types}, but {required} boxes are required")
@@ -137,7 +168,9 @@ class BoxSizingProblemModel(StrictModel):
 
     def to_core(self) -> _core.BoxSizingProblem:
         """pydantic -> engine object (the output fields are ignored; the engine recomputes them)."""
-        self._check()  # the fields stay mutable after validation
+        # The fields stay mutable after validation. The engine checks the fit itself when it
+        # solves (ScoreCalculator::requireSolvable), with the same message.
+        self._check(fits=False)
         position = {box.id: index for index, box in enumerate(self.boxes)}
         return _core.BoxSizingProblem(
             boxes=[
@@ -165,8 +198,8 @@ class BoxSizingProblemModel(StrictModel):
         """engine object -> pydantic, including the boxes of the parcels, the score and the derived outputs."""
         boxes = problem.boxes
         shipped = problem.parcels_per_box()
-        return cls(
-            boxes=[
+        data = {
+            "boxes": [
                 BoxModel(
                     id=box.id,
                     length=box.length,
@@ -179,7 +212,7 @@ class BoxSizingProblemModel(StrictModel):
                 )
                 for index, box in enumerate(boxes)
             ],
-            parcels=[
+            "parcels": [
                 ParcelModel(
                     id=parcel.id,
                     length=parcel.length,
@@ -191,14 +224,16 @@ class BoxSizingProblemModel(StrictModel):
                 )
                 for parcel in problem.parcels
             ],
-            max_box_types=problem.max_box_types,
-            warm_start=problem.warm_start,
-            score_hard=problem.score.hard,
-            score_soft=problem.score.soft,
-            box_types_used=problem.box_types_used(),
-            void_volume=problem.void_volume(),
-            fill_ratio=problem.fill_ratio(),
-        )
+            "max_box_types": problem.max_box_types,
+            "warm_start": problem.warm_start,
+            "score_hard": problem.score.hard,
+            "score_soft": problem.score.soft,
+            "box_types_used": problem.box_types_used(),
+            "void_volume": problem.void_volume(),
+            "fill_ratio": problem.fill_ratio(),
+        }
+        # A problem the engine has solved or scored: the fit of every parcel is its to check.
+        return cls.model_validate(data, context={"checked_by_the_engine": True})
 
 
 def parameter_uses(problem: BoxSizingProblemModel) -> list[ParameterUse]:

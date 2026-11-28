@@ -185,7 +185,9 @@ class SolverConfig:
 
         share: float
         """Gate on how often a step may draw one of the moves on the set of sizes
-        (CloseBoxMove, OpenBoxMove, SwapBoxMove); 1 = unrestricted."""
+        (CloseBoxMove, OpenBoxMove, SwapBoxMove); 1 = unrestricted. Inside the gate
+        the three and the move mix take turns evenly, so three steps in four are
+        theirs."""
         close_box: bool
         """Enable CloseBoxMove: take one size out of use and send each of its parcels
         to the cheapest remaining size that takes it."""
@@ -249,8 +251,9 @@ class SolverConfig:
     """Seeds, parallel starts and debugging aids."""
 
 class Solver:
-    """Greedy construction over the sizes + late acceptance with CloseBoxMove,
-    OpenBoxMove and SwapBoxMove. Solves IN PLACE: fills parcel.box and problem.score,
+    """Greedy construction over the sizes + late acceptance that starts over just
+    below its best, with CloseBoxMove, OpenBoxMove and SwapBoxMove (ruin & recreate
+    kicks off by default). Solves IN PLACE: fills parcel.box and problem.score,
     clears warm_start. A plain solve ignores the boxes on the parcels; with warm_start
     it starts from them. ValueError for what calculate_score refuses, for a parcel that
     fits none of the candidate boxes (by size and weight) and for more required boxes
@@ -262,7 +265,9 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.box_sizing.constraints). The given list replaces the default set; None
         keeps the default set. Single start. The construction and the moves price the
-        sizes with the picked weights of void_volume_cost, box_cost and box_type_cost.
+        sizes with the picked weights of void_volume_cost, box_cost and box_type_cost
+        (the weights alone: a level, an exponent or an offset shapes the score a step is
+        judged by, not which step is proposed).
         A name may be picked several times: each pick is its own instance with its own
         knobs, and the instances add up."""
 

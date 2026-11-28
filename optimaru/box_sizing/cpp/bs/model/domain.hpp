@@ -132,6 +132,8 @@ struct BoxSizingProblem {
     }
 
     // --- summary getters (read the facts directly: no prepare() needed) ---
+    // They add up in int64 without the bound prepare() puts on the shipped
+    // volume, so on facts prepare() would refuse they can overflow.
 
     // Shipments per box: the quantities of its parcels, summed.
     std::vector<std::int64_t> parcelsPerBox() const {

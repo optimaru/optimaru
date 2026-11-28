@@ -12,10 +12,11 @@ namespace bs {
 
 // Thin domain-side wrapper around the generic engine in core/optimaru/: the
 // domain construction (a greedy over the sizes, bs/construct/construction.hpp),
-// then optimaru::Solver<BoxSizingProblem> with late acceptance over the
-// built-in change/swap moves, the domain's CloseBoxMove, OpenBoxMove and
-// SwapBoxMove (bs/search/moves/) and the engine's adaptive ruin-and-recreate
-// (ALNS).
+// then optimaru::Solver<BoxSizingProblem> with late acceptance that starts
+// over just below its best (bs/accept/reheating_late_acceptance.hpp) over the
+// built-in change/swap moves and the domain's CloseBoxMove, OpenBoxMove and
+// SwapBoxMove (bs/search/moves/). The engine's ruin-and-recreate kicks (ALNS)
+// are there and off by default.
 class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
@@ -38,8 +39,10 @@ public:
 
         // Upper gate on how often a step may draw one of the domain's moves
         // (CloseBoxMove, OpenBoxMove, SwapBoxMove) instead of the ordinary
-        // mix; the adaptive selector still chooses inside the gate. 1 =
-        // unrestricted (the engine's default).
+        // mix. Inside the gate the mix and the registered moves take turns
+        // evenly (runEngine sets the engine's selection to Uniform). 1 =
+        // unrestricted (the engine's default): with the three moves on, three
+        // steps in four are theirs.
         double custom_move_probability = 1.0;
 
         // The three moves on the set of sizes (bs/search/moves/). Without
@@ -75,7 +78,9 @@ public:
     // bs/constraints.hpp): the same construction and search, scored by the
     // assembly (custom weights, levels and exponents included). The
     // construction and the moves price the sizes with the assembly's weights
-    // of voidVolumeCost, boxCost and boxTypeCost. The final problem.score is
+    // of voidVolumeCost, boxCost and boxTypeCost, and with the weights alone:
+    // a pick's level, exponent and offset shape the score a step is judged
+    // by, not which step is proposed. The final problem.score is
     // computed by THIS calculator and the calculator is left primed on the
     // final solution, so constraint_totals() explains exactly that score.
     // Single-start: the caller-owned calculator cannot be cloned, so

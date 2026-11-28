@@ -179,7 +179,8 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Gate on how often a step may draw one of the moves on the set
-            // of sizes. 1 = unrestricted.
+            // of sizes; inside it they and the move mix take turns evenly.
+            // 1 = unrestricted.
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // The moves on the set of sizes (see cpp/bs/search/moves/).
             .def_readwrite("close_box_moves", &Solver::Config::close_box_moves)

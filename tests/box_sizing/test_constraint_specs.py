@@ -166,6 +166,10 @@ def test_weight_none_means_the_component_default():
             for spec in get_constraints()
         ],
         [parcel_fit_cost, box_weight_cost, VoidVolumeCost(offset=2_000_000.0, clip=False), box_type_limit_cost],
+        # A soft constraint moved to the hard level: the prices of the construction and the
+        # moves read its weight only, and the solve still ends on a score both sides agree on.
+        [VoidVolumeCost(level="hard") if spec.name == "void_volume_cost" else spec for spec in get_constraints()],
+        [BoxTypeCost(level="hard", weight=3) if spec.name == "box_type_cost" else spec for spec in get_constraints()],
     ],
 )
 def test_score_matches_the_engine_for_arbitrary_specs(specs):

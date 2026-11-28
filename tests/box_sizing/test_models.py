@@ -158,6 +158,30 @@ def test_a_parcel_too_heavy_for_every_box_that_holds_it_is_refused():
     assert BoxSizingProblemModel.model_validate(data)
 
 
+def test_the_fit_scan_tries_the_largest_box_first_and_still_finds_every_misfit():
+    """A parcel that fits only a small box with a higher weight limit is not refused because
+    the larger boxes come first in the scan."""
+    data = nested_data()
+    data["boxes"][1]["max_weight"] = data["boxes"][2]["max_weight"] = 100  # M and L carry 100
+    data["parcels"][0]["weight"] = 500  # the small parcel: only S (no limit) takes it
+    solved = bs.solve(BoxSizingProblemModel.model_validate(data), time_limit_seconds=0)
+    assert solved.parcels[0].box == "S"
+    data["boxes"][0]["max_weight"] = 499
+    with pytest.raises(ValueError, match="parcel 'small' .* fits none of the candidate boxes"):
+        BoxSizingProblemModel.model_validate(data)
+
+
+def test_a_solved_model_is_not_scanned_again_but_a_model_from_json_is():
+    """from_core reads a problem the engine has checked; the same data read as JSON is
+    validated in full."""
+    core = bs.BoxSizingProblem([bs.Box("S", 10, 10, 10)], [bs.Parcel("pole", 11, 5, 5, box=0)])
+    bs.calculate_score(core)
+    model = BoxSizingProblemModel.from_core(core)  # scored, not solved: the misfit is on the score
+    assert model.score_hard == -1
+    with pytest.raises(ValueError, match="fits none of the candidate boxes"):
+        BoxSizingProblemModel.model_validate_json(model.model_dump_json())
+
+
 def test_a_parcel_may_be_turned_to_fit():
     data = nested_data()
     data["boxes"] = [{"id": "flat", "length": 300, "width": 200, "height": 100}]
