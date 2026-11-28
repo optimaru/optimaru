@@ -15,20 +15,13 @@
 #include "optimaru/search/operators.hpp"
 #include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/search/ruin_recreate/removal_gain.hpp"
+#include "optimaru/search/ruin_recreate/ruin_count.hpp"
 #include "optimaru/search/ruin_recreate/ruin_pool.hpp"
 #include "optimaru/select/scheme.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/utils/random.hpp"
 
 namespace optimaru {
-
-// How many of its `n` candidates (n >= 1) a kick ruins: `drawn`, its share of them,
-// kept to at most n - 1 and the configured maximum, and to at least one. One
-// also where n - 1 or the maximum is below one (a single entity or element):
-// a kick that ruins nothing is no kick.
-inline int kick_ruin_count(int drawn, int n, int max_ruin_count) {
-    return std::clamp(drawn, 1, std::max(1, std::min(n - 1, max_ruin_count)));
-}
 
 // ---------------------------------------------------------------------------
 // StagnationKick — adaptive ruin & recreate (the ALNS iteration)

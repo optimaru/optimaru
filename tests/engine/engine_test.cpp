@@ -1108,6 +1108,18 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     check(optimaru::kick_ruin_count(3, 10, 0) == 1 && optimaru::kick_ruin_count(3, 10, -4) == 1,
           "one with a maximum below one");
 
+    // The destroy-repair move and the iterated local search: no maximum of
+    // their own, the same bounds, and exactly the clamp they inlined before.
+    check(optimaru::clamp_ruin_count(7, 10) == 7, "a ruin removes the count it drew");
+    check(optimaru::clamp_ruin_count(20, 10) == 9 && optimaru::clamp_ruin_count(0, 10) == 1,
+          "at most all but one, at least one");
+    check(optimaru::clamp_ruin_count(0, 1) == 1 && optimaru::clamp_ruin_count(5, 1) == 1,
+          "one of a single entity or element");
+    for (int n = 2; n <= 40; ++n)
+        for (int drawn = -3; drawn <= 50; ++drawn)
+            check(optimaru::clamp_ruin_count(drawn, n) == std::clamp(drawn, 1, n - 1),
+                  "clamp_ruin_count matches the inline clamp for n >= 2");
+
     // One entity, end to end, with the settings above (hill climbing, a kick
     // every 50 unimproved steps, ScoreChecks::Full): the kicks neither crash
     // nor corrupt the score. That they ruin one is what the checks above say.
