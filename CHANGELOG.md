@@ -25,10 +25,10 @@
   On generated trucks of 10 to 25 stops and 110 to 300 boxes (one thread, three seeds per row,
   `container-loading-vehicle-loads`), the trucks that met every order and limit after 30 s went
   from none of 24 to 8 of 24, at the default weights and at the weights a warehouse system sends,
-  and the pairs left at the default weights (the mean of three seeds per kind of truck) from 151
-  to 1,729 to 0 to 255. Loads without unloading orders or stacking limits are decoded exactly as
+  and the pairs left at the default weights (the mean of three seeds per kind of truck) from
+  151–1,729 to 0–255. Loads without unloading orders or stacking limits are decoded exactly as
   before (the benchmarks give the same results), at about the same speed, and twice as fast with
-  hundreds of items in one container. With stacking limits the decode now also keeps weight off
+  hundreds of items per container. With stacking limits the decode now also keeps weight off
   them where it can. The guide's "How good, how fast" has the numbers.
 
 ## 0.9.0

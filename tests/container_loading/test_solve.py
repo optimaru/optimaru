@@ -1,6 +1,7 @@
 """solve(): the samples, the engine knobs and the callbacks."""
 
 import json
+import random
 from pathlib import Path
 
 import pytest
@@ -95,8 +96,6 @@ def test_the_van_is_loaded_last_stop_first():
 def test_a_truck_with_many_stops_comes_out_in_stop_order():
     """Twelve stops, 96 cartons of four sizes drawn at random, a third of the cargo space: the
     construction alone loads every stop clear of the later ones, and a short search keeps it."""
-    import random
-
     rng = random.Random(4)
     sizes = [(600, 400, 400), (400, 300, 300), (500, 400, 300), (300, 200, 200)]
     items = []
@@ -126,8 +125,6 @@ def test_nearby_selection_by_stop_can_be_switched_off():
     """The setting reaches the engine: 0 turns nearby selection off, and the same seeded solve then
     takes another path through the same truck (other improvements, at other steps). On a load
     that is mostly without orders it is not used."""
-    import random
-
     rng = random.Random(7)
     sizes = [(600, 400, 400), (400, 300, 300), (500, 400, 300), (300, 200, 200)]
     items = [

@@ -25,11 +25,15 @@ int shared(int a, int la, int b, int lb) {
     return high > low ? high - low : 0;
 }
 
-// The share of a load that counts as more than an item carries: the
-// tolerance of stackingExcess, which absorbs the rounding of the shares.
-bool over(double load, double carried) {
-    return load - carried > std::max(1e-6, 1e-12 * std::max(load, carried));
+// How far a load passed down may exceed what an item carries before it
+// counts: it absorbs the rounding of the shares (see stackingExcess, the one
+// other user; the decoder and the cost must agree).
+double loadTolerance(double load, double carried) {
+    return std::max(1e-6, 1e-12 * std::max(load, carried));
 }
+
+// Whether `load` is more than an item that carries `carried` takes.
+bool over(double load, double carried) { return load - carried > loadTolerance(load, carried); }
 
 // The loads resting on the boxes that carry a limit, passed down again from
 // the boxes as they stand: every box's supports were placed before it, so the
@@ -614,7 +618,7 @@ std::int64_t stackingExcess(const ContainerLoadingProblem& problem, const Packin
         // rounding grows with the load (about 1e-5 at 1e11), so the tolerance
         // is relative: 1e-12 of the load, at least 1e-6. Below 0.1 of a unit
         // up to loads of 1e11, so a real excess of a whole unit always counts.
-        const double tolerance = std::max(1e-6, 1e-12 * std::max(load[index], carried));
+        const double tolerance = loadTolerance(load[index], carried);
         if (over > tolerance) excess += static_cast<std::int64_t>(std::ceil(over - tolerance));
     }
     packing.stackingExcess = excess;

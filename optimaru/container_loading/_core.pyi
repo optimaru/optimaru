@@ -297,7 +297,8 @@ class SolverConfig:
         which keeps the stops in blocks; a ruin-and-recreate kick then tries only the
         places next to them (0.8). 0 disables nearby selection."""
         nearby_size: int
-        """Size of the nearby neighbor list (20)."""
+        """Size of the nearby neighbor list (20). Used, like nearby_probability, only
+        when at least half the items set an unload_order."""
 
     selection: Selection
     """What the move mix moves: nearby candidates and this use case's hints."""

@@ -72,7 +72,9 @@ void runEngine(const Solver::Config& config, ContainerLoadingProblem& problem,
             const double volumes =
                     std::abs(static_cast<double>(x.volume()) - static_cast<double>(y.volume())) /
                     (static_cast<double>(std::max(x.volume(), y.volume())) + 1.0);
-            if (x.unloadOrder.has_value() != y.unloadOrder.has_value()) return 1e12 + volumes;
+            // Farther than any two stops can be (two ints differ by less).
+            constexpr double kOtherKind = 1e12;
+            if (x.unloadOrder.has_value() != y.unloadOrder.has_value()) return kOtherKind + volumes;
             if (!x.unloadOrder) return volumes;
             return static_cast<double>(
                            std::abs(static_cast<std::int64_t>(*x.unloadOrder) - *y.unloadOrder)) +
