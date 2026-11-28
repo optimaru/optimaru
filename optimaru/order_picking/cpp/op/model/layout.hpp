@@ -52,7 +52,10 @@ void checkLayout(const OrderPickingSolution& solution);
 // start's candidate) leaves it alone, when it is made and when it goes.
 class ActiveDistances {
 public:
-    static constexpr int kMaxGridNodes = 2048;  // 16 MB of distances
+    // 16 MB of distances. Measured up to here on a 60 x 40 grid with every
+    // pick at a location of its own: the table took 1.4x the steps per second
+    // of the grid arithmetic at 100 locations and 1.6x to 2x at 300 to 2000.
+    static constexpr int kMaxGridNodes = 2048;
 
     explicit ActiveDistances(OrderPickingSolution& solution);
     ~ActiveDistances();

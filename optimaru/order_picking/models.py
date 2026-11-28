@@ -428,7 +428,11 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
     named = {name: warehouse.location(name) for name in request.locations or ()}
 
     def place(location: Location) -> "_core.WarehouseLocation":
-        return named[location] if isinstance(location, str) else location.to_core()
+        if not isinstance(location, str):
+            return location.to_core()
+        if location not in named:  # a request changed after it was validated
+            raise ValueError(f"unknown location {location!r}")
+        return named[location]
 
     orders = [_core.Order(o.id) for o in request.orders]
     pick_tasks = []

@@ -161,24 +161,21 @@ ActiveDistances::ActiveDistances(OrderPickingSolution& solution) : solution_(sol
         warehouse.active = warehouse.locations;
         return;
     }
-    // Number the distinct grid locations in use, in order of appearance.
+    // Number the distinct grid locations in use, in order of appearance, and
+    // build the table over them. The solution is written only once the table
+    // stands, so an allocation that fails leaves it as it was (the destructor
+    // of an object that was never made does not run).
     std::unordered_map<std::int64_t, int> nodeOf;
     std::vector<WarehouseLocation> places;
     forEachLocation(solution, [&](WarehouseLocation& location) {
-        const auto [found, added] =
-                nodeOf.emplace(gridKey(warehouse, location), static_cast<int>(places.size()));
-        if (added) places.push_back(location);
-        location.node = found->second;
+        if (nodeOf.emplace(gridKey(warehouse, location), static_cast<int>(places.size())).second)
+            places.push_back(location);
     });
     const std::size_t size = places.size();
-    if (size > static_cast<std::size_t>(kMaxGridNodes)) {
-        // No table. This return has to stay ahead of the assignment of
-        // `active` below: calculateDistance reads the table unchecked, by the
-        // nodes, whenever `active` is set, so it is set only with every node
-        // valid, and the nodes go back to -1 here.
-        forEachLocation(solution, [](WarehouseLocation& location) { location.node = -1; });
-        return;
-    }
+    // No table above the limit. calculateDistance reads the table unchecked,
+    // by the nodes, whenever `active` is set: it is set only together with a
+    // valid node on every location, below, and here neither is.
+    if (size > static_cast<std::size_t>(kMaxGridNodes)) return;
     auto table = std::make_shared<DistanceTable>();
     table->size = static_cast<int>(size);
     table->meters.resize(size * size);
@@ -186,6 +183,9 @@ ActiveDistances::ActiveDistances(OrderPickingSolution& solution) : solution_(sol
         for (std::size_t to = 0; to < size; ++to)
             table->meters[from * size + to] = gridDistance(warehouse, places[from], places[to]);
     }
+    forEachLocation(solution, [&](WarehouseLocation& location) {
+        location.node = nodeOf.find(gridKey(warehouse, location))->second;
+    });
     warehouse.active = std::move(table);
 }
 

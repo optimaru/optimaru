@@ -436,6 +436,23 @@ def test_a_bad_table_is_refused(change, message):
         OrderPickingRequest.model_validate(data)
 
 
+def test_a_request_changed_after_validation_is_still_refused_with_a_value_error():
+    request = table_request()
+    request.trolleys[0].location = "nowhere"
+    with pytest.raises(ValueError, match="unknown location 'nowhere'"):
+        solve_request(request)
+
+    request = table_request()
+    request.distances = {"dock": {"a": 5}}
+    with pytest.raises(ValueError, match="no distance between"):
+        solve_request(request)
+
+    request = grid_request()
+    request.orders[0].items[0].location = LocationModel(column="ZZ", shelving_row=1, side="LEFT", row=0)
+    with pytest.raises(ValueError, match="pick task 'order-0': column 701 is outside"):
+        solve_request(request)
+
+
 def test_a_request_uses_one_kind_of_layout():
     data = table_request().model_dump()
     data["trolleys"][0]["location"] = START.model_dump()
