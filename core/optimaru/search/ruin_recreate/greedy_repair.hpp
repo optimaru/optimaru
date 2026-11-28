@@ -131,7 +131,7 @@ public:
             // range is enumerated in full anyway.
             (void)exclude_list;
             const int value_count = Traits::value_count(solution);
-            for (int e : ruined) place_best_value(editor, e, value_count);
+            for (int e : ruined) optimaru::place_best_value(editor, e, value_count);
         } else {
             recreate_list(editor, std::move(ruined), rng, exclude_list);
         }

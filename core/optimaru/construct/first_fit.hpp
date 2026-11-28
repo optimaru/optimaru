@@ -52,8 +52,8 @@ void first_fit(Editor<Solution>& editor, const ConstructionSettings& config) {
     for (int e = 0; e < entity_count; ++e) {
         if (Traits::value_of(solution, e) < 0) uninitialized.push_back(e);
     }
-    for (int e : initialization_order(uninitialized, config.difficulty)) {
-        place_best_value(editor, e, value_count);
+    for (int e : optimaru::initialization_order(uninitialized, config.difficulty)) {
+        optimaru::place_best_value(editor, e, value_count);
     }
 }
 

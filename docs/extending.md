@@ -288,7 +288,11 @@ To change how the initial solution is built:
    run, through the editor (so the score stays current). It should place only what
    the caller left unplaced, as the built-in one does, so a warm start keeps its
    placements; `first_fit` and `cheapest_insertion`
-   (`core/optimaru/construct/`) can finish what it leaves.
+   (`core/optimaru/construct/`) can finish what it leaves. A multi-start run calls it
+   on every start's thread at once, so what the lambda captures must be safe to use
+   concurrently. A use case that solves through `solve_parallel_starts`
+   (`core/optimaru/solver_config.hpp`) makes one engine solver per start in its
+   `solve_one`: register the construction there, on each.
 
 ## Adding a cost
 

@@ -1192,8 +1192,11 @@ void testCustomConstruction(const Score& optimum) {
     const auto mine = [&](optimaru::Editor<TaskAssignment>& editor,
                           const optimaru::ConstructionSettings&) {
         ++calls;
+        // Places only what the caller left unplaced, as the contract asks.
         TaskAssignment& s = editor.solution();
-        for (int t = 0; t < static_cast<int>(s.assignment.size()); ++t) editor.assign(t, 0);
+        for (int t = 0; t < static_cast<int>(s.assignment.size()); ++t) {
+            if (s.assignment[t] < 0) editor.assign(t, 0);
+        }
     };
     {
         optimaru::Settings config;
@@ -1206,7 +1209,24 @@ void testCustomConstruction(const Score& optimum) {
         check(calls == 1, "it runs once per solve");
         int moved = 0;
         for (int v : s.assignment) moved += v != 0 ? 1 : 0;
+        // One step is one move of the mix (a kick needs a stall first), and a
+        // move changes at most two tasks.
         check(moved <= 2, "the search starts from what it built (one step moves at most two)");
+    }
+    {  // A warm start keeps what the caller placed: the construction fills the rest.
+        calls = 0;
+        optimaru::Settings config;
+        config.stop.step_limit = 1;
+        config.moves.change_weight = 0.0;  // the one step swaps, so one task still holds 3
+        TaskAssignment s = buildTaskInstance();
+        s.assignment[1] = 3;
+        optimaru::Solver<TaskAssignment> solver(config);
+        solver.set_construction(mine);
+        TaskAssignmentCalculator calculator;
+        solver.solve(s, calculator);
+        int threes = 0;
+        for (int v : s.assignment) threes += v == 3 ? 1 : 0;
+        check(calls == 1 && threes == 1, "a warm start keeps its placement");
     }
     {
         calls = 0;

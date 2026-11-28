@@ -60,9 +60,9 @@ struct Construction {
     // The built-in heuristic of the solution's shape.
     static void run(Editor<Solution>& editor, const ConstructionSettings& config) {
         if constexpr (Traits::shape == Shape::Assignment) {
-            first_fit(editor, config);
+            optimaru::first_fit(editor, config);
         } else {
-            cheapest_insertion(editor, config);
+            optimaru::cheapest_insertion(editor, config);
         }
     }
 };

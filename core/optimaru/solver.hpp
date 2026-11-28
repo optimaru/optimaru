@@ -104,7 +104,9 @@ public:
     // Replace the built-in construction (construct/construction.hpp) with the
     // use case's own; called once per solve, before the search, with the
     // solve's editor. It places what the caller left unplaced, as the
-    // built-in one does: a warm start keeps what it placed.
+    // built-in one does: a warm start keeps what it placed. solve_multistart
+    // runs it on every start's thread at once: what it captures must be safe
+    // to use concurrently.
     void set_construction(ConstructionFn<Solution> construction) {
         construction_ = std::move(construction);
     }
@@ -161,7 +163,9 @@ public:
     // Note: registered custom operators are per-Solver (possibly stateful), so
     // multi-start threads run with the built-ins only. The acceptor factory
     // (set_acceptor_factory) IS shared: every start calls it for an acceptor
-    // of its own, so it must be safe to call concurrently.
+    // of its own, so it must be safe to call concurrently. So is the
+    // construction (set_construction): every start runs it at the same time,
+    // each on its own copy of the solution, so what it captures is shared.
     template <typename ObjectiveFactory>
     Score solve_multistart(Solution& solution, ObjectiveFactory&& make_objective) {
         require_pinned_values<Traits>(solution);

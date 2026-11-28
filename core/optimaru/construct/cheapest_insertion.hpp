@@ -65,8 +65,8 @@ void cheapest_insertion(Editor<Solution>& editor, const ConstructionSettings& co
     for (int e = 0; e < element_count; ++e) {
         if (!assigned[e]) unassigned.push_back(e);
     }
-    for (int e : initialization_order(unassigned, config.difficulty)) {
-        place_cheapest_insertion_full_scan(editor, e);
+    for (int e : optimaru::initialization_order(unassigned, config.difficulty)) {
+        optimaru::place_cheapest_insertion_full_scan(editor, e);
     }
 }
 
