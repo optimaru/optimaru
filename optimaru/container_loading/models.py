@@ -152,7 +152,7 @@ class AxleGroupModel(StrictModel):
         default=None,
         ge=0,
         le=MAX_AXLE_LOAD,
-        description="What it carries with the vehicle empty; given, it replaces the share of tare_weight.",
+        description="What it carries with the vehicle empty: on both groups or neither, and then no tare_weight.",
     )
 
 
@@ -208,7 +208,7 @@ class ContainerModel(StrictModel):
         default=None,
         ge=0,
         le=MAX_AXLE_LOAD,
-        description="The vehicle's empty weight, taken at the middle of the cargo space unless the axle groups give empty_load.",
+        description="The vehicle's empty weight, taken at the middle of the cargo space (not with empty_load).",
     )
     axle_groups: list[AxleGroupModel] = Field(
         default_factory=list,
@@ -256,6 +256,10 @@ class ContainerModel(StrictModel):
                 raise ValueError(f"container {self.id!r}: axle group ids must be unique")
             if front.position == rear.position:
                 raise ValueError(f"container {self.id!r}: the two axle groups must be apart")
+            if (front.empty_load is None) != (rear.empty_load is None):
+                raise ValueError(f"container {self.id!r}: give both axle groups an empty_load or neither")
+            if front.empty_load is not None and self.tare_weight is not None:
+                raise ValueError(f"container {self.id!r}: tare_weight or the empty loads, not both")
         return self
 
     def loading_order(self) -> list[str]:
@@ -557,7 +561,7 @@ def parameter_uses(problem: ContainerLoadingProblemModel) -> list[ParameterUse]:
                 uses.append(ParameterUse(where, field, None, ("balance_limit_cost",)))
         if container.axle_groups:
             uses.append(ParameterUse(where, "axle_groups", [], ("axle_load_cost",)))
-        if container.tare_weight is not None:
+        if container.tare_weight is not None and container.axle_groups:
             uses.append(ParameterUse(where, "tare_weight", None, ("axle_load_cost",)))
     if problem.stacking_rules:
         uses.append(ParameterUse("the problem", "stacking_rules", [], ("stacking_rule_cost",)))

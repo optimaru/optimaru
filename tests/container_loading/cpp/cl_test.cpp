@@ -901,10 +901,12 @@ void verifyCostsByHand() {
         p.containers[0].tareWeight = 100;
         check(ScoreCalculator::calculateTotals(p).axleLoadCost == 80,
               "axles: the tare taken at the middle; the worst stage's excesses add up (25 + 55)");
-        // Empty loads replace the tare: 10 and 0.
+        // Empty loads instead of the tare: 10 and 0.
+        p.containers[0].tareWeight.reset();
         p.containers[0].axleGroups[0].emptyLoad = 10;
+        p.containers[0].axleGroups[1].emptyLoad = 0;
         check(ScoreCalculator::calculateTotals(p).axleLoadCost == 10,
-              "axles: the empty loads replace the tare");
+              "axles: the empty loads add to the groups");
         p.containers[0].axleGroups.clear();
         check(ScoreCalculator::calculateTotals(p).axleLoadCost == 0 &&
                       p.containers[0].axleLoads.size() == 2,
@@ -1118,8 +1120,16 @@ void verifyScoreCalculator() {
               p.containers[0].axleGroups = {{"a", 0, 10, std::nullopt}, {"a", 5, 10, std::nullopt}};
           }) && broken([](ContainerLoadingProblem& p) {
               p.containers[0].axleGroups = {{"a", 0, -1, std::nullopt}, {"b", 5, 10, std::nullopt}};
-          }) && broken([](ContainerLoadingProblem& p) { p.containers[0].tareWeight = -1; }),
-          "one axle group, two at one place, a repeated id, a negative limit or tare are refused");
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].tareWeight = -1;
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].axleGroups = {{"a", 0, 10, 1}, {"b", 5, 10, std::nullopt}};
+          }) && broken([](ContainerLoadingProblem& p) {
+              p.containers[0].axleGroups = {{"a", 0, 10, 1}, {"b", 5, 10, 1}};
+              p.containers[0].tareWeight = 5;
+          }),
+          "one axle group, two at one place, a repeated id, a negative limit or tare, one empty "
+          "load without the other, a tare with empty loads are refused");
 
     // Two pallets, hand-built: weight above the limit, a group over both, a
     // container cost.

@@ -22,6 +22,18 @@ from . import reference_container_loading as ref
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def _axles(rng: random.Random) -> dict:
+    """No axle groups, groups with a tare, or groups with both empty loads."""
+    kind = rng.choice(["none", "none", "tare", "empty"])
+    if kind == "none":
+        return {"tare_weight": rng.choice([None, 20])}
+    empty = (3, 4) if kind == "empty" else (None, None)
+    return {
+        "tare_weight": 20 if kind == "tare" else None,
+        "axle_groups": [("front", -3, rng.randint(10, 60), empty[0]), ("rear", 9, rng.randint(10, 60), empty[1])],
+    }
+
+
 def random_problem(seed: int) -> cl.ContainerLoadingProblem:
     """Boxes with sides of 1 to 6 for a few spaces of two sizes, with every optional field in use
     (stacking rules, layer limits, bottom_only, stack heights, balance limits, priorities,
@@ -39,14 +51,7 @@ def random_problem(seed: int) -> cl.ContainerLoadingProblem:
             max_offset_length=rng.choice([None, None, 0.1, 0.3]),
             max_offset_width=rng.choice([None, None, 0.2]),
             tags=rng.choice([[], ["reefer"]]),
-            tare_weight=rng.choice([None, 20]),
-            axle_groups=rng.choice(
-                [
-                    [],
-                    [],
-                    [("front", -3, rng.randint(10, 60), None), ("rear", 9, rng.randint(10, 60), rng.choice([None, 4]))],
-                ]
-            ),
+            **_axles(rng),
         )
         for c in range(rng.randint(2, 5))
     ]

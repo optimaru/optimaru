@@ -269,6 +269,25 @@ def test_solve_request_is_solve_with_the_request_settings():
             "must be apart",
         ),
         (lambda data: data["containers"][0].update(tare_weight=-1), "greater than or equal to 0"),
+        (
+            lambda data: data["containers"][0].update(
+                axle_groups=[
+                    {"id": "f", "position": 0, "max_load": 1, "empty_load": 1},
+                    {"id": "r", "position": 5, "max_load": 1},
+                ]
+            ),
+            "both axle groups an empty_load or neither",
+        ),
+        (
+            lambda data: data["containers"][0].update(
+                tare_weight=5,
+                axle_groups=[
+                    {"id": "f", "position": 0, "max_load": 1, "empty_load": 1},
+                    {"id": "r", "position": 5, "max_load": 1, "empty_load": 1},
+                ],
+            ),
+            "tare_weight or the empty loads",
+        ),
         (lambda data: data.update(segregation_rules=[{"a": "x", "b": "y", "distance": 0}]), "greater than 0"),
         (lambda data: data.update(segregation_rules=[{"a": "", "b": "y"}]), "at least 1 character"),
         (lambda data: data["items"][0].update(segregation_class=""), "at least 1 character"),

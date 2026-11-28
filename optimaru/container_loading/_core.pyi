@@ -157,8 +157,8 @@ class Container:
     tags: list[str]
     """Names an item's allowed_containers may use besides the id."""
     tare_weight: int | None
-    """The vehicle's empty weight, taken at the middle of the cargo space unless an axle group
-    gives its empty_load."""
+    """The vehicle's empty weight, taken at the middle of the cargo space; not with empty loads
+    (give both axle groups an empty_load, or neither)."""
     axle_groups: list[tuple[str, int, int, int | None]]
     """(id, position, max_load, empty_load): two axle groups, front then rear, or none. position
     is along x from the closed end (negative = ahead of it)."""
@@ -198,7 +198,7 @@ class ContainerLoadingProblem:
     1..1,000,000, a group rule for no item's group or a group ruled twice, allowed_containers
     naming no container's id or tag, a segregation rule without a class or with a distance
     outside 1..1,000,000, axle groups that are not two or stand at one place, a negative axle
-    limit, empty load or tare, an item listed
+    limit, empty load or tare, one empty load without the other or with a tare, an item listed
     twice, or items without a container."""
 
     def __init__(

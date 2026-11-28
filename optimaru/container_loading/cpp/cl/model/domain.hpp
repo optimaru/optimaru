@@ -157,8 +157,8 @@ struct Container {
     // What items' allowedContainers may name besides the id (a reefer, a
     // vehicle type).
     std::vector<std::string> tags;
-    // The vehicle's empty weight, taken at the middle of the cargo space
-    // unless the axle groups give their emptyLoad. Unset = 0.
+    // The vehicle's empty weight, taken at the middle of the cargo space; not
+    // with the axle groups' emptyLoad (both groups or neither). Unset = 0.
     std::optional<std::int64_t> tareWeight;
     // Two axle groups (front, rear) or none: the load each carries follows
     // from the lever rule (axleLoadCost).

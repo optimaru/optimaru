@@ -89,8 +89,8 @@ request has (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
 | `max_weight` | int or None, None | weight it may hold; None = no limit |
 | `cost` | float >= 0, 1.0 | what using this container costs (1 = count containers) |
 | `max_stack_height` | int or None, None | how high the load may reach (a hand's height): the decoder fills up to the lower of it and `height`; None = up to `height` |
-| `tare_weight` | int >= 0 or None, None | the vehicle's empty weight, taken at the middle of the cargo space unless an axle group gives its `empty_load` |
-| `axle_groups` | list of `AxleGroupModel`, [] | two axle groups, front first, or none: `{"id": "front", "position": -1200, "max_load": 8000000, "empty_load": null}`, `position` along x from the closed end (negative = ahead of it: a cab's axle, a trailer's kingpin), `max_load` what it may carry, `empty_load` what it carries empty |
+| `tare_weight` | int >= 0 or None, None | the vehicle's empty weight, taken at the middle of the cargo space; not with `empty_load`s |
+| `axle_groups` | list of `AxleGroupModel`, [] | two axle groups, front first, or none: `{"id": "front", "position": -1200, "max_load": 8000000, "empty_load": null}`, `position` along x from the closed end (negative = ahead of it: a cab's axle, a trailer's kingpin), `max_load` what it may carry, `empty_load` what it carries empty (both groups or neither, and then no `tare_weight`) |
 | `tags` | list of non-empty str, [] | names an item's `allowed_containers` may use besides the id (`reefer`, a vehicle type); a tag may not be a container's id |
 | `max_offset_length`, `max_offset_width` | float in [0, 1] or None, None | how far the placed load's centre of gravity may lie from the container's centre, as a share of half the length (width); None = no limit |
 | `initial_items` | list of item ids, [] | warm start: the loading order to start from |
@@ -326,8 +326,9 @@ What the raw costs mean exactly:
 - **Axle loads.** The lever rule with two supports: a placed item of weight w whose middle
   along x is at x puts w (r - x) / (r - f) on the front group (at f) and the rest on the
   rear one (at r); an item behind the rear group lifts the front. Each group adds its
-  `empty_load`, or, where neither group gives one, its share of `tare_weight` taken at the
-  middle of the cargo space (0 without a tare). A truck 10 long with groups at -2 and 8 and a
+  `empty_load`, or its share of `tare_weight` taken at the middle of the cargo space (0
+  without either; the two ways are not mixed, and a `tare_weight` without axle groups does
+  nothing). A truck 10 long with groups at -2 and 8 and a
   load of 100 with its middle at 1 carries 70 on the front and 30 on the rear. The loads are
   checked at departure and after each stop in increasing `unload_order` (its items taken
   off; items without an order stay to the end), and the worst stage counts: the sum over the

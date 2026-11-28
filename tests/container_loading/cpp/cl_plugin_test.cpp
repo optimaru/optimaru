@@ -139,7 +139,7 @@ ContainerLoadingProblem busyProblem(std::uint64_t seed, int containers = 4, int 
         if (more() % 3 == 0) item.segregationClass = "k" + std::to_string(more() % 3);
     }
     p.segregationRules = {{"k0", "k1", std::nullopt}, {"k2", "k1", 3}};
-    p.containers[0].axleGroups = {{"front", -3, 60, std::nullopt}, {"rear", 9, 80, 5}};
+    p.containers[0].axleGroups = {{"front", -3, 60, 3}, {"rear", 9, 80, 5}};
     p.containers[2].axleGroups = {{"front", -2, 40, std::nullopt}, {"rear", 10, 40, std::nullopt}};
     p.containers[2].tareWeight = 30;
     p.containers[0].maxStackHeight = 7;

@@ -69,6 +69,13 @@ void validate(const ContainerLoadingProblem& problem) {
                 throw std::invalid_argument(what + ": axle group ids must be unique");
             if (container.axleGroups[0].position == container.axleGroups[1].position)
                 throw std::invalid_argument(what + ": the two axle groups must be apart");
+            const bool frontEmpty = container.axleGroups[0].emptyLoad.has_value();
+            const bool rearEmpty = container.axleGroups[1].emptyLoad.has_value();
+            if (frontEmpty != rearEmpty)
+                throw std::invalid_argument(what +
+                                            ": give both axle groups an empty_load or neither");
+            if (frontEmpty && container.tareWeight)
+                throw std::invalid_argument(what + ": tare_weight or the empty loads, not both");
         }
         for (const auto& [name, share] :
              {std::pair{"max_offset_length", container.maxOffsetLength},
