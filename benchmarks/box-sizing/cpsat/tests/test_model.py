@@ -142,3 +142,111 @@ def test_parcels_that_fit_the_same_boxes_form_one_group() -> None:
         "medium": "M",
         "large": "L",
     }
+
+
+def priced(seed: int, limit: int) -> BoxSizingProblemModel:
+    """`small`, billed: every box at divisor 5,000 (mm and g: 1 kg per 5 litres) and three zones."""
+    data = small(seed, limit, cost=0.5).model_dump()
+    for box in data["boxes"]:
+        box["dim_divisor"] = 5000
+    for index, parcel in enumerate(data["parcels"]):
+        parcel["zone"] = None if index % 3 == 0 else f"Z{index % 3}"
+    limits = (1000, 2000, 5000, 10_000, 20_000, 10**9)
+    data["rate_tables"] = [
+        {"zone": zone, "breaks": [{"max_weight": w, "price": (3.0 + 1.5 * i) * factor} for i, w in enumerate(limits)]}
+        for zone, factor in ((None, 1.0), ("Z1", 1.5), ("Z2", 2.0))
+    ]
+    return BoxSizingProblemModel.model_validate(data)
+
+
+def picks_of(board: float, shipping: float) -> list:
+    from optimaru.box_sizing.constraints import BoardAreaCost, ShippingCost, get_constraints
+
+    weighted = {"board_area_cost": BoardAreaCost(weight=board), "shipping_cost": ShippingCost(weight=shipping)}
+    return [weighted.get(spec.name, spec) for spec in get_constraints()]
+
+
+def priced_optimum(problem: BoxSizingProblemModel, board: float, shipping: float) -> float:
+    """The best soft score, under the picks of those weights, over every set of sizes, each
+    parcel in its cheapest size of the set."""
+    from box_sizing_cpsat.model import board_area, shipping_price
+
+    core = problem.to_core()
+    picks = picks_of(board, shipping)
+    boxes = problem.boxes
+    unit = [
+        [
+            b.length * b.width * b.height + b.cost + board * board_area(b) + shipping * shipping_price(problem, p, b)
+            for b in boxes
+        ]
+        for p in problem.parcels
+    ]
+    best = float("-inf")
+    for size in range(1, problem.max_box_types + 1):
+        for chosen in itertools.combinations(range(len(boxes)), size):
+            assignment = []
+            for p, parcel in enumerate(problem.parcels):
+                fitting = [b for b in chosen if _fits_box(parcel, boxes[b])]
+                if not fitting:
+                    break
+                assignment.append(min(fitting, key=lambda b: unit[p][b]))
+            else:
+                core.set_assignment(assignment)
+                score = bs.calculate_score(core, picks)
+                if score.hard == 0:
+                    best = max(best, score.soft)
+    return best
+
+
+def _fits_box(parcel, box) -> bool:
+    sides = zip(sorted((parcel.length, parcel.width, parcel.height)), sorted((box.length, box.width, box.height)))
+    return all(p <= b for p, b in sides) and (box.max_weight is None or parcel.weight <= box.max_weight)
+
+
+@pytest.mark.parametrize(
+    ("seed", "limit", "board", "shipping"),
+    [(5, 2, 200.0, 20_000_000.0), (6, 3, 0.0, 100_000_000.0), (8, 4, 200.0, 0.0), (8, 4, 50.0, 5_000_000.0)],
+)
+def test_board_area_and_shipping_reach_the_enumerated_optimum(seed, limit, board, shipping) -> None:
+    """The opt-in costs on both sides: the model's objective with the two weights and the
+    engine's assembly with the same picks reach the optimum an enumeration finds."""
+    problem = priced(seed, limit)
+    picks = picks_of(board, shipping)
+    optimum = priced_optimum(problem, board, shipping)
+    cpsat = solve(
+        problem, time_limit_seconds=10, parallel_solver_count=2, board_area_weight=board, shipping_weight=shipping
+    )
+    config = bs.SolverConfig(stop={"time_limit_seconds": 60, "step_limit": 20000}, run={"random_seed": 1})
+    engine = bs.solve(problem, config=config, constraints=picks)
+    rescored = cpsat.to_core()
+    assert bs.calculate_score(rescored, picks).soft == pytest.approx(optimum)
+    assert engine.score_hard == 0 and engine.score_soft == pytest.approx(optimum)
+    # The weights matter: the optimum without them ships otherwise.
+    plain = solve(problem, time_limit_seconds=10, parallel_solver_count=2)
+    assert [parcel.box for parcel in plain.parcels] != [parcel.box for parcel in engine.parcels]
+
+
+def test_the_priced_objective_is_the_engines_soft_score() -> None:
+    problem = priced(seed=9, limit=3)
+    picks = picks_of(12.5, 1_500_000.0)
+    model, ships, scale = build(problem, board_area_weight=12.5, shipping_weight=1_500_000.0)
+    assert scale == 10
+    solver = cp_model.CpSolver()
+    solver.parameters.num_workers = 2
+    assert solver.solve(model) == cp_model.OPTIMAL
+    core = problem.to_core()
+    assignment = [-1] * len(problem.parcels)
+    for members, b, variable in ships:
+        if solver.boolean_value(variable):
+            for p in members:
+                assignment[p] = b
+    core.set_assignment(assignment)
+    score = bs.calculate_score(core, picks)
+    assert score.hard == 0
+    assert solver.objective_value / scale == pytest.approx(-score.soft)
+
+
+def test_a_shipping_weight_splits_the_groups_by_price() -> None:
+    problem = priced(seed=5, limit=2)
+    assert len(groups(problem, by_price=True)) > len(groups(problem))
+    assert sum(len(members) for members in groups(problem, by_price=True).values()) == len(problem.parcels)

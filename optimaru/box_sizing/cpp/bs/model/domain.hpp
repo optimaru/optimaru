@@ -22,6 +22,9 @@ namespace bs {
 //            + distinct boxes in use above maxBoxTypes)
 //   soft = -(quantity * (box volume - parcel volume), over the parcels
 //            + quantity * the box's cost, over the parcels)
+// Two soft costs are opt-in at weight 0 and score nothing by default:
+// boardAreaCost (the board of the boxes shipped) and shippingCost (what the
+// parcels cost to ship by billed weight, from the rate tables).
 // The weights are the components' kDefaultWeight (bs/constraints/*.hpp); the
 // problem carries none. The volumes are whole numbers and the engine keeps
 // soft in a double, which is why ScoreCalculator::prepare refuses a problem
@@ -53,7 +56,57 @@ struct Box {
     // Already stocked and staying: it counts as in use even when no parcel
     // takes it.
     bool required = false;
+    // The dimensional-weight divisor: a parcel in this box bills at least
+    // ceil(box volume / dimDivisor). No dimensional weight when empty; >= 1.
+    std::optional<std::int64_t> dimDivisor;
 };
+
+// ---------------------------------------------------------------------------
+// RateTable  (problem fact)
+// ---------------------------------------------------------------------------
+// What one shipment costs to ship, by its billed weight: the price of the
+// first break whose maxWeight is at least the billed weight. One table per
+// zone; the table without a zone prices the parcels without one.
+struct RateBreak {
+    std::int64_t maxWeight = 0;  // >= 0, ascending within a table
+    double price = 0.0;          // >= 0
+};
+
+struct RateTable {
+    std::optional<std::string> zone;  // empty = the parcels without a zone
+    std::vector<RateBreak> breaks;    // at least one, maxWeight strictly ascending
+
+    // The price of a billed weight: the first break that covers it, the
+    // last one above them all (prepare refuses a parcel that a box takes and
+    // the table does not cover, so only an assignment that breaks a hard
+    // constraint reads that).
+    double priceOf(std::int64_t billed) const {
+        for (const RateBreak& rateBreak : breaks) {
+            if (billed <= rateBreak.maxWeight) return rateBreak.price;
+        }
+        return breaks.empty() ? 0.0 : breaks.back().price;
+    }
+    // The position of the break that prices a billed weight; breaks.size()
+    // above them all.
+    std::size_t breakOf(std::int64_t billed) const {
+        std::size_t index = 0;
+        while (index < breaks.size() && billed > breaks[index].maxWeight) ++index;
+        return index;
+    }
+};
+
+// The dimensional weight of a box: ceil(volume / dimDivisor), 0 without a
+// divisor.
+inline std::int64_t dimWeightOf(const Box& box) {
+    if (!box.dimDivisor || *box.dimDivisor < 1) return 0;
+    const std::int64_t volume = box.length * box.width * box.height;
+    return volume / *box.dimDivisor + (volume % *box.dimDivisor != 0 ? 1 : 0);
+}
+
+// The board of a box: 2 (lw + lh + wh), the outside of its six faces.
+inline std::int64_t boardAreaOf(const Box& box) {
+    return 2 * (box.length * box.width + box.length * box.height + box.width * box.height);
+}
 
 // ---------------------------------------------------------------------------
 // Parcel  (entity)
@@ -68,6 +121,9 @@ struct Parcel {
     std::int64_t height = 0;
     std::int64_t weight = 0;    // >= 0, of one shipment
     std::int64_t quantity = 1;  // >= 1
+    // Which rate table prices it (RateTable::zone); empty = the table
+    // without a zone.
+    std::optional<std::string> zone;
 
     int box = -1;  // decision variable; -1 == unassigned
 
@@ -83,6 +139,9 @@ struct BoxSizingProblem {
     // How many distinct boxes may be in use (the required ones included); no
     // limit when empty.
     std::optional<int> maxBoxTypes;
+    // What a shipment costs to ship, per zone; none = no shipping prices
+    // (shippingCost is 0).
+    std::vector<RateTable> rateTables;
 
     // true = the next solve starts from the parcels' boxes (a seed), completed
     // where a parcel is still -1; false = a solve ignores them. A solve clears
@@ -99,6 +158,9 @@ struct BoxSizingProblem {
     std::vector<Sides> parcelSides;
     std::vector<std::int64_t> boxVolume;
     std::vector<std::int64_t> parcelVolume;
+    std::vector<std::int64_t> boxArea;       // boardAreaOf
+    std::vector<std::int64_t> boxDimWeight;  // dimWeightOf
+    std::vector<int> parcelTable;            // index into rateTables; -1 without tables
 
     int boxCount() const { return static_cast<int>(boxes.size()); }
     int parcelCount() const { return static_cast<int>(parcels.size()); }
@@ -129,6 +191,27 @@ struct BoxSizingProblem {
     std::int64_t voidOf(int parcel, int box) const {
         const std::int64_t air = boxVolume[box] - parcelVolume[parcel];
         return air > 0 ? parcels[parcel].quantity * air : 0;
+    }
+
+    // The weight a shipment of the parcel bills in the box: its own weight,
+    // or the box's dimensional weight when that is more.
+    std::int64_t billedWeight(int parcel, int box) const {
+        return std::max(parcels[parcel].weight, boxDimWeight[box]);
+    }
+    // What one shipment of the parcel costs to ship in the box; 0 without
+    // rate tables.
+    double shippingPrice(int parcel, int box) const {
+        const int table = parcelTable[parcel];
+        return table < 0 ? 0.0 : rateTables[table].priceOf(billedWeight(parcel, box));
+    }
+
+    // The rate table of a zone (empty = the one without a zone); -1 when
+    // none has it.
+    int tableOf(const std::optional<std::string>& zone) const {
+        for (std::size_t t = 0; t < rateTables.size(); ++t) {
+            if (rateTables[t].zone == zone) return static_cast<int>(t);
+        }
+        return -1;
     }
 
     // --- summary getters (read the facts directly: no prepare() needed) ---
@@ -192,6 +275,43 @@ struct BoxSizingProblem {
             boxVolumeSum += quantity * boxVolume;
         }
         return boxVolumeSum > 0.0L ? static_cast<double>(parcelVolumeSum / boxVolumeSum) : 0.0;
+    }
+
+    // Sum over the assigned parcels of quantity * the box's board
+    // (boardAreaOf).
+    std::int64_t boardArea() const {
+        std::int64_t total = 0;
+        for (const Parcel& parcel : parcels) {
+            if (parcel.box < 0 || parcel.box >= boxCount()) continue;
+            total += parcel.quantity * boardAreaOf(boxes[parcel.box]);
+        }
+        return total;
+    }
+
+    // Per box: over its parcels, quantity * the billed weight of a shipment.
+    std::vector<std::int64_t> billedWeightPerBox() const {
+        std::vector<std::int64_t> totals(boxes.size(), 0);
+        for (const Parcel& parcel : parcels) {
+            if (parcel.box < 0 || parcel.box >= boxCount()) continue;
+            totals[parcel.box] +=
+                    parcel.quantity * std::max(parcel.weight, dimWeightOf(boxes[parcel.box]));
+        }
+        return totals;
+    }
+
+    // Per box: over its parcels, quantity * what a shipment costs to ship (a
+    // parcel whose zone has no rate table counts 0).
+    std::vector<double> shippingCostPerBox() const {
+        std::vector<double> totals(boxes.size(), 0.0);
+        for (const Parcel& parcel : parcels) {
+            if (parcel.box < 0 || parcel.box >= boxCount()) continue;
+            const int table = tableOf(parcel.zone);
+            if (table < 0) continue;
+            const std::int64_t billed = std::max(parcel.weight, dimWeightOf(boxes[parcel.box]));
+            totals[parcel.box] +=
+                    static_cast<double>(parcel.quantity) * rateTables[table].priceOf(billed);
+        }
+        return totals;
     }
 
     std::vector<int> assignment() const {

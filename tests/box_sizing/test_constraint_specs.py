@@ -4,12 +4,15 @@ import pytest
 
 import optimaru.box_sizing as bs
 from optimaru.box_sizing.constraints import (
+    BoardAreaCost,
     BoxCost,
     BoxTypeCost,
     BoxTypeLimitCost,
     BoxWeightCost,
     ParcelFitCost,
+    ShippingCost,
     VoidVolumeCost,
+    board_area_cost,
     box_cost,
     box_type_cost,
     box_type_limit_cost,
@@ -17,6 +20,7 @@ from optimaru.box_sizing.constraints import (
     get_constraints,
     parcel_fit_cost,
     score,
+    shipping_cost,
     void_volume_cost,
 )
 
@@ -27,6 +31,8 @@ NAMES = [
     "box_weight_cost",
     "void_volume_cost",
     "box_cost",
+    "board_area_cost",
+    "shipping_cost",
     "box_type_limit_cost",
     "box_type_cost",
 ]
@@ -67,7 +73,16 @@ def test_list_constraints_matches_the_spec_names():
 
 
 def test_module_level_instances_keep_every_default():
-    instances = (parcel_fit_cost, box_weight_cost, void_volume_cost, box_cost, box_type_limit_cost, box_type_cost)
+    instances = (
+        parcel_fit_cost,
+        box_weight_cost,
+        void_volume_cost,
+        box_cost,
+        board_area_cost,
+        shipping_cost,
+        box_type_limit_cost,
+        box_type_cost,
+    )
     for spec in instances:
         assert (spec.weight, spec.level, spec.exponent, spec.offset, spec.clip) == (None, None, 1.0, 0.0, True)
     assert get_constraints() == list(instances)
@@ -83,6 +98,8 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("hard", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
+        ("soft", 0.0, True, False, False),
+        ("soft", 0.0, True, False, False),
         ("hard", 1.0, True, False, True),
         ("soft", 0.0, True, False, False),
     ]
@@ -105,9 +122,47 @@ def test_constraint_costs_by_hand():
     assert raw["box_cost"]["costs"] == [15.0, 0.0]  # 6 shipments x 2.5; B1 costs nothing
     assert raw["box_type_limit_cost"]["costs"] == [1.0]  # B0 and the required B1 against 1
     assert raw["box_type_cost"]["costs"] == [2.0]
+    # 2 (lw + lh + wh): B0 220,000, B1 520,000. No rate tables: no shipping cost.
+    assert raw["board_area_cost"]["costs"] == [6 * 220_000.0, 3 * 520_000.0]
+    assert raw["shipping_cost"]["costs"] == [0.0, 0.0]
     assert score(raw) == (-(60 + 300 + 1), -(48_000_000 + 15))
     engine = bs.calculate_score(by_hand())
     assert (engine.hard, engine.soft) == (-361, -48_000_015.0)
+
+
+def test_the_shipping_cost_by_hand():
+    """Divisor 5,000: B0 bills at least 1,200, B1 4,800. `heavy` (1,300 g) bills 1,300 in B0
+    and `fits` 4,800 in B1; the far zone pays more per break."""
+    problem = by_hand()
+    problem.boxes = [
+        bs.Box(box.id, box.length, box.width, box.height, box.max_weight, box.cost, box.required, 5000)
+        for box in problem.boxes
+    ]
+    problem.rate_tables = [
+        bs.RateTable([bs.RateBreak(1000, 4.0), bs.RateBreak(2000, 6.0), bs.RateBreak(5000, 9.0)]),
+        bs.RateTable([bs.RateBreak(5000, 20.0)], zone="far"),
+    ]
+    parcels = problem.parcels
+    parcels[2].zone = "far"
+    problem.parcels = parcels
+    raw = bs.constraint_costs(problem)
+    # B0: `long` (0 g, x2) bills 1,200: 6 each; `heavy` (x4) bills 1,300: 6 each. B1: `fits` x3 at 20.
+    assert raw["shipping_cost"]["costs"] == [2 * 6.0 + 4 * 6.0, 3 * 20.0]
+    assert problem.shipping_cost_per_box() == [36.0, 60.0]
+    assert problem.billed_weight_per_box() == [2 * 1200 + 4 * 1300, 3 * 4800]
+    picks = [ShippingCost(weight=1000) if spec.name == "shipping_cost" else spec for spec in get_constraints()]
+    assert bs.calculate_score(problem, picks).soft == -(48_000_015.0 + 1000 * 96.0)
+
+
+def test_the_board_area_takes_the_cube_of_two_boxes_the_same_volume():
+    problem = bs.BoxSizingProblem(
+        [bs.Box("flat", 400, 400, 25), bs.Box("cube", 200, 200, 100)], [bs.Parcel("p", 100, 100, 20, quantity=10)]
+    )
+    bs.solve(problem, time_limit_seconds=0)
+    assert problem.assignment() == [0]  # same air: the lower index
+    picks = [BoardAreaCost(weight=1) if spec.name == "board_area_cost" else spec for spec in get_constraints()]
+    bs.solve(problem, time_limit_seconds=0, constraints=picks)
+    assert problem.assignment() == [1] and problem.board_area() == 10 * 160_000
 
 
 def test_the_summary_getters_agree_with_the_costs():
@@ -138,8 +193,11 @@ def test_the_clean_cases_cost_nothing():
     )
     problem.set_assignment([0])
     raw = bs.constraint_costs(problem)
-    for name in NAMES[:5]:
+    for name in ("parcel_fit_cost", "box_weight_cost", "void_volume_cost", "box_cost", "shipping_cost"):
         assert set(raw[name]["costs"]) == {0.0}, name
+    assert raw["box_type_limit_cost"]["costs"] == [0.0]
+    # The board of a box that ships is never 0: it is what a box is made of, not a violation.
+    assert raw["board_area_cost"]["costs"] == [5 * 220_000.0, 0.0]
     assert raw["box_type_cost"]["costs"] == [1.0]
     assert bs.calculate_score(problem).soft == 0.0
 
@@ -277,8 +335,17 @@ def test_full_assert_solves_with_repeats_and_offsets():
         *get_constraints(),
         VoidVolumeCost(weight=1e-9, exponent=2.0, offset=1_000_000.0),
         BoxTypeCost(weight=1_000_000),
+        BoardAreaCost(weight=50),
+        ShippingCost(weight=100_000),
     ]
     problem = bs.generate_demo_data(parcel_count=30).to_core()
+    problem.boxes = [
+        bs.Box(box.id, box.length, box.width, box.height, box.max_weight, box.cost, box.required, 5000)
+        for box in problem.boxes
+    ]
+    problem.rate_tables = [
+        bs.RateTable([bs.RateBreak(limit, 2.0 + limit / 4000) for limit in (2000, 5000, 10_000, 40_000)])
+    ]
     config = bs.SolverConfig(stop={"time_limit_seconds": 60, "step_limit": 2000})
     bs.solve(problem, config=config, full_assert=True, constraints=picks)
     python = score(bs.constraint_costs(problem, picks), picks)

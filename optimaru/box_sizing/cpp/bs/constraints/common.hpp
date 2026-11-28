@@ -15,13 +15,14 @@ namespace bs {
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
-// The six box-sizing constraints, one small component each on the engine's
+// The eight box-sizing constraints, one small component each on the engine's
 // DecomposedObjective: an assembly path NEXT TO the monolithic
 // BoxSizingIncrementalScoreCalculator, which stays the default fast path.
 //
 // Unit choice: the assignment shape's unit is the VALUE, i.e. one candidate
 // box; members are the parcels that ship in it (order irrelevant). Fit,
-// weight, void and box cost are sums over a box's parcels, so they are
+// weight, void, box cost, board area and shipping cost are sums over a box's
+// parcels, so they are
 // UnitConstraints (one cost per candidate, 0 for a box no parcel takes). The two that count the
 // boxes in use, boxTypeLimitCost and boxTypeCost, are GlobalConstraints: one number for the whole
 // solution, and a required box counts without any member.
@@ -52,9 +53,9 @@ inline void requirePrepared(const BoxSizingProblem& problem) {
 }
 
 // A cost that is a sum over a box's parcels of one (parcel, box) term: the
-// base of parcelFitCost, boxWeightCost and voidVolumeCost (boxCost adds up the
-// shipments and multiplies once). A component writes term(), and cost() adds
-// the terms up.
+// base of parcelFitCost, boxWeightCost, voidVolumeCost and shippingCost
+// (boxCost and boardAreaCost add up the shipments and multiply once). A component writes term(),
+// and cost() adds the terms up.
 //
 // No delta contract, on purpose. A sum of per-parcel terms could state what
 // one parcel adds (supports_delta / delta_cost), and a change of one parcel

@@ -65,15 +65,17 @@ private:
             if (planned_[box]) inUse_.push_back(box);
         }
         loss_.assign(planned_.size(), 0.0);
-        const double openingPrice = ranking_->unitPrice[opening];
-        const int openingRank = ranking_->rank[opening];
+        const bool perGroup = ranking_->perGroup;
         for (std::size_t g = 0; g < ranking_->groups.size(); ++g) {
+            const int group = static_cast<int>(g);
             const int p = ranking_->groups[g].front();  // what takes it takes its group
             // The two cheapest sizes in use that take the group.
             int first = -1;
             int second = -1;
-            for (int box : inUse_) {
-                if (!problem.fits(p, box)) continue;
+            // With shipping prices the group's own order, which holds only
+            // the boxes that take it; without, the sizes in use.
+            for (int box : perGroup ? ranking_->groupOrder[g] : inUse_) {
+                if (perGroup ? !planned_[box] : !problem.fits(p, box)) continue;
                 if (first < 0) {
                     first = box;
                 } else {
@@ -83,12 +85,14 @@ private:
             }
             if (first < 0) continue;  // nothing in use takes it: it stays where it is
             const bool takes = problem.fits(p, opening);
-            if (takes && openingRank < ranking_->rank[first]) continue;  // it moves to the new size
+            if (takes && ranking_->rankOf(group, opening) < ranking_->rankOf(group, first)) {
+                continue;  // it moves to the new size
+            }
             double next = std::numeric_limits<double>::infinity();
-            if (second >= 0) next = ranking_->unitPrice[second];
-            if (takes) next = std::min(next, openingPrice);
+            if (second >= 0) next = ranking_->priceOf(group, second);
+            if (takes) next = std::min(next, ranking_->priceOf(group, opening));
             loss_[first] += static_cast<double>(ranking_->groupQuantity[g]) *
-                            (next - ranking_->unitPrice[first]);
+                            (next - ranking_->priceOf(group, first));
         }
         // Every size may be as good as impossible to close (an infinite
         // loss): the first one is then returned, and commit() brings in the

@@ -19,7 +19,8 @@ namespace bs {
 //   soft 4. voidVolumeCost     -(quantity * (box volume - parcel volume))
 //   soft 5. boxCost            -(quantity * the box's cost)
 //   soft 6. boxTypeCost        weight 0: scores nothing until a caller picks
-//                              it (the plugin path)
+//                              it (the plugin path); so do boardAreaCost and
+//                              shippingCost
 // Unassigned parcels (box == -1) contribute nothing: the construction scores
 // partially initialized solutions.
 class ScoreCalculator {
@@ -36,7 +37,13 @@ public:
     // candidate box, a repeated or empty id, a side outside 1..kMaxSide, a
     // weight or a maxWeight outside 0..kMaxWeight, a quantity below 1, a cost
     // that is negative or not finite, maxBoxTypes below 1, shipped volume
-    // that could pass kMaxVolume, and a box index outside -1..boxCount-1.
+    // that could pass kMaxVolume, a box index outside -1..boxCount-1, a
+    // dimDivisor below 1, a rate table that repeats a zone, has no breaks,
+    // breaks out of order or a price that is negative or not finite, a
+    // parcel whose zone has no rate table (when it has a zone or there are
+    // tables), a parcel that a box takes at a billed weight above its table's
+    // top break, and, when some box has a dimDivisor or there are rate
+    // tables, billed weight that could pass kMaxVolume.
     static void prepare(BoxSizingProblem& problem);
 
     // What a solve refuses on top of prepare(), because no assignment could

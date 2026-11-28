@@ -12,12 +12,14 @@
 // Adding a component is a file plus a line here (and a line in
 // defaultConstraints below when it belongs to the default assembly).
 
+#include "bs/constraints/board_area_cost.hpp"
 #include "bs/constraints/box_cost.hpp"
 #include "bs/constraints/box_type_cost.hpp"
 #include "bs/constraints/box_type_limit_cost.hpp"
 #include "bs/constraints/box_weight_cost.hpp"
 #include "bs/constraints/common.hpp"
 #include "bs/constraints/parcel_fit_cost.hpp"
+#include "bs/constraints/shipping_cost.hpp"
 #include "bs/constraints/void_volume_cost.hpp"
 
 namespace bs {
@@ -32,6 +34,8 @@ namespace bs {
 //   boxWeightCost      hard, weight 1
 //   voidVolumeCost     soft, weight 1
 //   boxCost            soft, weight 1
+//   boardAreaCost      soft, weight 0 (opt-in: the board of the boxes shipped)
+//   shippingCost       soft, weight 0 (opt-in: shipping by billed weight)
 //   boxTypeLimitCost   hard, weight 1
 //   boxTypeCost        soft, weight 0 (opt-in: the fixed cost of one more size)
 //
@@ -54,6 +58,8 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<BoxWeightCost>();
     assembly.emplace<VoidVolumeCost>();
     assembly.emplace<BoxCost>();
+    assembly.emplace<BoardAreaCost>();
+    assembly.emplace<ShippingCost>();
     assembly.emplace<BoxTypeLimitCost>();
     assembly.emplace<BoxTypeCost>();
     return assembly;

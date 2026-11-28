@@ -69,15 +69,41 @@ ctest --test-dir build
   limit when it is left out.
 - Lengths and weights are whole numbers in whatever unit you use; the examples here use mm
   and g. See [Units](#units).
+- Shipping prices, for `shipping_cost` (opt-in): a box may carry `dim_divisor`, and a parcel
+  in it then bills at least the box's **dimensional weight**, `ceil(box volume /
+  dim_divisor)` (5000 in mm and g is 1 kg per 5 litres, the usual metric divisor). A
+  shipment's **billed weight** is the larger of its own weight and that. `rate_tables`
+  prices it: one table per zone, each a list of weight breaks (`max_weight`, `price`,
+  `max_weight` strictly ascending), and a shipment pays the price of the first break that
+  covers its billed weight. A parcel's `zone` picks its table; a parcel without one is
+  priced by the table without a zone.
+
+```json
+"rate_tables": [
+  {"breaks": [{"max_weight": 2000, "price": 4.0}, {"max_weight": 5000, "price": 5.5},
+              {"max_weight": 30000, "price": 11.0}]},
+  {"zone": "remote", "breaks": [{"max_weight": 5000, "price": 9.0}, {"max_weight": 30000, "price": 18.0}]}
+]
+```
 
 A solve refuses a parcel that fits none of the candidate boxes (by size and by `max_weight`),
 with a `ValueError` that describes the first such parcel and names up to five more, and a
 `max_box_types` below the number of required boxes: no assignment could be feasible. The
 model refuses them when it is built; the engine refuses them again for a compiled problem.
+With rate tables, a repeated zone, breaks out of order, a parcel whose zone has no table
+(also when there are no tables at all) and, at solve time, a parcel that some box takes at a
+billed weight above its table's top break are refused too: past its last break a table says
+nothing, so end it with a break that covers the heaviest billed weight.
 
 The solved model carries the outputs: `box_types_used`, `void_volume` (the sum over the
 parcels of `quantity x (box volume - parcel volume)`), `fill_ratio` (shipped parcel volume /
-shipped box volume) and, on every box, `parcels` (the shipments in it: quantities summed).
+shipped box volume), `board_area` (the sum over the parcels of `quantity x 2 (lw + lh + wh)`
+of their box) and, on every box, `parcels` (the shipments in it: quantities summed). Where
+weight is billed (some box has a `dim_divisor`, or there are rate tables) every box also
+reports `billed_weight` (over its parcels, `quantity x` the billed weight of a shipment), and
+with rate tables `shipping_cost` (over its parcels, `quantity x` the price of a shipment),
+with the total `shipping_cost` on the problem. They are reported whatever the constraints
+weigh: at the default weights the shipping cost is a report, not an objective.
 On an assignment that is not feasible, a parcel larger than its box counts as the box's
 volume in both: no air, and a fill of 1 for that shipment, so `fill_ratio` never passes 1.
 
@@ -89,14 +115,18 @@ volume in both: no air, and a fill of 1 for that shipment, so `fill_ratio` never
 | `box_weight_cost` | `BoxWeightCost` | hard | 1 | per box: over its parcels, the parcel's weight above the box's `max_weight` |
 | `void_volume_cost` | `VoidVolumeCost` | soft | 1 | per box: over its parcels, `quantity x (box volume - parcel volume)` |
 | `box_cost` | `BoxCost` | soft | 1 | per box: over its parcels, `quantity x` the box's `cost` |
+| `board_area_cost` | `BoardAreaCost` | soft | 0 (opt-in) | per box: over its parcels, `quantity x 2 (lw + lh + wh)`: the board of the boxes shipped |
+| `shipping_cost` | `ShippingCost` | soft | 0 (opt-in) | per box: over its parcels, `quantity x` the price of a shipment's billed weight in the rate table of its zone; 0 without rate tables |
 | `box_type_limit_cost` | `BoxTypeLimitCost` | hard | 1 | the distinct boxes in use (the required ones included) above `max_box_types`: one number |
 | `box_type_cost` | `BoxTypeCost` | soft | 0 (opt-in) | the distinct boxes in use (the required ones included): one number |
 
 Every constraint is flippable (`level="hard"` / `level="soft"`) and none is a reward. Five are
-scored by default; `box_type_cost` has weight 0 and scores nothing until it is picked with a
-weight (`default_enabled` is `False`). `box_sizing.constraint_info()` reports exactly this
-table from the C++ components (`kDefaultLevel` / `kDefaultWeight`), in this order: the four
-per-box constraints, then the two that count the boxes in use.
+scored by default; `board_area_cost`, `shipping_cost` and `box_type_cost` have weight 0 and
+score nothing until they are picked with a weight (`default_enabled` is `False`), so a
+request that leaves them alone solves as it did before they existed.
+`box_sizing.constraint_info()` reports exactly this table from the C++ components
+(`kDefaultLevel` / `kDefaultWeight`), in this order: the six per-box constraints, then the
+two that count the boxes in use.
 
 - The two hard per-box costs are not multiplied by the quantity: they say how far a size is
   from fitting, not how many shipments had it. A parcel is one shipment in one box, so the
@@ -112,6 +142,17 @@ per-box constraints, then the two that count the boxes in use.
   volume one unit of cost is worth. A `cost` in a currency next to a void in mm³ needs a
   weight: at the default 1 a box that costs 300 more is avoided when it saves less than 300
   mm³ per shipment, which is nothing.
+- **`board_area_cost` is the material.** Of two boxes that hold the same, the cube takes
+  less board than the flat one, and a box a size too large takes more of both: a weight on
+  it says how much air one mm² of board is worth (50 says a square metre of board costs as
+  much as 50 litres of air). Choosing sizes by the board used rather than by the air shipped
+  is the objective box-set studies on warehouse data have found closer to practice.
+- **`shipping_cost` is what the parcels cost to send.** A shipment pays the price of its
+  billed weight in its zone's table, so a box one size too large can cost a whole break more
+  for a light parcel, and two boxes that bill in the same break cost the same however much
+  air they ship. Its weight says how much air one unit of money is worth; to minimise the
+  shipping cost alone, pick it with `void_volume_cost` and `box_cost` left out (then the
+  smaller box wins a tie). Without rate tables it is 0.
 
 The problem carries no weights: they come only from constraint selections.
 
@@ -136,8 +177,36 @@ instance with its own knobs, and the instances add up;
 `bs.constraint_costs(problem, picks)` keys a second pick `void_volume_cost#2`.
 
 With a selection, the construction and the moves price the sizes with the picked weights
-of `void_volume_cost`, `box_cost` and `box_type_cost`, so a zero-budget solve already follows
-them (see [Search](#search)).
+of `void_volume_cost`, `box_cost`, `board_area_cost`, `shipping_cost` and `box_type_cost`, so
+a zero-budget solve already follows them (see [Search](#search)).
+
+The problem of [Usage](#usage), billed: every box at divisor 5000, one rate table, and the
+shipping cost as the only objective.
+
+```python
+from optimaru.box_sizing.constraints import ShippingCost, get_constraints
+from optimaru.box_sizing.models import RateBreakModel, RateTableModel
+
+priced = problem.model_copy(deep=True)
+for box in priced.boxes:
+    box.dim_divisor = 5000                              # S bills at least 600 g, M 1,800, L 4,800, XL 19,200
+priced.rate_tables = [RateTableModel(breaks=[
+    RateBreakModel(max_weight=w, price=p) for w, p in [(1000, 4.0), (2000, 5.5), (5000, 7.0), (20_000, 12.0), (30_000, 15.0)]
+])]
+shipping_only = [                                       # what the parcels cost to send, nothing else
+    ShippingCost(weight=1) if spec.name == "shipping_cost" else spec
+    for spec in get_constraints()
+    if spec.name not in ("void_volume_cost", "box_cost")
+]
+cheap = bs.solve(priced, time_limit_seconds=2.0, random_seed=42, constraints=shipping_only)
+print({parcel.id: parcel.box for parcel in cheap.parcels})   # {'P1': 'S', 'P2': 'M', 'P3': 'XL', 'P4': 'XL'}
+print(cheap.shipping_cost)                                   # 3071.0 (3326.0 for the plan of the least air)
+print({box.id: box.billed_weight for box in cheap.boxes})    # {'S': 192000, 'M': 378000, 'L': 0, 'XL': 1017600}
+```
+
+The light `P1` bills 600 g in `S` (4.0) against 1,800 g in `M` (5.5), which over 320 shipments
+is worth more than what `P3` pays in `XL` instead of `L` (12.0 against 7.0, 45 times): so `S`
+takes the third place on the shelf and `L` gives it up, for a third more air.
 
 ### Units
 
@@ -145,7 +214,8 @@ Volumes are whole numbers and the soft level is a double, which holds whole numb
 exactly up to 2^53 (about 9 x 10^15). A solve refuses a problem whose shipped volume could
 pass that: the summed quantities times the largest box volume. In mm that is 9 million
 shipments in a 1 m³ box; with more, use cm. A side is at most 2,000,000 and a weight at most
-10^12.
+10^12. Where weight is billed (a `dim_divisor` or rate tables) the summed quantities times the
+heaviest billed weight must stay below 2^53 as well, so that `billed_weight` is exact.
 
 The default path adds the soft level up exactly, also with a fractional `cost`. A solve
 with a constraint selection keeps one running soft total, as every use case does: a
@@ -158,8 +228,8 @@ does not notice (the final score is a full recompute) but `full_assert`, which c
 - `optimaru/box_sizing/cpp/bs/model/domain.hpp`: domain + `optimaru::SolutionTraits` specialization;
   `model/pricing.hpp`: what a box costs a parcel, for the construction and the moves
 - `optimaru/box_sizing/cpp/bs/constraints/`: one component per constraint: `parcel_fit_cost.hpp`,
-  `box_weight_cost.hpp`, `void_volume_cost.hpp`, `box_cost.hpp`, `box_type_limit_cost.hpp`,
-  `box_type_cost.hpp` (+ `common.hpp`); `optimaru/box_sizing/cpp/bs/constraints.hpp` assembles
+  `box_weight_cost.hpp`, `void_volume_cost.hpp`, `box_cost.hpp`, `board_area_cost.hpp`,
+  `shipping_cost.hpp`, `box_type_limit_cost.hpp`, `box_type_cost.hpp` (+ `common.hpp`); `optimaru/box_sizing/cpp/bs/constraints.hpp` assembles
   the default set (`defaultConstraints()`)
 - `score/score_calculator`: full recompute (the reference), and the checks of the facts
 - `score/incremental_calculator`: before/after hooks, O(1) per change
@@ -172,7 +242,7 @@ does not notice (the final score is a full recompute) but `full_assert`, which c
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=box_sizing
 cmake --build build -j4
-./build/box_sizing/bs_test         # per-constraint hand checks, refusals, the construction, the moves, the acceptor, optima of small instances
+./build/box_sizing/bs_test         # per-constraint hand checks, refusals, the construction, the moves, the acceptor, optima of small instances (also priced by board and shipping)
 ./build/box_sizing/bs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides, box_type_cost
 ./build/box_sizing/bs_demo 2       # 2 s solve; prints the sizes to stock (exit 0 when feasible)
 ```
@@ -189,7 +259,11 @@ when its last parcel leaves, and a size worth opening pays off only once every p
 serves cheaper has moved to it. Moving one parcel does neither. So the search works on the
 **set of sizes**, and places the parcels for a set in the same step. Given the set, placing
 needs no search: among the boxes that take a parcel, the cheapest is the one with the lowest
-`void weight x volume + cost weight x cost`, the same order for every parcel.
+`void weight x volume + cost weight x cost + board weight x board`, the same order for every
+parcel. A shipping price depends on the parcel too (its weight and zone against the box's
+dimensional weight), so with a weight on `shipping_cost` the parcels that the same boxes take
+and that each of those boxes prices at the same break of the same table form a group, and
+each group orders its boxes by that price plus its shipping price (ties to the smaller box).
 
 - **Construction** (`construct/construction.cpp`): a greedy. The set starts as the
   required boxes (and the boxes a seed ships in). While a parcel is taken by no size of the

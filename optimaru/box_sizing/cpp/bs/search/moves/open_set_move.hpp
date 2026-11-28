@@ -29,7 +29,8 @@ namespace bs {
 // whole trade with one score.
 //
 // Given the set, where a parcel goes needs no search: its cheapest box is the
-// first box of the set, in the ranking's order, that takes it (BoxRanking).
+// first box of the set, in the ranking's order (its group's order, with
+// shipping prices), that takes it (BoxRanking).
 // commit() therefore puts every parcel in its cheapest box of the planned set,
 // which also undoes what single-parcel moves left elsewhere.
 //
@@ -117,13 +118,24 @@ protected:
 
         moved_.clear();
         ctx.editor.begin_batch();
-        for (const std::vector<int>& group : ranking_->groups) {
+        for (std::size_t g = 0; g < ranking_->groups.size(); ++g) {
+            const std::vector<int>& group = ranking_->groups[g];
             // The boxes that take one parcel of a group take them all.
             int to = -1;
-            for (int box : plannedOrder_) {
-                if (problem.fits(group.front(), box)) {
-                    to = box;
-                    break;
+            if (ranking_->perGroup) {
+                // The group's own order holds only the boxes that take it.
+                for (int box : ranking_->groupOrder[g]) {
+                    if (planned_[box]) {
+                        to = box;
+                        break;
+                    }
+                }
+            } else {
+                for (int box : plannedOrder_) {
+                    if (problem.fits(group.front(), box)) {
+                        to = box;
+                        break;
+                    }
                 }
             }
             if (to < 0) continue;
@@ -150,7 +162,7 @@ protected:
 
 private:
     int cheapestPlanned(const BoxSizingProblem& problem, int parcel) const {
-        for (int box : ranking_->order) {
+        for (int box : ranking_->orderOf(ranking_->groupOf[parcel])) {
             if (planned_[box] && problem.fits(parcel, box)) return box;
         }
         return -1;

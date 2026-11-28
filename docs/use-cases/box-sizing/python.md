@@ -13,8 +13,11 @@ Score, at the default weights (1 each):
 - soft = -(`quantity x (box volume - parcel volume)` + `quantity x` the box's `cost`, over the
   parcels): `void_volume_cost`, `box_cost`
 
-`box_type_cost` (the distinct boxes in use, soft) has weight 0: it scores nothing until it
-is picked with a weight, which is then the fixed cost of stocking one more size.
+Three soft costs have weight 0 and score nothing until they are picked with a weight:
+`board_area_cost` (`quantity x 2 (lw + lh + wh)`, the board of the boxes shipped),
+`shipping_cost` (`quantity x` the price of a shipment's billed weight, `max(weight,
+ceil(box volume / dim_divisor))`, in the rate table of its zone) and `box_type_cost` (the
+distinct boxes in use: its weight is the fixed cost of stocking one more size).
 
 | Constraint (Python name) | C++ component | Default level | Default weight |
 |---|---|---|---|
@@ -22,10 +25,12 @@ is picked with a weight, which is then the fixed cost of stocking one more size.
 | `box_weight_cost` | `BoxWeightCost` | hard | 1 |
 | `void_volume_cost` | `VoidVolumeCost` | soft | 1 |
 | `box_cost` | `BoxCost` | soft | 1 |
+| `board_area_cost` | `BoardAreaCost` | soft | 0 (opt-in) |
+| `shipping_cost` | `ShippingCost` | soft | 0 (opt-in) |
 | `box_type_limit_cost` | `BoxTypeLimitCost` | hard | 1 |
 | `box_type_cost` | `BoxTypeCost` | soft | 0 (opt-in) |
 
-All six are flippable and none is a reward. The problem carries no weights. Pick, re-weight
+All eight are flippable and none is a reward. The problem carries no weights. Pick, re-weight
 or flip constraints with `optimaru.box_sizing.constraints`, and read the defaults with
 `bs.constraint_info()`:
 
@@ -82,6 +87,12 @@ print(problem.box_types_used(), problem.void_volume(), problem.fill_ratio(), pro
 # 2 483060000 0.509... [320, 1]
 ```
 
+Shipping prices on the compiled objects: `bs.Box(..., dim_divisor=5000)`,
+`bs.Parcel(..., zone="remote")` and `problem.rate_tables = [bs.RateTable([bs.RateBreak(2000,
+4.0), bs.RateBreak(30_000, 11.0)]), bs.RateTable([bs.RateBreak(30_000, 18.0)], zone="remote")]`;
+`problem.board_area()`, `problem.billed_weight_per_box()` and `problem.shipping_cost_per_box()`
+report them.
+
 Note: `problem.parcels[i]` returns a copy. Write boxes in bulk with
 `problem.set_assignment([...])`, and set `problem.warm_start = True` to make the next solve
 start from them (a plain solve ignores the boxes on the parcels).
@@ -103,12 +114,16 @@ BoxSizingProblemModel
     boxes: list[BoxModel]                 at least one: the candidate sizes
     parcels: list[ParcelModel]
     max_box_types: int | None = None      >= 1: how many distinct boxes may be in use
+    rate_tables: list[RateTableModel] = []  one per zone: what a shipment costs by its billed weight
     warm_start: bool = False              start from the parcels' `box`
     # outputs
     score_hard, score_soft
     box_types_used: int                   distinct boxes in use, the required ones included
     void_volume: int                      sum over the parcels of quantity * (box volume - parcel volume)
     fill_ratio: float                     shipped parcel volume / shipped box volume
+    board_area: int                       sum over the parcels of quantity * 2 (lw + lh + wh) of their box
+    shipping_cost: float | None           sum over the parcels of quantity * the price of a shipment;
+                                          None without rate tables
 
 BoxModel
     id: str
@@ -116,20 +131,37 @@ BoxModel
     max_weight: int | None = None         the heaviest parcel it carries
     cost: float = 0.0                     >= 0: what one box of this size costs
     required: bool = False                already stocked and staying: counts as in use
-    # output
+    dim_divisor: int | None = None        >= 1: a parcel in it bills at least ceil(volume / dim_divisor)
+    # outputs
     parcels: int | None                   the shipments in it (quantities summed)
+    billed_weight: int | None             quantity * billed weight over its parcels; None unless some
+                                          box has a dim_divisor or there are rate tables
+    shipping_cost: float | None           quantity * the price of a shipment over its parcels; None
+                                          without rate tables
 
 ParcelModel
     id: str
     length, width, height: int            > 0
     weight: int = 0
     quantity: int = 1                     >= 1 (at most 2^53): how many shipments had this size
+    zone: str | None = None               which rate table prices it; None = the table without a zone
     box: str | None = None                in and out: the id of the box it ships in
+
+RateTableModel
+    zone: str | None = None               the parcels it prices; None = those without a zone
+    breaks: list[RateBreakModel]          at least one, max_weight strictly ascending
+
+RateBreakModel
+    max_weight: int                       >= 0: the heaviest billed weight at this price
+    price: float                          >= 0: what one shipment costs
 ```
 
 An unknown field is refused. So are a repeated id, a `box` that is not a candidate's id, a
 parcel that fits none of the candidates (by size and `max_weight`) and a `max_box_types`
-below the number of required boxes, each with a message that names it. The model is
+below the number of required boxes, each with a message that names it, and with rate tables
+a repeated zone, breaks out of order and a parcel whose zone has no table. A parcel that a
+box takes at a billed weight above its table's top break is refused by the engine, when the
+problem is solved or scored. The model is
 stricter here than the compiled `BoxSizingProblem`, which takes such a parcel and can be
 scored (`calculate_score`, `constraint_costs`); only a solve refuses it there. The message
 describes the first parcel that fits nothing and names up to five more with their count
@@ -166,6 +198,7 @@ constraints leave that cost out ([Parameters and their costs](../README.md#param
 | box `cost` | `box_cost` |
 | box `required` | `box_type_limit_cost` or `box_type_cost` |
 | `max_box_types` | `box_type_limit_cost` |
+| box `dim_divisor`, parcel `zone`, `rate_tables` | `shipping_cost` |
 
-The default selection holds all of them (`box_type_cost` at weight 0 counts: a weight of 0
-is an explicit choice). `models.parameter_uses(model)` lists what a model sets.
+The default selection holds all of them (`box_type_cost` and `shipping_cost` at weight 0
+count: a weight of 0 is an explicit choice). `models.parameter_uses(model)` lists what a model sets.

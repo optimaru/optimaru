@@ -6,9 +6,10 @@ The problem object holds the solution: each parcel's `box` (an index into
 Score (hard/soft, lexicographic), at the default weights (1 each): hard =
 -(length by which parcels exceed their box + parcel weight above the box's
 max_weight + distinct boxes in use above max_box_types), soft = -(quantity x
-(box volume - parcel volume) + quantity x box cost, over the parcels). The
-weights are the C++ components' defaults (constraint_info()); the problem
-carries none.
+(box volume - parcel volume) + quantity x box cost, over the parcels). Three
+soft costs are opt-in at weight 0: board_area_cost, shipping_cost (by billed
+weight, from the rate tables) and box_type_cost. The weights are the C++
+components' defaults (constraint_info()); the problem carries none.
 """
 
 from collections.abc import Callable, Iterable
@@ -35,6 +36,7 @@ class Box:
         max_weight: int | None = None,
         cost: float = 0.0,
         required: bool = False,
+        dim_divisor: int | None = None,
     ) -> None: ...
     id: str
     length: int
@@ -47,6 +49,9 @@ class Box:
     """What one box of this size costs (material, freight); >= 0."""
     required: bool
     """Already stocked and staying: it counts as in use even when no parcel takes it."""
+    dim_divisor: int | None
+    """Dimensional-weight divisor (>= 1): a parcel in this box bills at least
+    ceil(box volume / dim_divisor); None == it bills its own weight."""
 
 class Parcel:
     """The packed content of one shipment, by its bounding size. It fits a box when its
@@ -61,6 +66,7 @@ class Parcel:
         weight: int = 0,
         quantity: int = 1,
         box: int = -1,
+        zone: str | None = None,
     ) -> None: ...
     id: str
     length: int
@@ -72,7 +78,26 @@ class Parcel:
     """How many shipments had this size; they all ship in the same box."""
     box: int
     """The decision variable: index into problem.boxes; -1 == unassigned."""
+    zone: str | None
+    """Which rate table prices it; None == the table without a zone."""
     def is_assigned(self) -> bool: ...
+
+class RateBreak:
+    """One weight break of a rate table: a shipment billed at most `max_weight` costs `price`."""
+
+    def __init__(self, max_weight: int, price: float) -> None: ...
+    max_weight: int
+    price: float
+
+class RateTable:
+    """What one shipment costs to ship by its billed weight: the price of the first break
+    whose max_weight is at least the billed weight. `zone` None prices the parcels without
+    one."""
+
+    def __init__(self, breaks: list[RateBreak], zone: str | None = None) -> None: ...
+    breaks: list[RateBreak]
+    """At least one, max_weight strictly ascending."""
+    zone: str | None
 
 class BoxSizingProblem:
     """Problem and solution in one object. NOTE: `boxes` / `parcels` element access returns
@@ -84,9 +109,13 @@ class BoxSizingProblem:
         parcels: list[Parcel],
         max_box_types: int | None = None,
         warm_start: bool = False,
+        rate_tables: list[RateTable] = ...,
     ) -> None: ...
     boxes: list[Box]
     parcels: list[Parcel]
+    rate_tables: list[RateTable]
+    """One per zone; empty == no shipping prices (shipping_cost is 0). Element access returns
+    copies: replace the list."""
     max_box_types: int | None
     """How many distinct boxes may be in use, the required ones included; None == no limit."""
     warm_start: bool
@@ -107,6 +136,14 @@ class BoxSizingProblem:
         (1 - fill_ratio())."""
     def parcels_per_box(self) -> list[int]:
         """Per box, the shipments in it: the quantities of its parcels, summed."""
+    def board_area(self) -> int:
+        """Sum over the assigned parcels of quantity * 2 (lw + lh + wh) of their box."""
+    def billed_weight_per_box(self) -> list[int]:
+        """Per box, over its parcels, quantity * billed weight: the parcel's weight, or the
+        box's dimensional weight (ceil(volume / dim_divisor)) when that is more."""
+    def shipping_cost_per_box(self) -> list[float]:
+        """Per box, over its parcels, quantity * the price of the billed weight in the rate
+        table of the parcel's zone; a parcel whose zone has no table counts 0."""
     def assignment(self) -> list[int]:
         """The current box index per parcel (-1 == unassigned)."""
     def set_assignment(self, assignment: list[int]) -> None:
@@ -119,8 +156,13 @@ def calculate_score(problem: BoxSizingProblem, constraints: Iterable[Any] | None
     ValueError for no candidate box, a repeated or empty id, a side outside
     1..2,000,000, a weight or max_weight outside 0..1e12, a quantity below 1, a cost
     that is negative or not finite, max_box_types below 1, a shipped volume a double
-    cannot hold exactly (summed quantities x the largest box volume above 2^53), or a
-    box outside -1..box count - 1."""
+    cannot hold exactly (summed quantities x the largest box volume above 2^53), a
+    box outside -1..box count - 1, a dim_divisor below 1, a rate table that repeats a
+    zone, has no breaks, breaks out of order or a negative price, a parcel whose zone
+    has no rate table (when it has a zone or there are tables), a parcel that a box takes
+    at a billed weight above its table's top break, and, once weight is billed (a
+    dim_divisor or rate tables), summed quantities x the heaviest billed weight above
+    2^53."""
 
 class SolverConfig:
     """The solver settings, by stage of the solve: ``stop``, ``alns_trigger``, ``strategies``, ``custom_moves``, ``moves``, ``acceptance``, ``alns``, ``run``.
@@ -268,16 +310,16 @@ class Solver:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.box_sizing.constraints). The given list replaces the default set; None
         keeps the default set. Single start. The construction and the moves price the
-        sizes with the picked weights of void_volume_cost, box_cost and box_type_cost
-        (the weights alone: a level, an exponent or an offset shapes the score a step is
+        sizes with the picked weights of void_volume_cost, box_cost, board_area_cost,
+        shipping_cost and box_type_cost (the weights alone: a level, an exponent or an offset shapes the score a step is
         judged by, not which step is proposed).
         A name may be picked several times: each pick is its own instance with its own
         knobs, and the instances add up."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    parcel_fit_cost, box_weight_cost, void_volume_cost, box_cost,
-    box_type_limit_cost, box_type_cost. The same names
+    parcel_fit_cost, box_weight_cost, void_volume_cost, box_cost, board_area_cost,
+    shipping_cost, box_type_limit_cost, box_type_cost. The same names
     optimaru.box_sizing.constraints uses."""
 
 def constraint_costs(problem: BoxSizingProblem, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
@@ -285,7 +327,7 @@ def constraint_costs(problem: BoxSizingProblem, constraints: Iterable[Any] | Non
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. The four per-box constraints
+    "default_weight": float, "default_level": str}}. The six per-box constraints
     list one cost per candidate box, a box no parcel ships in included;
     box_type_limit_cost and box_type_cost (global) list their one number. None = the
     default constraints; a pick list (as for solve) scores exactly those picks, each
@@ -306,5 +348,6 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order:
     parcel_fit_cost (hard, 1), box_weight_cost (hard, 1), void_volume_cost (soft, 1),
-    box_cost (soft, 1), box_type_limit_cost (hard, 1), box_type_cost (soft, 0: opt-in,
-    default_enabled False); all flippable, none a reward."""
+    box_cost (soft, 1), board_area_cost (soft, 0: opt-in), shipping_cost (soft, 0:
+    opt-in), box_type_limit_cost (hard, 1), box_type_cost (soft, 0: opt-in); the three
+    opt-in ones default_enabled False; all flippable, none a reward."""
