@@ -8,6 +8,8 @@ import pytest
 
 import optimaru.container_loading as cl
 from optimaru.container_loading.constraints import (
+    UnloadingOrderCost,
+    UnplacedItemCost,
     UsedLengthCost,
     get_constraints,
 )
@@ -474,3 +476,43 @@ def test_set_loading_checks_its_lists():
     cl.calculate_score(problem)
     assert problem.unplaced_items() == [1]  # in no list: not placed, and it costs nothing
     assert problem.score.hard == 0
+
+
+def test_the_decoder_weighs_a_blocking_place_by_the_weights_of_the_solve():
+    """Two stop-1 boxes side by side at the closed end, and a stop-2 box whose only place is in
+    front of both. At the default weights two pairs cost more than one unplaced item: the box is
+    left out. Weighted as a warehouse system weights them (an unplaced item 1,000, a pair 10), it
+    is loaded in front of them, and `calculate_score` afterwards decodes it the same way."""
+    fixed = cl.Rotation.FIXED
+
+    def truck() -> cl.ContainerLoadingProblem:
+        problem = cl.ContainerLoadingProblem(
+            [cl.Container("van", 4, 4, 4)],
+            [
+                cl.Item("left", 2, 2, 4, rotations=fixed, unload_order=1),
+                cl.Item("right", 2, 2, 4, rotations=fixed, unload_order=1),
+                cl.Item("behind", 2, 4, 4, rotations=fixed, unload_order=2),
+            ],
+        )
+        problem.set_loading([[0, 1, 2]])
+        return problem
+
+    keep = cl.SolverConfig(stop={"time_limit_seconds": 0})
+    plain = truck()
+    cl.Solver(keep).solve(plain)
+    assert plain.unplaced_items() == [2] and plain.score.hard == -1
+    picks = replace_default(get_constraints(), "unplaced_item_cost", UnplacedItemCost(weight=1000))
+    picks = replace_default(picks, "unloading_order_cost", UnloadingOrderCost(weight=10))
+    weighted = truck()
+    cl.Solver(keep).solve_with_constraints(weighted, picks)
+    assert weighted.unplaced_items() == [] and weighted.score.hard == -20
+    assert cl.calculate_score(weighted).hard == -2 and weighted.unplaced_items() == []
+    cl.Solver(keep).solve(weighted)  # a default solve weighs by the defaults again
+    assert weighted.unplaced_items() == [2]
+    # Leaving out an item of priority 3 costs 3: two pairs are cheaper.
+    urgent = truck()
+    items = urgent.items
+    items[2].priority = 3
+    urgent.items = items
+    cl.Solver(keep).solve(urgent)
+    assert urgent.unplaced_items() == [] and urgent.score.hard == -2

@@ -212,6 +212,22 @@ struct StackingRule {
 // ---------------------------------------------------------------------------
 // ContainerLoadingProblem
 // ---------------------------------------------------------------------------
+// What the decoder weighs when every place left for an item breaks an
+// unloading order, a load limit or a stacking rule (cl/score/packing.hpp): per
+// constraint, its weight at each level (hard, medium, soft), 0 where it is not
+// counted. The solver sets them from the constraints it scores with
+// (unplacedItemCost, unloadingOrderCost, stackingLoadCost, stackingRuleCost,
+// optionalItemCost, segregationCost); the defaults are the default
+// constraints'. Leaving an item out counts its priority times.
+struct BreakWeights {
+    double unplaced[3] = {1.0, 0.0, 0.0};     // per item left out
+    double blocking[3] = {1.0, 0.0, 0.0};     // per unloading pair
+    double overload[3] = {1.0, 0.0, 0.0};     // per unit of weight over a limit
+    double stacking[3] = {1.0, 0.0, 0.0};     // per stacking rule or layer limit broken
+    double optional[3] = {0.0, 0.0, 1.0};     // per optional item left out
+    double segregation[3] = {1.0, 0.0, 0.0};  // per segregation distance broken
+};
+
 struct ContainerLoadingProblem {
     std::vector<Container> containers;
     std::vector<Item> items;
@@ -221,6 +237,7 @@ struct ContainerLoadingProblem {
     std::vector<StackingRule> stackingRules;
     std::vector<GroupRule> groupRules;
     std::vector<SegregationRule> segregationRules;
+    BreakWeights breakWeights;
 
     Score score;
 

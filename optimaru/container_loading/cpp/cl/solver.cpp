@@ -39,6 +39,30 @@ void registerMoves(optimaru::Solver<ContainerLoadingProblem>& engine, const Solv
         engine.add_move_operator(std::make_unique<SwitchContainerMove>(problem));
 }
 
+// What the decoder weighs when an item can only break an order or a limit:
+// the weights the constraints it is scored with put on leaving it out, on an
+// unloading pair and on a unit of weight over a limit, per level. A
+// constraint picked twice counts twice; one left out counts nothing. Each is
+// read as linear in its raw cost (an exponent other than 1 is not modelled).
+void setBreakWeights(ContainerLoadingProblem& problem,
+                     const optimaru::DecomposedObjective<ContainerLoadingProblem>& calculator) {
+    BreakWeights weights;
+    for (int l = 0; l < 3; ++l)
+        weights.unplaced[l] = weights.blocking[l] = weights.overload[l] = weights.stacking[l] =
+                weights.optional[l] = weights.segregation[l] = 0.0;
+    for (const auto& constraint : calculator.unit_constraint_list()) {
+        double* target = nullptr;
+        if (constraint->name == "unplacedItemCost") target = weights.unplaced;
+        if (constraint->name == "unloadingOrderCost") target = weights.blocking;
+        if (constraint->name == "stackingLoadCost") target = weights.overload;
+        if (constraint->name == "stackingRuleCost") target = weights.stacking;
+        if (constraint->name == "optionalItemCost") target = weights.optional;
+        if (constraint->name == "segregationCost") target = weights.segregation;
+        if (target != nullptr) target[static_cast<int>(constraint->level)] += constraint->weight;
+    }
+    problem.breakWeights = weights;
+}
+
 // Shared engine wiring for both solve() overloads: late-acceptance local
 // search over the sequence move mix (+ ALNS kicks) and the domain's moves,
 // driven by whichever assembly the caller brought.
@@ -92,9 +116,10 @@ void runEngine(const Solver::Config& config, ContainerLoadingProblem& problem,
 
 // One start on a prepared problem, scored by the default assembly.
 void searchOneStart(const Solver::Config& config, ContainerLoadingProblem& problem) {
-    if (config.first_fit_decreasing) constructLoading(problem);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
+    setBreakWeights(problem, calculator);
+    if (config.first_fit_decreasing) constructLoading(problem);
     runEngine(config, problem, calculator);
     // The authoritative final score: a full recompute on the best solution,
     // which also writes where every item stands.
@@ -106,6 +131,9 @@ void searchOneStart(const Solver::Config& config, ContainerLoadingProblem& probl
 void Solver::solve(ContainerLoadingProblem& problem) {
     optimaru::check_config(config_);
     ScoreCalculator::prepare(problem);
+    // The default constraints' weights, also for the final score below
+    // (every start sets the same on its copy).
+    problem.breakWeights = BreakWeights();
     if (problem.items.empty() || problem.containers.empty()) {
         ScoreCalculator::score(problem);
         return;
@@ -124,6 +152,7 @@ void Solver::solve(ContainerLoadingProblem& problem,
                    optimaru::DecomposedObjective<ContainerLoadingProblem>& calculator) {
     optimaru::check_config(config_);
     ScoreCalculator::prepare(problem);
+    setBreakWeights(problem, calculator);
     if (!problem.items.empty() && !problem.containers.empty()) {
         if (config_.first_fit_decreasing) constructLoading(problem);
         runEngine(config_, problem, calculator);

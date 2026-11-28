@@ -358,7 +358,28 @@ void verifyDecoderByHand() {
         ScoreCalculator::score(q);
         check(at(q.items[1], 2, 0, 0) &&
                       ScoreCalculator::calculateTotals(q).unloadingOrderCost == 1,
-              "with no place that keeps the order, the first feasible one is taken");
+              "with no place that keeps the order, the first feasible one is taken (one pair "
+              "costs no more than one item left out)");
+        // Two pairs cost more than an item left out at the default weights;
+        // with leaving it out weighted 1,000 the item is placed.
+        ContainerLoadingProblem r;
+        addContainer(r, 4, 4, 4);
+        const int left = addItem(r, 2, 2, 4, Rotation::Fixed);
+        const int right = addItem(r, 2, 2, 4, Rotation::Fixed);
+        const int behind = addItem(r, 2, 4, 4, Rotation::Fixed);
+        r.items[static_cast<std::size_t>(left)].unloadOrder = 1;
+        r.items[static_cast<std::size_t>(right)].unloadOrder = 1;
+        r.items[static_cast<std::size_t>(behind)].unloadOrder = 2;
+        r.containers[0].items = {left, right, behind};
+        ScoreCalculator::score(r);
+        check(!r.items[static_cast<std::size_t>(behind)].isPlaced() &&
+                      ScoreCalculator::calculateTotals(r).unloadingOrderCost == 0,
+              "a place that blocks two items costs more than leaving the item out: left out");
+        r.breakWeights.unplaced[0] = 1000.0;
+        ScoreCalculator::score(r);
+        check(at(r.items[static_cast<std::size_t>(behind)], 2, 0, 0) &&
+                      ScoreCalculator::calculateTotals(r).unloadingOrderCost == 2,
+              "with leaving it out weighted 1,000, it blocks the two");
     }
     {
         // Load limits: a box that carries nothing on the floor, then a heavy
@@ -377,8 +398,13 @@ void verifyDecoderByHand() {
         addItem(p, 2, 2, 2, Rotation::Fixed, 5);
         loadAll(p);
         ScoreCalculator::score(p);
+        check(!p.items[3].isPlaced() && ScoreCalculator::calculateTotals(p).stackingLoadCost == 0,
+              "with no other place left, at the default weights it is left out: 5 over the "
+              "limit costs more than one item unplaced");
+        p.breakWeights.unplaced[0] = 1000.0;
+        ScoreCalculator::score(p);
         check(at(p.items[3], 0, 0, 2) && ScoreCalculator::calculateTotals(p).stackingLoadCost == 5,
-              "with no other place left it goes on the fragile box, and the cost counts it");
+              "when leaving it out costs more, it goes on the fragile box, and the cost counts it");
         // A limit of 6 on the box under the heavy pair: the third box's
         // weight passed down through the second would exceed it.
         ContainerLoadingProblem q;
@@ -632,6 +658,7 @@ void verifyCostsByHand() {
         addItem(p, 4, 4, 4, Rotation::Fixed, 2);
         p.items[static_cast<std::size_t>(a)].maxLoadOnTop = 5;
         p.items[static_cast<std::size_t>(b)].maxLoadOnTop = 2;
+        p.breakWeights.unplaced[0] = 1000.0;  // placed even where they overload
         loadAll(p);
         check(ScoreCalculator::calculateTotals(p).stackingLoadCost == 5,
               "stacking: a column passes its weight down (10 on a limit of 5, 2 on a limit of 2)");

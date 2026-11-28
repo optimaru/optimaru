@@ -42,8 +42,7 @@ namespace cl {
 //     changes nothing for the items after it, and unplacedItemCost counts it.
 //   - When items set an unloadOrder, a maxLoadOnTop, a maxStackLayers or a
 //     stackGroup a stacking rule names, a place is also judged by what it
-//     would break, and the first point that breaks nothing wins over earlier
-//     ones that do. A place "blocks" when the item would stand in the way of a
+//     would break. A place "blocks" when the item would stand in the way of a
 //     placed item that leaves earlier (between it and the door, or above it),
 //     or have a placed item that leaves later in its own way; it "overloads"
 //     when its weight, passed down through the items it stands on, would put
@@ -51,23 +50,31 @@ namespace cl {
 //     on a placed item (or have one stand on it) against a stacking rule, or
 //     when it would make a column taller than its own maxStackLayers or that
 //     of an item under it. The item goes to the first point where some
-//     orientation does neither; if there is none, to the first that only blocks; if
-//     there is none either, to the first feasible point, as without them.
-//     So an item is never left unplaced for the sake of an order or a limit,
-//     and a list in the construction's order (what leaves last first) comes
-//     out with every stop nearer the door than the stops after it wherever
-//     the room allows. The loads passed down are tracked as the items are
-//     placed: an item placed later under an overhang does not take load from
-//     the item above it, which the stacking cost on the result does count.
+//     orientation does neither; an item with an unloadOrder prefers, of those,
+//     the first place within the depth its stop's placed items already reach
+//     (their largest x + length), so that a stop fills the cross-section it
+//     has started before it goes deeper. If every place breaks something, the
+//     first place that only blocks, the first that overloads and leaving the
+//     item unplaced are weighed by ContainerLoadingProblem::breakWeights (the
+//     weights of the solve's constraints: per pair added, per unit of weight
+//     over a limit, per stacking rule, layer limit or segregation distance
+//     broken, per item left out times its priority) and the cheapest is
+//     taken; of equal costs blocking, then overloading, then leaving out. A
+//     list in the construction's order (what leaves last first) comes out
+//     with every stop nearer the door than the stops after it wherever the
+//     room allows. The loads passed down are tracked as the items are placed:
+//     an item placed later under an overhang does not take load from the item
+//     above it, which the stacking cost on the result does count.
 //   - An optional item whose weight would put the items placed so far above
 //     the container's maxWeight is unplaced, wherever there is room, and so
 //     is an item whose allowedContainers leave this container out.
 //   - An item whose segregation class must keep a distance from a placed
 //     item's treats a place closer than that as one that breaks a limit.
 //
-// The decode is a pure function of (problem facts, container, list in order):
-// it reads the container's weight limit only for optional items, and nothing
-// of the other containers. The costs are computed on its result.
+// The decode is a pure function of (problem facts, break weights, container,
+// list in order): it reads the container's weight limit only for optional
+// items, and nothing of the other containers. The costs are computed on its
+// result.
 //
 // It is also a function of the list's prefix: item k's place depends on items
 // 0 .. k - 1 only. A Packing keeps what a decode needs to go on from any
@@ -83,9 +90,11 @@ struct Box {
     int x = 0;
     int y = 0;
     int z = 0;
-    int length = 0;  // along x, after rotation
-    int width = 0;   // along y
-    int height = 0;  // along z
+    int length = 0;        // along x, after rotation
+    int width = 0;         // along y
+    int height = 0;        // along z
+    int order = kNoOrder;  // the item's unloadOrder, kNoOrder = none
+    static constexpr int kNoOrder = std::numeric_limits<int>::min();
 };
 
 // One candidate corner, with the list positions that made it and covered it.
@@ -120,6 +129,11 @@ struct Packing {
     // the boxes of the cells its own x-range meets.
     int cellLength = 1;
     std::vector<std::vector<int>> cells;
+    // Per cell, the lowest and highest unloadOrder of its boxes that have one
+    // (INT_MAX / INT_MIN when none has): a cell whose orders cannot block an
+    // item is skipped without looking at its boxes.
+    std::vector<int> cellLowOrder;
+    std::vector<int> cellHighOrder;
     // The boxes by the height of their tops: (z + height, index into
     // `boxes`), sorted. What an item at height z can stand on is the run of
     // boxes whose tops are at z.
@@ -270,10 +284,11 @@ public:
 
     // Before the first packing() of a problem, and again whenever its facts
     // may have changed: sizes the slots and drops every decode if the facts
-    // (sizes, rotations, the support ratio, the stack heights, bottomOnly, the
-    // layer limits and stacking rules, the allowed containers, the segregation
-    // classes and distances, and the weights, load limits, unloading orders and
-    // balance limits the decode and the kept costs read) are not the ones
+    // (sizes, rotations, the support ratio, the break weights, the stack
+    // heights, bottomOnly, the layer limits and stacking rules, the allowed
+    // containers, the segregation classes and distances, and the weights, load
+    // limits, unloading orders and balance limits the decode and the kept costs
+    // read) are not the ones
     // the kept decodes were made for. The facts are compared through a
     // 64-bit hash, which is trusted: a collision (practically impossible)
     // would keep decodes made for other facts.
